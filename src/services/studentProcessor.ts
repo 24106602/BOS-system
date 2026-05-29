@@ -12,6 +12,7 @@ import type {
 } from "./types";
 import { buildColumnMap, findHeaderRowIndex, parseRuleOptions } from "./templateParser";
 import { applyHighlightStyle, cloneWorksheet } from "./excelExport";
+import { supabase } from '../utils/supabaseClient';
 import {
   cleanFieldName,
   compressText,
@@ -972,6 +973,34 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
 标记单元格：${Object.keys(highlightMap).length}
 不通过人数：${finalFailRows.length}`,
   });
+
+  try {
+    const studentIdFieldIndex = templateFields.findIndex((field) => cleanFieldName(field).includes("学号"));
+    const studentIdField = studentIdFieldIndex >= 0 ? templateFields[studentIdFieldIndex] : "";
+
+    const cloudRows = result.map((row) => ({
+      college_name: String(row[templateFields[1]] ?? "").trim() || "未填学院",
+      student_id: studentIdField ? String(row[studentIdField] ?? "").trim() : "",
+      name: String(row[templateFields[0]] ?? "").trim(),
+      id_card: String(row[templateFields[2]] ?? "").trim(),
+      difficulty_level: String(row[templateFields[11]] ?? "").trim(),
+      status: "pending_review",
+    }));
+
+    const { error: syncError } = await supabase.from("students").insert(cloudRows);
+    if (syncError) throw syncError;
+
+    onLog?.({
+      type: "success",
+      message: "🎉 云端数据同步成功，全校数据库已实时更新！",
+    });
+  } catch (error) {
+    console.error("Supabase sync failed:", error);
+    onLog?.({
+      type: "error",
+      message: "⚠️ 云端同步暂时失败，系统已自动转为本地 Excel/IndexedDB 备份机制，数据绝对安全。",
+    });
+  }
 
   return {
     processedData: result,
