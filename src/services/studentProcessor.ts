@@ -1,4 +1,4 @@
-// 本专科困难生处理服务：负责本专科数据规则校验、修复、标记和 Excel 导出。
+﻿// 本专科困难生处理服务：负责本专科数据规则校验、修复、标记和 Excel 导出。
 
 import * as XLSX from "xlsx-js-style";
 import type {
@@ -995,10 +995,20 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
       message: "🎉 云端数据同步成功，全校数据库已实时更新！",
     });
   } catch (error) {
-    console.error("Supabase sync failed:", error);
+    const e = error as {
+      message?: string;
+      details?: string;
+      hint?: string;
+      code?: string;
+    };
+    console.error("Supabase cloud sync failed:", e);
+    console.error("Supabase error message:", e?.message);
+    console.error("Supabase error details:", e?.details);
+    console.error("Supabase error hint:", e?.hint);
+    console.error("Supabase error code:", e?.code);
     onLog?.({
       type: "error",
-      message: "⚠️ 云端同步暂时失败，系统已自动转为本地 Excel/IndexedDB 备份机制，数据绝对安全。",
+      message: `云端同步失败：${e?.message || JSON.stringify(e)}；details=${e?.details || ""}；hint=${e?.hint || ""}；code=${e?.code || ""}`,
     });
   }
 
