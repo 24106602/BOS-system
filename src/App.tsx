@@ -4,6 +4,8 @@
 import { getMergeBatches, saveMergeBatch } from "./db/localMergeDb";
 import DatabasePage from "./pages/DatabasePage";
 import MergePage from "./pages/MergePage";
+import StudentProcessPage from "./pages/StudentProcessPage";
+import FamilyProcessPage from "./pages/FamilyProcessPage";
 import { exportErrorReport } from "./services/errorReport";
 import { exportFamilyExcel, processFamilyRows } from "./services/familyProcessor";
 import { exportStudentExcel, processStudentRows } from "./services/studentProcessor";
@@ -615,142 +617,55 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
           </div>
 
           {activeProcessingPanel === "student" ? (
-            <div style={styles.layout}>
-              <div style={styles.leftPanel}>
-                <div style={styles.windowHeader}>
-                  <h1 style={styles.title}>本专科困难生信息处理</h1>
-                  <span style={styles.windowBadge}>困难生数据处理子功能</span>
-                </div>
-
-                <div style={styles.buttonGrid}>
-                  <input ref={templateRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={uploadTemplate} />
-                  <button onClick={() => templateRef.current?.click()} style={styles.blueButton}>上传模板</button>
-                  <input ref={dataRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={uploadData} />
-                  <button onClick={() => dataRef.current?.click()} style={styles.greenButton}>上传待处理数据</button>
-                  <button disabled={isProcessing} onClick={processData} style={styles.orangeButton}>
-                    {isProcessing ? "治理执行中..." : "开始治理"}
-                  </button>
-                  <button onClick={exportExcel} style={styles.purpleButton}>导出结果</button>
-                  <button onClick={exportStudentErrorReport} style={styles.purpleButton}>导出异常报告</button>
-                  <button onClick={addStudentResultToMergePool} style={styles.mergeButton}>加入汇总池</button>
-                </div>
-
-                <div style={styles.status}>{status}</div>
-                <div style={styles.status}>当前识别学院：{studentCollegeName}</div>
-
-                <div style={styles.statsGrid}>
-                  <div style={styles.statCard}><div>数据行数</div><strong>{stats.total}</strong></div>
-                  <div style={styles.statCard}><div>修复</div><strong style={{ color: "#16a34a" }}>{stats.repaired}</strong></div>
-                  <div style={styles.statCard}><div>异常</div><strong style={{ color: "#dc2626" }}>{stats.errors}</strong></div>
-                  <div style={styles.statCard}><div>标记</div><strong style={{ color: "#7c3aed" }}>{stats.highlighted}</strong></div>
-                  <div style={styles.statCard}><div>不通过</div><strong style={{ color: "#dc2626" }}>{stats.disqualified}</strong></div>
-                </div>
-
-                <section style={styles.section}><h2>模板预览</h2>{renderTemplatePreview()}</section>
-                <section style={styles.section}><h2>待处理数据预览</h2>{renderTable(makeSourcePreview(sourceRows, templateFields))}</section>
-                <section style={styles.section}><h2>治理结果预览</h2>{renderTable(processedData)}</section>
-                <section style={styles.section}><h2>不通过名单预览</h2>{renderTable(disqualifiedRows)}</section>
-
-                <section style={styles.section}>
-                  <h2>问题分析</h2>
-                  {Object.keys(analysis).length === 0 ? (
-                    <div style={styles.empty}>暂无分析结果</div>
-                  ) : (
-                    Object.keys(analysis).map((key) => (
-                      <div key={key} style={styles.problemItem}>{key}：{analysis[key]} 项问题</div>
-                    ))
-                  )}
-                </section>
-              </div>
-
-              <div style={styles.rightPanel}>
-                <h2 style={styles.logTitle}>本专科处理日志</h2>
-                <div style={styles.logBox}>
-                  {logs.map((item, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        ...styles.logItem,
-                        color: item.type === "error" ? "#f87171" : item.type === "success" ? "#4ade80" : "#ffffff",
-                      }}
-                    >
-                      [{item.time}] {item.message}
-                    </div>
-                  ))}
-                  <div ref={logEndRef} />
-                </div>
-              </div>
-            </div>
+            <StudentProcessPage
+              styles={styles}
+              templateRef={templateRef}
+              dataRef={dataRef}
+              uploadTemplate={uploadTemplate}
+              uploadData={uploadData}
+              isProcessing={isProcessing}
+              processData={processData}
+              exportExcel={exportExcel}
+              exportStudentErrorReport={exportStudentErrorReport}
+              addStudentResultToMergePool={addStudentResultToMergePool}
+              status={status}
+              studentCollegeName={studentCollegeName}
+              stats={stats}
+              renderTemplatePreview={renderTemplatePreview}
+              renderTable={renderTable}
+              sourceRows={sourceRows}
+              templateFields={templateFields}
+              processedData={processedData}
+              disqualifiedRows={disqualifiedRows}
+              analysis={analysis}
+              logs={logs}
+              logEndRef={logEndRef}
+            />
           ) : (
-            <div style={styles.familyLayout}>
-              <div style={styles.familyMainPanel}>
-                <div style={styles.windowHeader}>
-                  <h1 style={styles.title}>家庭成员信息处理</h1>
-                  <span style={styles.windowBadge}>困难生数据处理子功能</span>
-                </div>
-
-                <div style={styles.buttonGrid}>
-                  <input ref={familyTemplateRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={uploadFamilyTemplate} />
-                  <button onClick={() => familyTemplateRef.current?.click()} style={styles.blueButton}>上传模板</button>
-                  <input ref={familyDataRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={uploadFamilyData} />
-                  <button onClick={() => familyDataRef.current?.click()} style={styles.greenButton}>上传家庭成员数据</button>
-                  <button disabled={isFamilyProcessing} onClick={processFamilyData} style={styles.orangeButton}>
-                    {isFamilyProcessing ? "处理中..." : "开始处理"}
-                  </button>
-                  <button onClick={exportFamilyResult} style={styles.purpleButton}>导出结果</button>
-                  <button onClick={addFamilyResultToMergePool} style={styles.mergeButton}>加入汇总池</button>
-                </div>
-
-                <div style={styles.status}>{familyStatus}</div>
-                <div style={styles.status}>当前识别学院：{familyCollegeName}</div>
-
-                <div style={styles.statsGrid}>
-                  <div style={styles.statCard}><div>成员数据行数</div><strong>{familyStats.total}</strong></div>
-                  <div style={styles.statCard}><div>修复</div><strong style={{ color: "#16a34a" }}>{familyStats.repaired}</strong></div>
-                  <div style={styles.statCard}><div>异常</div><strong style={{ color: "#dc2626" }}>{familyStats.errors}</strong></div>
-                  <div style={styles.statCard}><div>标记</div><strong style={{ color: "#7c3aed" }}>{familyStats.highlighted}</strong></div>
-                  <div style={styles.statCard}><div>待复核</div><strong style={{ color: "#f97316" }}>{familyStats.review}</strong></div>
-                  <div style={styles.statCard}><div>库未命中</div><strong style={{ color: "#dc2626" }}>{familyStats.databaseMiss}</strong></div>
-                </div>
-
-                <section style={styles.section}><h2>家庭成员模板预览</h2>{renderFamilyTemplatePreview()}</section>
-                <section style={styles.section}><h2>家庭成员数据预览</h2>{renderTable(makeSourcePreview(familySourceRows, familyTemplateFields))}</section>
-                <section style={styles.section}><h2>家庭成员处理结果</h2>{renderTable(familyProcessedData)}</section>
-                <section style={styles.section}><h2>家庭成员待复核名单</h2>{renderTable(familyReviewRows)}</section>
-
-                <section style={styles.section}>
-                  <h2>问题分析</h2>
-                  {Object.keys(familyAnalysis).length === 0 ? (
-                    <div style={styles.empty}>暂无分析结果</div>
-                  ) : (
-                    Object.keys(familyAnalysis).map((key) => (
-                      <div key={key} style={styles.problemItem}>{key}：{familyAnalysis[key]} 项问题</div>
-                    ))
-                  )}
-                </section>
-              </div>
-
-              <div style={styles.familySidePanel}>
-                <h2 style={styles.logTitle}>家庭成员处理日志</h2>
-                <div style={styles.logBox}>
-                  {familyLogs.length === 0 && (
-                    <div style={{ ...styles.logItem, color: "#ffffff" }}>[等待] 家庭成员信息处理功能区已就绪</div>
-                  )}
-                  {familyLogs.map((item, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        ...styles.logItem,
-                        color: item.type === "error" ? "#f87171" : item.type === "success" ? "#4ade80" : "#ffffff",
-                      }}
-                    >
-                      [{item.time}] {item.message}
-                    </div>
-                  ))}
-                  <div ref={familyLogEndRef} />
-                </div>
-              </div>
-            </div>
+            <FamilyProcessPage
+              styles={styles}
+              familyTemplateRef={familyTemplateRef}
+              familyDataRef={familyDataRef}
+              uploadFamilyTemplate={uploadFamilyTemplate}
+              uploadFamilyData={uploadFamilyData}
+              isFamilyProcessing={isFamilyProcessing}
+              processFamilyData={processFamilyData}
+              exportFamilyResult={exportFamilyResult}
+              addFamilyResultToMergePool={addFamilyResultToMergePool}
+              familyStatus={familyStatus}
+              familyCollegeName={familyCollegeName}
+              familyStats={familyStats}
+              renderFamilyTemplatePreview={renderFamilyTemplatePreview}
+              renderTable={renderTable}
+              makeSourcePreview={makeSourcePreview}
+              familySourceRows={familySourceRows}
+              familyTemplateFields={familyTemplateFields}
+              familyProcessedData={familyProcessedData}
+              familyReviewRows={familyReviewRows}
+              familyAnalysis={familyAnalysis}
+              familyLogs={familyLogs}
+              familyLogEndRef={familyLogEndRef}
+            />
           )}
         </div>
       )}
@@ -1029,5 +944,9 @@ function button(background: string): React.CSSProperties {
     cursor: "pointer",
   };
 }
+
+
+
+
 
 
