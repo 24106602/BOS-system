@@ -1,8 +1,8 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
 // 主页面组件：负责功能区切换、上传按钮、状态管理、结果预览和日志展示。
 
-import StudentDatabasePanel from "./components/StudentDatabasePanel";
 import { getMergeBatches, saveMergeBatch } from "./db/localMergeDb";
+import DatabasePage from "./pages/DatabasePage";
 import MergePage from "./pages/MergePage";
 import { exportErrorReport } from "./services/errorReport";
 import { exportFamilyExcel, processFamilyRows } from "./services/familyProcessor";
@@ -593,17 +593,7 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
         <button style={styles.disabledModule}>后续功能板块预留</button>
       </div>
 
-      {activeModule === "database" && (
-        <div style={styles.databaseLayout}>
-          <div style={styles.databasePanel}>
-            <div style={styles.windowHeader}>
-              <h1 style={styles.title}>困难生数据库</h1>
-              <span style={styles.windowBadge}>基础数据维护</span>
-            </div>
-            <StudentDatabasePanel />
-          </div>
-        </div>
-      )}
+      {activeModule === "database" && <DatabasePage />}
 
       {activeModule === "merge" && <MergePage />}
 
@@ -1039,3 +1029,5 @@ function button(background: string): React.CSSProperties {
     cursor: "pointer",
   };
 }
+
+
