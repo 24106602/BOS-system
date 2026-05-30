@@ -113,22 +113,25 @@ export default function AdminCollegesPage() {
 const styles: Record<string, CSSProperties> = {
   card: {
     background: "#fff",
-    borderRadius: 16,
+    borderRadius: 8,
     padding: 20,
-    border: "1px solid #cbd5e1",
+    border: "1px solid #d7e1ed",
+    boxShadow: "0 4px 14px rgba(15,35,64,0.05)",
   },
   title: {
     margin: "0 0 8px 0",
-    color: "#0f172a",
+    color: "#172033",
+    fontSize: 24,
   },
   description: {
-    color: "#475569",
+    color: "#63738a",
+    fontSize: 13,
     margin: "0 0 14px 0",
   },
   tableWrap: {
     overflow: "auto",
-    border: "1px solid #cbd5e1",
-    borderRadius: 10,
+    border: "1px solid #d7e1ed",
+    borderRadius: 6,
   },
   table: {
     width: "100%",
@@ -137,7 +140,7 @@ const styles: Record<string, CSSProperties> = {
   },
   th: {
     border: "1px solid #cbd5e1",
-    background: "#e2e8f0",
+    background: "#edf4fa",
     padding: 8,
     whiteSpace: "nowrap",
   },
@@ -149,9 +152,9 @@ const styles: Record<string, CSSProperties> = {
   },
   logButton: {
     border: "none",
-    borderRadius: 8,
+    borderRadius: 5,
     padding: "7px 10px",
-    background: "#2563eb",
+    background: "#0077d4",
     color: "#fff",
     cursor: "pointer",
   },

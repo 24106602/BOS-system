@@ -115,9 +115,10 @@ function Stat({ label, value }: { label: string; value: number }) {
 const styles: Record<string, CSSProperties> = {
   card: {
     background: "#fff",
-    borderRadius: 16,
+    borderRadius: 8,
     padding: 20,
-    border: "1px solid #cbd5e1",
+    border: "1px solid #d7e1ed",
+    boxShadow: "0 4px 14px rgba(15,35,64,0.05)",
   },
   header: {
     display: "flex",
@@ -128,17 +129,19 @@ const styles: Record<string, CSSProperties> = {
   },
   title: {
     margin: 0,
-    color: "#0f172a",
+    color: "#172033",
+    fontSize: 24,
   },
   description: {
-    color: "#475569",
+    color: "#63738a",
+    fontSize: 13,
     margin: "8px 0 0 0",
   },
   exportButton: {
     border: "none",
-    borderRadius: 10,
+    borderRadius: 6,
     padding: "10px 14px",
-    background: "#2563eb",
+    background: "#0077d4",
     color: "#fff",
     cursor: "pointer",
     fontWeight: 700,
@@ -151,27 +154,27 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 14,
   },
   stat: {
-    background: "#f8fafc",
-    border: "1px solid #cbd5e1",
-    borderRadius: 10,
+    background: "#f8fbfe",
+    border: "1px solid #dbe5ef",
+    borderRadius: 6,
     padding: 14,
   },
   statLabel: {
-    color: "#475569",
+    color: "#63738a",
     marginBottom: 6,
   },
   statValue: {
-    color: "#0f172a",
+    color: "#172033",
     fontSize: 24,
   },
   section: {
     marginTop: 14,
     paddingTop: 12,
-    borderTop: "1px solid #e2e8f0",
+    borderTop: "1px solid #e3ebf3",
   },
   subTitle: {
     margin: "0 0 10px 0",
-    color: "#0f172a",
+    color: "#172033",
     fontSize: 18,
   },
   table: {
@@ -181,7 +184,7 @@ const styles: Record<string, CSSProperties> = {
   },
   th: {
     border: "1px solid #cbd5e1",
-    background: "#e2e8f0",
+    background: "#edf4fa",
     padding: 8,
     textAlign: "center",
   },
@@ -191,8 +194,8 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
   },
   logItem: {
-    color: "#334155",
-    borderBottom: "1px solid #e2e8f0",
+    color: "#54657c",
+    borderBottom: "1px solid #edf1f6",
     padding: "8px 0",
   },
 };

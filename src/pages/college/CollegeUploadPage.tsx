@@ -74,6 +74,7 @@ export default function CollegeUploadPage() {
   return (
     <section style={styles.wrap}>
       <div style={styles.card}>
+        <div style={styles.eyebrow}>困难生业务 / 数据处理</div>
         <h1 style={styles.title}>学院数据上传与治理</h1>
         <div style={styles.tip}>流程：上传模板 → 上传待处理数据 → 开始治理 → 查看不通过预览 → 上载到学校端</div>
         <div style={styles.tip}>总数据行数：{hasProcessed ? "已治理" : "未治理"}</div>
@@ -107,46 +108,64 @@ const styles: Record<string, CSSProperties> = {
   },
   card: {
     background: "#fff",
-    borderRadius: 14,
-    border: "1px solid #cbd5e1",
+    borderRadius: 8,
+    border: "1px solid #d7e1ed",
     padding: 16,
+    boxShadow: "0 4px 14px rgba(15,35,64,0.05)",
+  },
+  eyebrow: {
+    color: "#0077d4",
+    fontSize: 12,
+    fontWeight: 800,
+    marginBottom: 5,
   },
   title: {
     margin: "0 0 10px 0",
-    color: "#0f172a",
+    color: "#172033",
+    fontSize: 22,
   },
   subTitle: {
     margin: "0 0 10px 0",
-    color: "#0f172a",
+    color: "#172033",
+    fontSize: 17,
   },
   tip: {
-    color: "#475569",
+    color: "#63738a",
+    fontSize: 13,
     marginBottom: 8,
   },
   warn: {
-    color: "#b91c1c",
+    color: "#b42336",
+    background: "#fff1f2",
+    border: "1px solid #ffd4da",
+    borderRadius: 6,
+    padding: "9px 10px",
     fontWeight: 700,
     marginBottom: 8,
   },
   ok: {
-    color: "#15803d",
+    color: "#087b5b",
+    background: "#e9f8f2",
+    border: "1px solid #c7eedf",
+    borderRadius: 6,
+    padding: "9px 10px",
     fontWeight: 700,
     marginBottom: 8,
   },
   submit: {
-    background: "#16a34a",
+    background: "#0077d4",
     color: "#fff",
     border: "none",
-    borderRadius: 10,
+    borderRadius: 6,
     padding: "10px 14px",
     fontWeight: 700,
     cursor: "pointer",
   },
   submitDisabled: {
-    background: "#94a3b8",
+    background: "#a6b4c5",
     color: "#fff",
     border: "none",
-    borderRadius: 10,
+    borderRadius: 6,
     padding: "10px 14px",
     fontWeight: 700,
     cursor: "not-allowed",

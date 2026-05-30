@@ -45,10 +45,10 @@ export default function CollegeRecordsPage() {
 }
 
 const styles: Record<string, CSSProperties> = {
-  card: { background: "#fff", borderRadius: 16, padding: 20, border: "1px solid #cbd5e1" },
-  title: { margin: "0 0 12px 0", color: "#0f172a" },
-  tableWrap: { overflow: "auto", border: "1px solid #cbd5e1", borderRadius: 10 },
+  card: { background: "#fff", borderRadius: 8, padding: 18, border: "1px solid #d7e1ed", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
+  title: { margin: "0 0 12px 0", color: "#172033", fontSize: 22 },
+  tableWrap: { overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  th: { border: "1px solid #cbd5e1", background: "#e2e8f0", padding: 8, whiteSpace: "nowrap" },
+  th: { border: "1px solid #d7e1ed", background: "#edf4fa", padding: 8, whiteSpace: "nowrap" },
   td: { border: "1px solid #cbd5e1", padding: 8, textAlign: "center", whiteSpace: "nowrap" },
 };

@@ -52,8 +52,8 @@ const styles: Record<string, CSSProperties> = {
   wrap: {
     maxHeight: 240,
     overflow: "auto",
-    border: "1px solid #cbd5e1",
-    borderRadius: 10,
+    border: "1px solid #d7e1ed",
+    borderRadius: 6,
   },
   table: {
     width: "100%",
@@ -62,7 +62,7 @@ const styles: Record<string, CSSProperties> = {
   },
   th: {
     border: "1px solid #cbd5e1",
-    background: "#e2e8f0",
+    background: "#edf4fa",
     padding: 8,
     position: "sticky",
     top: 0,
@@ -75,7 +75,7 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
   },
   empty: {
-    color: "#64748b",
+    color: "#63738a",
     padding: 12,
   },
 };

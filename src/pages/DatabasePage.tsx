@@ -22,11 +22,12 @@ const styles: Record<string, CSSProperties> = {
   },
   databasePanel: {
     background: "#ffffff",
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 8,
+    padding: 18,
     maxWidth: 1180,
     margin: "0 auto",
-    boxShadow: "0 10px 25px rgba(0,0,0,0.08)",
+    border: "1px solid #d7e1ed",
+    boxShadow: "0 4px 14px rgba(15,35,64,0.05)",
   },
   windowHeader: {
     display: "flex",
@@ -35,16 +36,16 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
   },
   title: {
-    fontSize: 34,
+    fontSize: 24,
     margin: 0,
     color: "#1e293b",
   },
   windowBadge: {
-    background: "#dbeafe",
-    color: "#1d4ed8",
+    background: "#e8f4ff",
+    color: "#0077d4",
     borderRadius: 999,
-    padding: "8px 14px",
-    fontSize: 14,
+    padding: "6px 9px",
+    fontSize: 12,
     fontWeight: 700,
   },
 };
