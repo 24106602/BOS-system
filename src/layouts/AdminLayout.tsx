@@ -10,7 +10,7 @@ type AdminLayoutProps = {
 const menus = [
   { path: "/admin", label: "管理员首页" },
   { path: "/admin/colleges", label: "学院提交情况" },
-  { path: "/admin/students", label: "全校困难生数据库" },
+  { path: "/admin/students", label: "困难生数据库" },
   { path: "/admin/summary", label: "全校数据汇总" },
 ];
 
