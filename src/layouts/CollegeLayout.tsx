@@ -8,8 +8,7 @@ type CollegeLayoutProps = {
 };
 
 const menus = [
-  { path: "/college", label: "学院首页" },
-  { path: "/college/upload", label: "上传数据" },
+  { path: "/college/upload", label: "数据处理" },
   { path: "/college/records", label: "提交记录" },
 ];
 
@@ -17,7 +16,8 @@ export default function CollegeLayout({ path, onNavigate, onLogout, children }: 
   return (
     <div style={styles.page}>
       <aside style={styles.sidebar}>
-        <h2 style={styles.title}>学院端</h2>
+        <h2 style={styles.title}>学院（部）端</h2>
+        <div style={styles.groupLabel}>困难生业务</div>
         {menus.map((item) => (
           <button
             key={item.path}
@@ -52,6 +52,12 @@ const styles: Record<string, CSSProperties> = {
   title: {
     margin: "0 0 8px 0",
     fontSize: 20,
+  },
+  groupLabel: {
+    color: "#bbf7d0",
+    fontSize: 14,
+    fontWeight: 700,
+    padding: "8px 2px 2px",
   },
   menu: {
     background: "#14532d",

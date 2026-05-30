@@ -6,6 +6,8 @@ import AdminHomePage from "./pages/admin/AdminHomePage";
 import AdminCollegesPage from "./pages/admin/AdminCollegesPage";
 import AdminStudentsPage from "./pages/admin/AdminStudentsPage";
 import AdminSummaryPage from "./pages/admin/AdminSummaryPage";
+import AdminStudentSummaryPage from "./pages/admin/AdminStudentSummaryPage";
+import AdminFamilySummaryPage from "./pages/admin/AdminFamilySummaryPage";
 import CollegeHomePage from "./pages/college/CollegeHomePage";
 import CollegeUploadPage from "./pages/college/CollegeUploadPage";
 import CollegeRecordsPage from "./pages/college/CollegeRecordsPage";
@@ -21,6 +23,8 @@ const normalizePath = (path: string) => {
     "/admin/colleges",
     "/admin/students",
     "/admin/summary",
+    "/admin/student-summary",
+    "/admin/family-summary",
     "/college",
     "/college/upload",
     "/college/records",
@@ -87,6 +91,10 @@ export default function PlatformApp() {
       const page =
         path === "/admin/colleges" ? (
           <AdminCollegesPage />
+        ) : path === "/admin/student-summary" ? (
+          <AdminStudentSummaryPage />
+        ) : path === "/admin/family-summary" ? (
+          <AdminFamilySummaryPage />
         ) : path === "/admin/students" ? (
           <AdminStudentsPage />
         ) : path === "/admin/summary" ? (

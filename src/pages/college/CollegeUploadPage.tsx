@@ -26,7 +26,7 @@ export default function CollegeUploadPage() {
       setErrorCount(detail.errorCount || 0);
       setValidationErrors(detail.validationErrors || []);
       setSubmitMessage(
-        detail.errorCount > 0 ? "上传失败：当前数据仍存在不通过项" : "治理通过：可以上传到学校端"
+        detail.errorCount > 0 ? "上载失败：当前数据仍存在不通过项" : "治理通过：可以上载到学校端"
       );
     };
 
@@ -47,27 +47,27 @@ export default function CollegeUploadPage() {
   const uploadToSchool = async () => {
     const globalBlocking = (window as SyncWindow).__bosHasBlockingErrors?.() ?? false;
     if (hasBlockingErrors || globalBlocking) {
-      setSubmitMessage("上传失败：当前数据仍存在不通过项，请查看不通过预览");
-      alert("上传失败：当前数据仍存在不通过项，请查看不通过预览");
+      setSubmitMessage("上载失败：当前数据仍存在不通过项，请查看不通过预览");
+      alert("上载失败：当前数据仍存在不通过项，请查看不通过预览");
       return;
     }
 
     const syncFn = (window as SyncWindow).__bosSyncToSchool;
     if (!syncFn) {
-      setSubmitMessage("上传失败：未找到学校端上传入口");
-      alert("上传失败：未找到学校端上传入口");
+      setSubmitMessage("上载失败：未找到学校端上载入口");
+      alert("上载失败：未找到学校端上载入口");
       return;
     }
 
     try {
-      setSubmitMessage("正在上传到学校端...");
+      setSubmitMessage("正在上载到学校端...");
       await syncFn();
-      setSubmitMessage("已提交到学校端");
-      alert("已提交到学校端");
+      setSubmitMessage("已上载到学校端");
+      alert("已上载到学校端");
     } catch (error) {
       console.error("College upload sync failed:", error);
-      setSubmitMessage("上传失败：云端写入异常");
-      alert("上传失败：云端写入异常");
+      setSubmitMessage("上载失败：云端写入异常");
+      alert("上载失败：云端写入异常");
     }
   };
 
@@ -75,17 +75,17 @@ export default function CollegeUploadPage() {
     <section style={styles.wrap}>
       <div style={styles.card}>
         <h1 style={styles.title}>学院数据上传与治理</h1>
-        <div style={styles.tip}>流程：上传模板 → 上传待处理数据 → 开始治理 → 查看不通过预览 → 上传到学校端</div>
+        <div style={styles.tip}>流程：上传模板 → 上传待处理数据 → 开始治理 → 查看不通过预览 → 上载到学校端</div>
         <div style={styles.tip}>总数据行数：{hasProcessed ? "已治理" : "未治理"}</div>
         <div style={styles.tip}>不通过数量：{errorCount}</div>
         {hasProcessed && hasBlockingErrors ? (
-          <div style={styles.warn}>当前数据存在不通过项，不能上传到学校端</div>
+          <div style={styles.warn}>当前数据存在不通过项，不能上载到学校端</div>
         ) : hasProcessed ? (
-          <div style={styles.ok}>当前数据已全部通过，可以上传到学校端</div>
+          <div style={styles.ok}>当前数据已全部通过，可以上载到学校端</div>
         ) : null}
 
         <button style={canSubmit ? styles.submit : styles.submitDisabled} onClick={uploadToSchool} disabled={!canSubmit}>
-          上传到学校端
+          上载到学校端
         </button>
         <div style={styles.tip}>提交状态：{submitMessage}</div>
       </div>
@@ -95,7 +95,7 @@ export default function CollegeUploadPage() {
         <ErrorReportTable errors={validationErrors} />
       </div>
 
-      <ProcessingWorkbench />
+      <ProcessingWorkbench collegeMode />
     </section>
   );
 }

@@ -8,8 +8,9 @@ type AdminLayoutProps = {
 };
 
 const menus = [
-  { path: "/admin", label: "管理员首页" },
   { path: "/admin/colleges", label: "学院提交情况" },
+  { path: "/admin/student-summary", label: "本专科信息汇总" },
+  { path: "/admin/family-summary", label: "家庭成员信息汇总" },
   { path: "/admin/students", label: "困难生数据库" },
   { path: "/admin/summary", label: "全校数据汇总" },
 ];
@@ -19,6 +20,13 @@ export default function AdminLayout({ path, onNavigate, onLogout, children }: Ad
     <div style={styles.page}>
       <aside style={styles.sidebar}>
         <h2 style={styles.title}>学校管理员端</h2>
+        <button
+          onClick={() => onNavigate("/admin")}
+          style={path === "/admin" ? styles.activeMenu : styles.menu}
+        >
+          管理员首页
+        </button>
+        <div style={styles.groupLabel}>困难生业务</div>
         {menus.map((item) => (
           <button
             key={item.path}
@@ -53,6 +61,12 @@ const styles: Record<string, CSSProperties> = {
   title: {
     margin: "0 0 8px 0",
     fontSize: 20,
+  },
+  groupLabel: {
+    color: "#bfdbfe",
+    fontSize: 14,
+    fontWeight: 700,
+    padding: "8px 2px 2px",
   },
   menu: {
     background: "#1e293b",

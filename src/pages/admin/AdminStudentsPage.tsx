@@ -2,9 +2,9 @@ import type { CSSProperties } from "react";
 import DatabasePage from "../DatabasePage";
 
 const reservedAreas = [
-  ["本专科信息表", "学生主信息区域：后续展示学院、学号、姓名、身份证号、困难档次与审核状态。"],
-  ["家庭成员信息表", "学生附属信息区域：后续按学生身份证号展示一名学生对应的多条家庭成员记录。"],
-  ["合并后困难生总表", "学校端总表区域：后续展示本专科主信息与家庭成员信息合并结果。"],
+  ["本专科信息汇总", "学院上载的学生本人困难生主信息。一名学生一行，使用 id_card 保存学生身份证号。"],
+  ["家庭成员信息汇总", "学院上载的学生家庭成员信息。一个家庭成员一行，使用 student_id_card 指向学生身份证号。"],
+  ["合并后困难生总表", "系统自动关联生成：通过 id_card = student_id_card 合并，最终一名学生一行，家庭成员展开为家庭成员1、家庭成员2、家庭成员3等字段。"],
   ["身份证号关联状态", "后续展示 matched、缺少家庭成员、家庭成员数量异常、特殊情况待确认等状态。"],
 ];
 
@@ -14,7 +14,7 @@ export default function AdminStudentsPage() {
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>学校困难生数据库</h1>
-          <p style={styles.description}>困难生数据库属于学校管理员端。本专科信息作为主信息，家庭成员信息通过学生身份证号关联。</p>
+          <p style={styles.description}>困难生数据库属于学校管理员端，由系统自动将“本专科信息汇总”和“家庭成员信息汇总”按学生身份证号关联后生成。学院不直接上传困难生数据库。</p>
         </div>
         <button style={styles.exportButton} onClick={() => alert("导出困难生数据库功能已预留")}>
           导出困难生数据库

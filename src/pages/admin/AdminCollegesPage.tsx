@@ -62,7 +62,7 @@ export default function AdminCollegesPage() {
   return (
     <section style={styles.card}>
       <h1 style={styles.title}>学院提交情况</h1>
-      <p style={styles.description}>学院治理通过后提交到学校端。当前页面汇总各学院提交批次，日志入口预留用于后续查看详细治理记录。</p>
+      <p style={styles.description}>学院治理通过后上载到学校端。当前页面汇总各学院上载批次，日志入口预留用于后续查看详细治理记录。</p>
 
       <div style={styles.tableWrap}>
         <table style={styles.table}>

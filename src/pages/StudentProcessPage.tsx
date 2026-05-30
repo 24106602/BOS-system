@@ -69,7 +69,7 @@ export default function StudentProcessPage({
           </button>
           <button onClick={exportExcel} style={styles.purpleButton}>导出结果</button>
           <button onClick={exportStudentErrorReport} style={styles.purpleButton}>导出不通过名单</button>
-          <button onClick={addStudentResultToMergePool} style={styles.mergeButton}>加入汇总池</button>
+          <button onClick={addStudentResultToMergePool} style={styles.mergeButton}>上载</button>
         </div>
 
         <div style={styles.status}>{status}</div>

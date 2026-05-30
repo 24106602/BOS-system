@@ -67,7 +67,7 @@ export default function FamilyProcessPage({
             {isFamilyProcessing ? "处理中..." : "开始处理"}
           </button>
           <button onClick={exportFamilyResult} style={styles.purpleButton}>导出结果</button>
-          <button onClick={addFamilyResultToMergePool} style={styles.mergeButton}>加入汇总池</button>
+          <button onClick={addFamilyResultToMergePool} style={styles.mergeButton}>上载</button>
         </div>
 
         <div style={styles.status}>{familyStatus}</div>

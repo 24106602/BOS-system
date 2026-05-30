@@ -52,7 +52,7 @@ export default function AdminSummaryPage() {
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>全校数据汇总</h1>
-          <p style={styles.description}>学院治理通过并提交后，系统自动将已通过数据合并到全校汇总。这里展示学院提交情况、全校统计和最近提交日志。</p>
+          <p style={styles.description}>全校数据汇总是从已上载并通过的数据中自动统计出来的汇总看板，不是原始数据库。这里展示学院上载情况、全校统计和最近上载日志。</p>
         </div>
         <button style={styles.exportButton} onClick={exportSummary}>导出全校汇总表</button>
       </div>
@@ -88,13 +88,13 @@ export default function AdminSummaryPage() {
       </section>
 
       <section style={styles.section}>
-        <h2 style={styles.subTitle}>最近提交日志</h2>
+        <h2 style={styles.subTitle}>最近上载日志</h2>
         {recentLogs.length === 0 ? (
-          <p style={styles.description}>暂无提交日志</p>
+          <p style={styles.description}>暂无上载日志</p>
         ) : (
           recentLogs.map((item) => (
             <div key={item.id} style={styles.logItem}>
-              {new Date(item.createdAt).toLocaleString()}：{item.collegeName} 提交 {item.dataType === "student" ? "本专科信息" : "家庭成员信息"} {item.rowCount} 条
+              {new Date(item.createdAt).toLocaleString()}：{item.collegeName} 上载 {item.dataType === "student" ? "本专科信息" : "家庭成员信息"} {item.rowCount} 条
             </div>
           ))
         )}

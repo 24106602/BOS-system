@@ -79,7 +79,11 @@ const toCollegeValidationErrors = (items: ErrorReportItem[]): CollegeValidationE
     };
   });
 
-export default function App() {
+type AppProps = {
+  collegeMode?: boolean;
+};
+
+export default function App({ collegeMode = false }: AppProps) {
   const templateRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef<HTMLInputElement>(null);
   const familyTemplateRef = useRef<HTMLInputElement>(null);
@@ -157,7 +161,7 @@ export default function App() {
 
   const addStudentResultToMergePool = async () => {
     if (processedData.length === 0) {
-      alert("没有可加入汇总池的本专科处理结果");
+      alert("没有可上载的本专科处理结果");
       return;
     }
 
@@ -179,7 +183,7 @@ export default function App() {
 
     if (
       possibleDuplicate &&
-      !confirm("检测到该学院本专科信息可能已加入汇总池，是否仍然继续加入？")
+      !confirm("检测到该学院本专科信息可能已上载，是否仍然继续上载？")
     ) {
       return;
     }
@@ -193,13 +197,13 @@ export default function App() {
       rows: processedData,
     });
 
-    pushLog("success", `${collegeName} 本专科信息已加入汇总池，共 ${processedData.length} 条`);
-    alert("已加入汇总池");
+    pushLog("success", `${collegeName} 本专科信息已上载到学校端，共 ${processedData.length} 条`);
+    alert("已上载到学校端");
   };
 
   const addFamilyResultToMergePool = async () => {
     if (familyProcessedData.length === 0) {
-      alert("没有可加入汇总池的家庭成员处理结果");
+      alert("没有可上载的家庭成员处理结果");
       return;
     }
 
@@ -214,7 +218,7 @@ export default function App() {
 
     if (
       possibleDuplicate &&
-      !confirm("检测到该学院家庭成员信息可能已加入汇总池，是否仍然继续加入？")
+      !confirm("检测到该学院家庭成员信息可能已上载，是否仍然继续上载？")
     ) {
       return;
     }
@@ -228,8 +232,8 @@ export default function App() {
       rows: familyProcessedData,
     });
 
-    pushFamilyLog("success", `${collegeName} 家庭成员信息已加入汇总池，共 ${familyProcessedData.length} 条`);
-    alert("家庭成员信息已加入汇总池");
+    pushFamilyLog("success", `${collegeName} 家庭成员信息已上载到学校端，共 ${familyProcessedData.length} 条`);
+    alert("家庭成员信息已上载到学校端");
   };
 
   const uploadTemplate = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -657,21 +661,25 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
           困难生数据处理
         </button>
 
-        <button
-          onClick={() => setActiveModule("database")}
-          style={activeModule === "database" ? styles.activeModule : styles.inactiveModule}
-        >
-          困难生数据库
-        </button>
+        {!collegeMode && (
+          <>
+            <button
+              onClick={() => setActiveModule("database")}
+              style={activeModule === "database" ? styles.activeModule : styles.inactiveModule}
+            >
+              困难生数据库
+            </button>
 
-        <button
-          onClick={() => setActiveModule("merge")}
-          style={activeModule === "merge" ? styles.activeModule : styles.inactiveModule}
-        >
-          全校数据汇总
-        </button>
+            <button
+              onClick={() => setActiveModule("merge")}
+              style={activeModule === "merge" ? styles.activeModule : styles.inactiveModule}
+            >
+              全校数据汇总
+            </button>
 
-        <button style={styles.disabledModule}>后续功能板块预留</button>
+            <button style={styles.disabledModule}>后续功能板块预留</button>
+          </>
+        )}
       </div>
 
       {activeModule === "database" && <DatabasePage />}
