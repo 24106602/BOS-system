@@ -50,6 +50,35 @@ const initialFamilyStats: FamilyProcessingStats = {
   databaseMiss: 0,
 };
 
+type CollegeValidationError = {
+  row: number;
+  column: string;
+  field: string;
+  value: string;
+  reason: string;
+  level: "error" | "warning";
+};
+
+const toCollegeValidationErrors = (items: ErrorReportItem[]): CollegeValidationError[] =>
+  items.map((item) => {
+    const reasonText = String(item.issueType || "");
+    const actionText = String(item.action || "");
+    const hardError =
+      reasonText.includes("错误") ||
+      reasonText.includes("不通过") ||
+      actionText.includes("标红") ||
+      actionText.includes("不通过");
+
+    return {
+      row: item.rowIndex,
+      column: item.fieldName,
+      field: item.fieldName,
+      value: String(item.originalValue ?? ""),
+      reason: reasonText || actionText || "数据异常",
+      level: hardError ? "error" : "warning",
+    };
+  });
+
 export default function App() {
   const templateRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef<HTMLInputElement>(null);
@@ -106,6 +135,7 @@ export default function App() {
   useEffect(() => {
     familyLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [familyLogs]);
+
 
   const pushLog = (type: LogType, message: string) => {
     setLogs((prev) => [...prev, { type, message, time: new Date().toLocaleTimeString() }]);
@@ -295,6 +325,15 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
       setStats(result.stats);
       setStatus("治理完成");
 
+      window.dispatchEvent(
+        new CustomEvent("bos:college-upload-result", {
+          detail: {
+            errorCount: result.stats.errors,
+            validationErrors: toCollegeValidationErrors(result.errorReports),
+          },
+        })
+      );
+
       alert(`
 困难生数据处理完成
 
@@ -312,6 +351,20 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
       setIsProcessing(false);
     }
   };
+
+  useEffect(() => {
+    const win = window as typeof window & {
+      __bosSyncToSchool?: () => Promise<void>;
+    };
+
+    win.__bosSyncToSchool = async () => {
+      await processData();
+    };
+
+    return () => {
+      delete win.__bosSyncToSchool;
+    };
+  }, [processData]);
 
   const exportExcel = () => {
     if (processedData.length === 0) {

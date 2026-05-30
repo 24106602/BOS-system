@@ -1,26 +1,67 @@
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import ProcessingWorkbench from "../../App";
 import ErrorReportTable, { type ValidationError } from "../../components/ErrorReportTable";
 
+type CollegeUploadEventDetail = {
+  errorCount: number;
+  validationErrors: ValidationError[];
+};
+
+type SyncWindow = Window & {
+  __bosSyncToSchool?: () => Promise<void>;
+};
+
 export default function CollegeUploadPage() {
-  const [errorCount] = useState(0);
-  const [validationErrors] = useState<ValidationError[]>([]);
+  const [errorCount, setErrorCount] = useState(0);
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
+  const [hasProcessed, setHasProcessed] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("等待提交");
 
+  useEffect(() => {
+    const onResult = (event: Event) => {
+      const detail = (event as CustomEvent<CollegeUploadEventDetail>).detail;
+      if (!detail) return;
+      setHasProcessed(true);
+      setErrorCount(detail.errorCount || 0);
+      setValidationErrors(detail.validationErrors || []);
+      setSubmitMessage(
+        detail.errorCount > 0 ? "上传失败：当前数据仍存在错误" : "治理通过，可上传到学校端"
+      );
+    };
+
+    window.addEventListener("bos:college-upload-result", onResult);
+    return () => window.removeEventListener("bos:college-upload-result", onResult);
+  }, []);
+
   const canSubmit = useMemo(
-    () => errorCount === 0 && !validationErrors.some((item) => item.level === "error"),
-    [errorCount, validationErrors]
+    () => hasProcessed && errorCount === 0 && !validationErrors.some((item) => item.level === "error"),
+    [hasProcessed, errorCount, validationErrors]
   );
 
-  const uploadToSchool = () => {
+  const uploadToSchool = async () => {
     if (!canSubmit) {
-      setSubmitMessage("上传失败，当前数据仍存在错误");
+      setSubmitMessage("上传失败：当前数据仍存在错误");
       alert("上传失败，当前数据仍存在错误");
       return;
     }
 
-    setSubmitMessage("已提交到学校端");
-    alert("已提交到学校端");
+    const syncFn = (window as SyncWindow).__bosSyncToSchool;
+    if (!syncFn) {
+      setSubmitMessage("上传失败：未找到云端同步入口");
+      alert("上传失败：未找到云端同步入口");
+      return;
+    }
+
+    try {
+      setSubmitMessage("正在上传到学校端...");
+      await syncFn();
+      setSubmitMessage("已提交到学校端");
+      alert("已提交到学校端");
+    } catch (error) {
+      console.error("College upload sync failed:", error);
+      setSubmitMessage("上传失败：云端写入异常");
+      alert("上传失败：云端写入异常");
+    }
   };
 
   return (
@@ -29,7 +70,7 @@ export default function CollegeUploadPage() {
         <h1 style={styles.title}>学院数据上传与治理</h1>
         <div style={styles.tip}>流程：上传模板 → 上传待处理数据 → 开始治理 → 查看错误列表 → 上传到学校端</div>
         <div style={styles.tip}>当前错误数：{errorCount}</div>
-        {!canSubmit && <div style={styles.warn}>当前数据仍存在错误，请先修复后再上传</div>}
+        {hasProcessed && !canSubmit && <div style={styles.warn}>上传失败：当前数据仍存在错误</div>}
         <button style={canSubmit ? styles.submit : styles.submitDisabled} onClick={uploadToSchool} disabled={!canSubmit}>
           上传到学校端
         </button>
@@ -71,6 +112,7 @@ const styles: Record<string, CSSProperties> = {
   },
   warn: {
     color: "#b91c1c",
+    fontWeight: 700,
     marginBottom: 8,
   },
   submit: {
