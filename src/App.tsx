@@ -145,9 +145,26 @@ export default function App() {
     setFamilyLogs((prev) => [...prev, { type, message, time: new Date().toLocaleTimeString() }]);
   };
 
+  const hasBlockingStudentUpload = () =>
+    stats.errors > 0 ||
+    disqualifiedRows.length > 0 ||
+    studentErrorReports.some(
+      (item) =>
+        String(item.issueType || "").includes("标红") ||
+        String(item.issueType || "").includes("错误") ||
+        String(item.action || "").includes("不通过")
+    );
+
   const addStudentResultToMergePool = async () => {
     if (processedData.length === 0) {
       alert("没有可加入汇总池的本专科处理结果");
+      return;
+    }
+
+    if (hasBlockingStudentUpload()) {
+      const message = "上传失败，当前数据仍存在不通过项，请查看“不通过预览”";
+      pushLog("error", message);
+      alert(message);
       return;
     }
 
@@ -354,17 +371,26 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
 
   useEffect(() => {
     const win = window as typeof window & {
+      __bosHasBlockingErrors?: () => boolean;
       __bosSyncToSchool?: () => Promise<void>;
     };
 
+    win.__bosHasBlockingErrors = hasBlockingStudentUpload;
     win.__bosSyncToSchool = async () => {
-      await processData();
+      if (hasBlockingStudentUpload()) {
+        const message = "上传失败，当前数据仍存在不通过项，请查看“不通过预览”";
+        pushLog("error", message);
+        setStatus(message);
+        throw new Error(message);
+      }
+      await addStudentResultToMergePool();
     };
 
     return () => {
+      delete win.__bosHasBlockingErrors;
       delete win.__bosSyncToSchool;
     };
-  }, [processData]);
+  }, [stats.errors, disqualifiedRows, studentErrorReports, processedData, studentCollegeName]);
 
   const exportExcel = () => {
     if (processedData.length === 0) {
@@ -396,7 +422,7 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
 
   const exportStudentErrorReport = () => {
     if (studentErrorReports.length === 0) {
-      alert("暂无异常报告");
+      alert("暂无不通过名单");
       return;
     }
 

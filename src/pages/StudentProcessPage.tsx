@@ -68,7 +68,7 @@ export default function StudentProcessPage({
             {isProcessing ? "治理执行中..." : "开始治理"}
           </button>
           <button onClick={exportExcel} style={styles.purpleButton}>导出结果</button>
-          <button onClick={exportStudentErrorReport} style={styles.purpleButton}>导出异常报告</button>
+          <button onClick={exportStudentErrorReport} style={styles.purpleButton}>导出不通过名单</button>
           <button onClick={addStudentResultToMergePool} style={styles.mergeButton}>加入汇总池</button>
         </div>
 
@@ -86,7 +86,7 @@ export default function StudentProcessPage({
         <section style={styles.section}><h2>模板预览</h2>{renderTemplatePreview()}</section>
         <section style={styles.section}><h2>待处理数据预览</h2>{renderTable(makeSourcePreview(sourceRows, templateFields))}</section>
         <section style={styles.section}><h2>治理结果预览</h2>{renderTable(processedData)}</section>
-        <section style={styles.section}><h2>不通过名单预览</h2>{renderTable(disqualifiedRows)}</section>
+        <section style={styles.section}><h2>不通过预览</h2>{renderTable(disqualifiedRows)}</section>
 
         <section style={styles.section}>
           <h2>问题分析</h2>

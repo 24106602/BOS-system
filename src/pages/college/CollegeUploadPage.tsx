@@ -9,6 +9,7 @@ type CollegeUploadEventDetail = {
 
 type SyncWindow = Window & {
   __bosSyncToSchool?: () => Promise<void>;
+  __bosHasBlockingErrors?: () => boolean;
 };
 
 export default function CollegeUploadPage() {
@@ -25,7 +26,7 @@ export default function CollegeUploadPage() {
       setErrorCount(detail.errorCount || 0);
       setValidationErrors(detail.validationErrors || []);
       setSubmitMessage(
-        detail.errorCount > 0 ? "上传失败：当前数据仍存在错误" : "治理通过，可上传到学校端"
+        detail.errorCount > 0 ? "上传失败：当前数据仍存在不通过项" : "治理通过：可以上传到学校端"
       );
     };
 
@@ -33,22 +34,28 @@ export default function CollegeUploadPage() {
     return () => window.removeEventListener("bos:college-upload-result", onResult);
   }, []);
 
-  const canSubmit = useMemo(
-    () => hasProcessed && errorCount === 0 && !validationErrors.some((item) => item.level === "error"),
+  const hasBlockingErrors = useMemo(
+    () =>
+      !hasProcessed ||
+      errorCount > 0 ||
+      validationErrors.some((item) => item.level === "error"),
     [hasProcessed, errorCount, validationErrors]
   );
 
+  const canSubmit = !hasBlockingErrors;
+
   const uploadToSchool = async () => {
-    if (!canSubmit) {
-      setSubmitMessage("上传失败：当前数据仍存在错误");
-      alert("上传失败，当前数据仍存在错误");
+    const globalBlocking = (window as SyncWindow).__bosHasBlockingErrors?.() ?? false;
+    if (hasBlockingErrors || globalBlocking) {
+      setSubmitMessage("上传失败：当前数据仍存在不通过项，请查看不通过预览");
+      alert("上传失败：当前数据仍存在不通过项，请查看不通过预览");
       return;
     }
 
     const syncFn = (window as SyncWindow).__bosSyncToSchool;
     if (!syncFn) {
-      setSubmitMessage("上传失败：未找到云端同步入口");
-      alert("上传失败：未找到云端同步入口");
+      setSubmitMessage("上传失败：未找到学校端上传入口");
+      alert("上传失败：未找到学校端上传入口");
       return;
     }
 
@@ -68,9 +75,15 @@ export default function CollegeUploadPage() {
     <section style={styles.wrap}>
       <div style={styles.card}>
         <h1 style={styles.title}>学院数据上传与治理</h1>
-        <div style={styles.tip}>流程：上传模板 → 上传待处理数据 → 开始治理 → 查看错误列表 → 上传到学校端</div>
-        <div style={styles.tip}>当前错误数：{errorCount}</div>
-        {hasProcessed && !canSubmit && <div style={styles.warn}>上传失败：当前数据仍存在错误</div>}
+        <div style={styles.tip}>流程：上传模板 → 上传待处理数据 → 开始治理 → 查看不通过预览 → 上传到学校端</div>
+        <div style={styles.tip}>总数据行数：{hasProcessed ? "已治理" : "未治理"}</div>
+        <div style={styles.tip}>不通过数量：{errorCount}</div>
+        {hasProcessed && hasBlockingErrors ? (
+          <div style={styles.warn}>当前数据存在不通过项，不能上传到学校端</div>
+        ) : hasProcessed ? (
+          <div style={styles.ok}>当前数据已全部通过，可以上传到学校端</div>
+        ) : null}
+
         <button style={canSubmit ? styles.submit : styles.submitDisabled} onClick={uploadToSchool} disabled={!canSubmit}>
           上传到学校端
         </button>
@@ -78,7 +91,7 @@ export default function CollegeUploadPage() {
       </div>
 
       <div style={styles.card}>
-        <h2 style={styles.subTitle}>错误列表</h2>
+        <h2 style={styles.subTitle}>不通过预览</h2>
         <ErrorReportTable errors={validationErrors} />
       </div>
 
@@ -112,6 +125,11 @@ const styles: Record<string, CSSProperties> = {
   },
   warn: {
     color: "#b91c1c",
+    fontWeight: 700,
+    marginBottom: 8,
+  },
+  ok: {
+    color: "#15803d",
     fontWeight: 700,
     marginBottom: 8,
   },

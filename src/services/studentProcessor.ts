@@ -61,6 +61,21 @@ export type StudentProcessorResult = {
   errorReports: ErrorReportItem[];
 };
 
+type StudentCloudRow = {
+  college_name: string;
+  student_id: string;
+  name: string;
+  id_card: string;
+  difficulty_level: string;
+  status: string;
+};
+
+const makeStudentKey = (collegeName: string, studentId: string, idCard: string) => {
+  if (studentId) return `sid:${collegeName}::${studentId}`;
+  if (idCard) return `id:${collegeName}::${idCard}`;
+  return "";
+};
+
 const makeStats = (
   total: number,
   repaired: number,
@@ -954,10 +969,74 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
   errorCount += crossMarked + emptyMarked;
 
   const finalFailRows = buildFailListFromHighlights(result, highlightMap, templateFields);
+  const finalFailRowNumbers = new Set(finalFailRows.map((item) => item.rowNumber));
+  const studentIdFieldIndex = templateFields.findIndex((field) => cleanFieldName(field).includes("学号"));
+  const studentIdField = studentIdFieldIndex >= 0 ? templateFields[studentIdFieldIndex] : "";
+  const duplicateSeen = new Map<string, number>();
+  let duplicateCount = 0;
+
+  result.forEach((row, index) => {
+    const collegeName = String(row[templateFields[1]] ?? "").trim() || "未填学院";
+    const studentId = studentIdField ? String(row[studentIdField] ?? "").trim() : "";
+    const idCard = String(row[templateFields[2]] ?? "").trim();
+
+    if (!studentId && !idCard) {
+      duplicateCount += 1;
+      errorReports.push({
+        rowIndex: index + 1,
+        fieldName: "学号/身份证号",
+        originalValue: "",
+        fixedValue: "",
+        issueType: "严重错误",
+        action: "学号和身份证号都为空，禁止上传到学校端",
+      });
+      if (!finalFailRowNumbers.has(index + 1)) {
+        finalFailRows.push({
+          rowNumber: index + 1,
+          name: String(row[templateFields[0]] ?? ""),
+          idCard,
+          income: String(row[templateFields[11]] ?? ""),
+          reason: "学号和身份证号都为空，禁止上传到学校端",
+        });
+        finalFailRowNumbers.add(index + 1);
+      }
+      return;
+    }
+
+    const key = makeStudentKey(collegeName, studentId, idCard);
+    if (!key) return;
+    if (!duplicateSeen.has(key)) {
+      duplicateSeen.set(key, index + 1);
+      return;
+    }
+
+    duplicateCount += 1;
+    const duplicateReason = studentId ? "同一学院内学号重复" : "同一学院内身份证号重复";
+    errorReports.push({
+      rowIndex: index + 1,
+      fieldName: studentId ? "学号" : "身份证号",
+      originalValue: studentId || idCard,
+      fixedValue: studentId || idCard,
+      issueType: "严重错误",
+      action: duplicateReason,
+    });
+    if (!finalFailRowNumbers.has(index + 1)) {
+      finalFailRows.push({
+        rowNumber: index + 1,
+        name: String(row[templateFields[0]] ?? ""),
+        idCard,
+        income: String(row[templateFields[11]] ?? ""),
+        reason: duplicateReason,
+      });
+      finalFailRowNumbers.add(index + 1);
+    }
+  });
+
+  const adjustedErrorCount = errorCount + duplicateCount;
   const stats = makeStats(
     sourceDataRows.length,
     repairedCount,
-    errorCount,
+    adjustedErrorCount,
     missingFieldCount,
     removedHeaders.length,
     Object.keys(highlightMap).length,
@@ -969,47 +1048,107 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
     message: `困难生数据处理完成
 输出数据行数：${result.length}
 自动修复：${repairedCount}
-异常问题：${errorCount}
+异常问题：${adjustedErrorCount}
 标记单元格：${Object.keys(highlightMap).length}
 不通过人数：${finalFailRows.length}`,
   });
 
-  try {
-    const studentIdFieldIndex = templateFields.findIndex((field) => cleanFieldName(field).includes("学号"));
-    const studentIdField = studentIdFieldIndex >= 0 ? templateFields[studentIdFieldIndex] : "";
-
-    const cloudRows = result.map((row) => ({
-      college_name: String(row[templateFields[1]] ?? "").trim() || "未填学院",
-      student_id: studentIdField ? String(row[studentIdField] ?? "").trim() : "",
-      name: String(row[templateFields[0]] ?? "").trim(),
-      id_card: String(row[templateFields[2]] ?? "").trim(),
-      difficulty_level: String(row[templateFields[11]] ?? "").trim(),
-      status: "pending_review",
-    }));
-
-    const { error: syncError } = await supabase.from("students").insert(cloudRows);
-    if (syncError) throw syncError;
-
-    onLog?.({
-      type: "success",
-      message: "🎉 云端数据同步成功，全校数据库已实时更新！",
-    });
-  } catch (error) {
-    const e = error as {
-      message?: string;
-      details?: string;
-      hint?: string;
-      code?: string;
-    };
-    console.error("Supabase cloud sync failed:", e);
-    console.error("Supabase error message:", e?.message);
-    console.error("Supabase error details:", e?.details);
-    console.error("Supabase error hint:", e?.hint);
-    console.error("Supabase error code:", e?.code);
+  const hasBlockingErrors = stats.errors > 0 || finalFailRows.length > 0;
+  if (hasBlockingErrors) {
     onLog?.({
       type: "error",
-      message: `云端同步失败：${e?.message || JSON.stringify(e)}；details=${e?.details || ""}；hint=${e?.hint || ""}；code=${e?.code || ""}`,
+      message: "上传失败，当前数据仍存在不通过项，请查看“不通过预览”",
     });
+  } else {
+    try {
+      const cloudRows: StudentCloudRow[] = result.map((row) => ({
+        college_name: String(row[templateFields[1]] ?? "").trim() || "未填学院",
+        student_id: studentIdField ? String(row[studentIdField] ?? "").trim() : "",
+        name: String(row[templateFields[0]] ?? "").trim(),
+        id_card: String(row[templateFields[2]] ?? "").trim(),
+        difficulty_level: String(row[templateFields[11]] ?? "").trim(),
+        status: "pending_review",
+      }));
+
+      const collegeName = cloudRows[0]?.college_name || "未填学院";
+      const { data: existingRows, error: fetchError } = await supabase
+        .from("students")
+        .select("id,college_name,student_id,id_card")
+        .eq("college_name", collegeName);
+      if (fetchError) throw fetchError;
+
+      const existingByStudentId = new Map<string, number>();
+      const existingByIdCard = new Map<string, number>();
+      (existingRows || []).forEach((item: { id: number; student_id: string | null; id_card: string | null }) => {
+        const sid = String(item.student_id ?? "").trim();
+        const cid = String(item.id_card ?? "").trim();
+        if (sid) existingByStudentId.set(sid, item.id);
+        if (cid) existingByIdCard.set(cid, item.id);
+      });
+
+      let inserted = 0;
+      let updated = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      for (const row of cloudRows) {
+        const sid = row.student_id.trim();
+        const cid = row.id_card.trim();
+        if (!sid && !cid) {
+          skipped += 1;
+          continue;
+        }
+
+        const existingId = sid ? existingByStudentId.get(sid) : existingByIdCard.get(cid);
+        if (existingId) {
+          const { error: updateError } = await supabase
+            .from("students")
+            .update({
+              college_name: row.college_name,
+              student_id: row.student_id,
+              name: row.name,
+              id_card: row.id_card,
+              difficulty_level: row.difficulty_level,
+              status: row.status,
+            })
+            .eq("id", existingId);
+          if (updateError) {
+            failed += 1;
+          } else {
+            updated += 1;
+          }
+          continue;
+        }
+
+        const { error: insertError } = await supabase.from("students").insert(row);
+        if (insertError) {
+          failed += 1;
+        } else {
+          inserted += 1;
+        }
+      }
+
+      onLog?.({
+        type: "success",
+        message: `云端同步完成：新增 ${inserted} 条，更新 ${updated} 条，跳过 ${skipped} 条，失败 ${failed} 条`,
+      });
+    } catch (error) {
+      const e = error as {
+        message?: string;
+        details?: string;
+        hint?: string;
+        code?: string;
+      };
+      console.error("Supabase cloud sync failed:", e);
+      console.error("Supabase error message:", e?.message);
+      console.error("Supabase error details:", e?.details);
+      console.error("Supabase error hint:", e?.hint);
+      console.error("Supabase error code:", e?.code);
+      onLog?.({
+        type: "error",
+        message: `云端同步失败：${e?.message || JSON.stringify(e)}；details=${e?.details || ""}；hint=${e?.hint || ""}；code=${e?.code || ""}`,
+      });
+    }
   }
 
   return {
@@ -1096,28 +1235,6 @@ export const exportStudentExcel = ({
     XLSX.utils.book_append_sheet(workbook, cloneWorksheet(templateWorkbook.worksheets[templateDictSheet]), templateDictSheet);
   }
 
-  const failSheetRows = [
-    ["源数据行号", "姓名", "身份证号", "家庭年均收入", "不通过原因", "处理结果"],
-    ...disqualifiedRows.map((item) => [
-      item.rowNumber,
-      item.name,
-      item.idCard,
-      item.income,
-      item.reason,
-      "不通过",
-    ]),
-  ];
-  const failSheet = XLSX.utils.aoa_to_sheet(failSheetRows);
-  failSheet["!cols"] = [
-    { wch: 12 },
-    { wch: 15 },
-    { wch: 25 },
-    { wch: 18 },
-    { wch: 80 },
-    { wch: 14 },
-  ];
-  XLSX.utils.book_append_sheet(workbook, failSheet, "不通过名单");
-
   const issueEntries = Object.entries(highlightCellMap)
     .map(([key, info]) => {
       const [rowIndexText, colIndexText] = key.split("_");
@@ -1130,31 +1247,68 @@ export const exportStudentExcel = ({
     .filter((item) => !Number.isNaN(item.rowIndex) && !Number.isNaN(item.colIndex))
     .sort((a, b) => a.rowIndex - b.rowIndex || a.colIndex - b.colIndex);
 
-  const issueSheetRows =
-    issueEntries.length === 0
+  const failRowNumberSet = new Set(disqualifiedRows.map((item) => item.rowNumber));
+  const passedRows = processedData.filter((_, index) => !failRowNumberSet.has(index + 1));
+  const passedSheet = XLSX.utils.json_to_sheet(passedRows, { header: templateFields });
+  passedSheet["!cols"] = templateFields.map(() => ({ wch: 18 }));
+  XLSX.utils.book_append_sheet(workbook, passedSheet, "通过数据");
+
+  const studentIdFieldIndex = templateFields.findIndex((field) => cleanFieldName(field).includes("学号"));
+  const studentIdField = studentIdFieldIndex >= 0 ? templateFields[studentIdFieldIndex] : "";
+  const failIssueRows = issueEntries.map(({ rowIndex, colIndex, info }) => {
+    const row = processedData[rowIndex] || {};
+    const fieldName = templateFields[colIndex] || `第${colIndex + 1}列`;
+    return [
+      rowIndex + 1,
+      String(row[templateFields[1]] ?? ""),
+      String(row[templateFields[0]] ?? ""),
+      studentIdField ? String(row[studentIdField] ?? "") : "",
+      String(row[templateFields[2]] ?? ""),
+      fieldName,
+      String(row[fieldName] ?? ""),
+      info.reason,
+      info.color === "red" ? "error" : "warning",
+    ];
+  });
+
+  const noIssueFailRows = disqualifiedRows
+    .filter((item) => !failIssueRows.some((row) => Number(row[0]) === item.rowNumber))
+    .map((item) => {
+      const row = processedData[item.rowNumber - 1] || {};
+      return [
+        item.rowNumber,
+        String(row[templateFields[1]] ?? ""),
+        String(item.name ?? ""),
+        studentIdField ? String(row[studentIdField] ?? "") : "",
+        String(item.idCard ?? ""),
+        "",
+        "",
+        item.reason,
+        "error",
+      ];
+    });
+
+  const failDataRows = [...failIssueRows, ...noIssueFailRows];
+  const failSheetRows =
+    failDataRows.length === 0
       ? [["暂无问题"]]
       : [
-          ["源数据行号", "字段名", "当前值", "标记颜色", "问题原因"],
-          ...issueEntries.map(({ rowIndex, colIndex, info }) => {
-            const fieldName = templateFields[colIndex] || `第${colIndex + 1}列`;
-            return [
-              rowIndex + 1,
-              fieldName,
-              processedData[rowIndex]?.[fieldName] ?? "",
-              info.color,
-              info.reason,
-            ];
-          }),
+          ["行号", "学院", "姓名", "学号", "身份证号", "错误字段", "原值", "错误原因", "严重程度"],
+          ...failDataRows,
         ];
-  const issueSheet = XLSX.utils.aoa_to_sheet(issueSheetRows);
-  issueSheet["!cols"] = [
+  const failSheet = XLSX.utils.aoa_to_sheet(failSheetRows);
+  failSheet["!cols"] = [
+    { wch: 10 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 18 },
+    { wch: 24 },
+    { wch: 18 },
+    { wch: 20 },
+    { wch: 60 },
     { wch: 12 },
-    { wch: 28 },
-    { wch: 28 },
-    { wch: 12 },
-    { wch: 80 },
   ];
-  XLSX.utils.book_append_sheet(workbook, issueSheet, "问题清单");
+  XLSX.utils.book_append_sheet(workbook, failSheet, "不通过数据");
 
   XLSX.writeFile(workbook, `困难生数据处理结果_${Date.now()}.xlsx`);
 
