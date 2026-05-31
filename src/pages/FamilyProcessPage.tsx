@@ -10,6 +10,7 @@ type FamilyProcessPageProps = {
   isFamilyProcessing: boolean;
   processFamilyData: () => void;
   exportFamilyResult: () => void;
+  exportFamilyErrorReport: () => void;
   addFamilyResultToMergePool: () => void;
   hideSubmitAction?: boolean;
   familyStatus: string;
@@ -36,6 +37,7 @@ export default function FamilyProcessPage({
   isFamilyProcessing,
   processFamilyData,
   exportFamilyResult,
+  exportFamilyErrorReport,
   addFamilyResultToMergePool,
   hideSubmitAction = false,
   familyStatus,
@@ -68,7 +70,8 @@ export default function FamilyProcessPage({
           <button disabled={isFamilyProcessing} onClick={processFamilyData} style={styles.orangeButton}>
             {isFamilyProcessing ? "处理中..." : "开始处理"}
           </button>
-          <button onClick={exportFamilyResult} style={styles.purpleButton}>导出结果</button>
+          <button onClick={exportFamilyResult} style={styles.purpleButton}>导出通过名单</button>
+          <button onClick={exportFamilyErrorReport} style={styles.purpleButton}>导出不通过名单</button>
           {!hideSubmitAction && <button onClick={addFamilyResultToMergePool} style={styles.mergeButton}>上载到学校端</button>}
         </div>
 
@@ -76,18 +79,16 @@ export default function FamilyProcessPage({
         <div style={styles.status}>当前识别学院：{familyCollegeName}</div>
 
         <div style={styles.statsGrid}>
-          <div style={styles.statCard}><div>成员数据行数</div><strong>{familyStats.total}</strong></div>
-          <div style={styles.statCard}><div>修复</div><strong style={{ color: "#16a34a" }}>{familyStats.repaired}</strong></div>
-          <div style={styles.statCard}><div>异常</div><strong style={{ color: "#dc2626" }}>{familyStats.errors}</strong></div>
-          <div style={styles.statCard}><div>标记</div><strong style={{ color: "#7c3aed" }}>{familyStats.highlighted}</strong></div>
-          <div style={styles.statCard}><div>待复核</div><strong style={{ color: "#f97316" }}>{familyStats.review}</strong></div>
-          <div style={styles.statCard}><div>库未命中</div><strong style={{ color: "#dc2626" }}>{familyStats.databaseMiss}</strong></div>
+          <div style={styles.statCard}><div>总人数</div><strong>{familyStats.total}</strong></div>
+          <div style={styles.statCard}><div>通过人数</div><strong style={{ color: "#16a34a" }}>{Math.max(0, familyStats.total - familyStats.review)}</strong></div>
+          <div style={styles.statCard}><div>不通过人数</div><strong style={{ color: "#dc2626" }}>{familyStats.review}</strong></div>
+          <div style={styles.statCard}><div>自动修复项</div><strong style={{ color: "#0f766e" }}>{familyStats.repaired}</strong></div>
         </div>
 
         <section style={styles.section}><h2>家庭成员模板预览</h2>{renderFamilyTemplatePreview()}</section>
         <section style={styles.section}><h2>家庭成员数据预览</h2>{renderTable(makeSourcePreview(familySourceRows, familyTemplateFields))}</section>
         <section style={styles.section}><h2>家庭成员处理结果</h2>{renderTable(familyProcessedData)}</section>
-        <section style={styles.section}><h2>家庭成员待复核名单</h2>{renderTable(familyReviewRows)}</section>
+        <section style={styles.section}><h2>家庭成员不通过预览</h2>{renderTable(familyReviewRows)}</section>
 
         <section style={styles.section}>
           <h2>问题分析</h2>

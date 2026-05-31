@@ -53,3 +53,78 @@ export const collegeAccounts: CollegeAccount[] = [
   { college_code: "FL", college_name: "School of Foreign Languages", account_name: "FL", role: "college", enabled: true },
   { college_code: "AD", college_name: "School of Arts and Design", account_name: "AD", role: "college", enabled: true },
 ];
+
+const CURRENT_COLLEGE_ACCOUNT_KEY = "bos_college_account";
+
+export type CollegeDetectionResult = {
+  collegeName: string;
+  accountName: string;
+  source: "account" | "file" | "unknown";
+  error: string;
+};
+
+const detectCollegeAccountFromFileName = (fileName: string) => {
+  const normalized = fileName.toUpperCase();
+  return collegeAccounts.find(
+    (account) =>
+      new RegExp(`(^|[^A-Z0-9])${account.college_code}([^A-Z0-9]|$)`).test(normalized) ||
+      normalized.includes(account.college_name.toUpperCase())
+  );
+};
+
+export const getCurrentCollegeAccount = () => {
+  const accountName = window.localStorage.getItem(CURRENT_COLLEGE_ACCOUNT_KEY)?.trim().toUpperCase() || "";
+  if (!accountName) return undefined;
+  return collegeAccounts.find(
+    (account) => account.account_name.toUpperCase() === accountName || account.college_code === accountName
+  );
+};
+
+export const resolveCollegeUpload = (fileName: string): CollegeDetectionResult => {
+  const currentAccount = getCurrentCollegeAccount();
+  const accountFromFile = detectCollegeAccountFromFileName(fileName);
+  const legacyFileCollege = detectCollegeName(fileName);
+
+  if (currentAccount && accountFromFile && currentAccount.college_code !== accountFromFile.college_code) {
+    return {
+      collegeName: currentAccount.college_name,
+      accountName: currentAccount.account_name,
+      source: "account",
+      error: "上传文件所属学院与当前账号不一致。",
+    };
+  }
+
+  if (currentAccount) {
+    return {
+      collegeName: currentAccount.college_name,
+      accountName: currentAccount.account_name,
+      source: "account",
+      error: "",
+    };
+  }
+
+  if (accountFromFile) {
+    return {
+      collegeName: accountFromFile.college_name,
+      accountName: accountFromFile.account_name,
+      source: "file",
+      error: "",
+    };
+  }
+
+  if (legacyFileCollege !== "未知学院") {
+    return {
+      collegeName: legacyFileCollege,
+      accountName: "",
+      source: "file",
+      error: "",
+    };
+  }
+
+  return {
+    collegeName: "未知学院",
+    accountName: "",
+    source: "unknown",
+    error: "无法识别所属学院，请检查账号或文件名。",
+  };
+};

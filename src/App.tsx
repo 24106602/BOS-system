@@ -6,7 +6,6 @@ import DatabasePage from "./pages/DatabasePage";
 import MergePage from "./pages/MergePage";
 import StudentProcessPage from "./pages/StudentProcessPage";
 import FamilyProcessPage from "./pages/FamilyProcessPage";
-import { exportErrorReport } from "./services/errorReport";
 import { exportFamilyExcel, processFamilyRows } from "./services/familyProcessor";
 import { exportStudentExcel, processStudentRows } from "./services/studentProcessor";
 
@@ -16,7 +15,7 @@ import {
   parseStudentTemplate,
   readWorkbook,
 } from "./services/templateParser";
-import { detectCollegeName } from "./utils/collegeDetector";
+import { resolveCollegeUpload } from "./utils/collegeDetector";
 import type {
   DisqualifiedRow,
   ErrorReportItem,
@@ -60,7 +59,9 @@ type CollegeValidationError = {
 };
 
 const toCollegeValidationErrors = (items: ErrorReportItem[]): CollegeValidationError[] =>
-  items.map((item) => {
+  items
+    .filter((item) => item.issueType !== "自动修复")
+    .map((item) => {
     const reasonText = String(item.issueType || "");
     const actionText = String(item.action || "");
     const hardError =
@@ -77,7 +78,7 @@ const toCollegeValidationErrors = (items: ErrorReportItem[]): CollegeValidationE
       reason: reasonText || actionText || "数据异常",
       level: hardError ? "error" : "warning",
     };
-  });
+    });
 
 type AppProps = {
   collegeMode?: boolean;
@@ -101,6 +102,7 @@ export default function App({ collegeMode = false }: AppProps) {
   const [fieldDictMap, setFieldDictMap] = useState<Record<string, string>>({});
   const [sourceRows, setSourceRows] = useState<unknown[][]>([]);
   const [studentCollegeName, setStudentCollegeName] = useState("未知学院");
+  const [studentCollegeValidationError, setStudentCollegeValidationError] = useState("");
   const [processedData, setProcessedData] = useState<Record<string, unknown>[]>([]);
   const [studentErrorReports, setStudentErrorReports] = useState<ErrorReportItem[]>([]);
   const [highlightCellMap, setHighlightCellMap] = useState<Record<string, HighlightInfo>>({});
@@ -123,6 +125,7 @@ export default function App({ collegeMode = false }: AppProps) {
   const [familyFieldDictMap, setFamilyFieldDictMap] = useState<Record<string, string>>({});
   const [familySourceRows, setFamilySourceRows] = useState<unknown[][]>([]);
   const [familyCollegeName, setFamilyCollegeName] = useState("未知学院");
+  const [familyCollegeValidationError, setFamilyCollegeValidationError] = useState("");
   const [familyProcessedData, setFamilyProcessedData] = useState<Record<string, unknown>[]>([]);
   const [familyHighlightCellMap, setFamilyHighlightCellMap] = useState<Record<string, HighlightInfo>>({});
   const [familyReviewRows, setFamilyReviewRows] = useState<FamilyReviewRow[]>([]);
@@ -150,6 +153,7 @@ export default function App({ collegeMode = false }: AppProps) {
   };
 
   const hasBlockingStudentUpload = () =>
+    Boolean(studentCollegeValidationError) ||
     stats.errors > 0 ||
     disqualifiedRows.length > 0 ||
     studentErrorReports.some(
@@ -158,6 +162,11 @@ export default function App({ collegeMode = false }: AppProps) {
         String(item.issueType || "").includes("错误") ||
         String(item.action || "").includes("不通过")
     );
+
+  const hasBlockingFamilyUpload = () =>
+    Boolean(familyCollegeValidationError) ||
+    familyStats.errors > 0 ||
+    familyReviewRows.length > 0;
 
   const addStudentResultToMergePool = async () => {
     if (processedData.length === 0) {
@@ -204,6 +213,13 @@ export default function App({ collegeMode = false }: AppProps) {
   const addFamilyResultToMergePool = async () => {
     if (familyProcessedData.length === 0) {
       alert("没有可上载的家庭成员处理结果");
+      return;
+    }
+
+    if (hasBlockingFamilyUpload()) {
+      const message = "上载失败，当前家庭成员数据仍存在不通过项，请查看“不通过预览”";
+      pushFamilyLog("error", message);
+      alert(message);
       return;
     }
 
@@ -277,8 +293,11 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const detectedCollege = detectCollegeName(file.name);
-    setStudentCollegeName(detectedCollege);
+    const collegeDetection = resolveCollegeUpload(file.name);
+    setStudentCollegeName(collegeDetection.collegeName);
+    setStudentCollegeValidationError(collegeDetection.error);
+    if (collegeDetection.error) pushLog("error", collegeDetection.error);
+    else pushLog("success", `所属学院已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
 
     try {
       const workbookData = await readWorkbook(file);
@@ -317,6 +336,11 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
       alert("请先上传待处理数据");
       return;
     }
+    if (studentCollegeValidationError) {
+      pushLog("error", studentCollegeValidationError);
+      alert(studentCollegeValidationError);
+      return;
+    }
 
     try {
       setIsProcessing(true);
@@ -331,6 +355,7 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
         dictionaryMap,
         fieldDictMap,
         sourceRows,
+        collegeName: studentCollegeName,
         onLog: (item) => pushLog(item.type, item.message),
         onProgress: (nextStats, nextStatus) => {
           setStats(nextStats);
@@ -349,8 +374,20 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
       window.dispatchEvent(
         new CustomEvent("bos:college-upload-result", {
           detail: {
-            errorCount: result.stats.errors,
-            validationErrors: toCollegeValidationErrors(result.errorReports),
+            errorCount: result.stats.disqualified,
+            totalCount: result.stats.total,
+            fixedCount: result.stats.repaired,
+            validationErrors: [
+              ...toCollegeValidationErrors(result.errorReports),
+              ...result.disqualifiedRows.map((item) => ({
+                row: item.rowNumber,
+                column: "整行",
+                field: "不通过原因",
+                value: item.name,
+                reason: item.reason,
+                level: "error" as const,
+              })),
+            ],
           },
         })
       );
@@ -379,24 +416,46 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
       __bosSyncToSchool?: () => Promise<void>;
     };
 
-    win.__bosHasBlockingErrors = hasBlockingStudentUpload;
+    win.__bosHasBlockingErrors =
+      activeProcessingPanel === "student" ? hasBlockingStudentUpload : hasBlockingFamilyUpload;
     win.__bosSyncToSchool = async () => {
-      if (hasBlockingStudentUpload()) {
-        const message = "上传失败，当前数据仍存在不通过项，请查看“不通过预览”";
-        pushLog("error", message);
-        setStatus(message);
+      const hasBlockingErrors =
+        activeProcessingPanel === "student" ? hasBlockingStudentUpload() : hasBlockingFamilyUpload();
+      if (hasBlockingErrors) {
+        const message = "上载失败，当前数据仍存在不通过项，请查看“不通过预览”";
+        if (activeProcessingPanel === "student") {
+          pushLog("error", message);
+          setStatus(message);
+        } else {
+          pushFamilyLog("error", message);
+          setFamilyStatus(message);
+        }
         throw new Error(message);
       }
-      await addStudentResultToMergePool();
+      if (activeProcessingPanel === "student") await addStudentResultToMergePool();
+      else await addFamilyResultToMergePool();
     };
 
     return () => {
       delete win.__bosHasBlockingErrors;
       delete win.__bosSyncToSchool;
     };
-  }, [stats.errors, disqualifiedRows, studentErrorReports, processedData, studentCollegeName]);
+  }, [
+    activeProcessingPanel,
+    stats.errors,
+    disqualifiedRows,
+    studentErrorReports,
+    processedData,
+    studentCollegeName,
+    studentCollegeValidationError,
+    familyStats.errors,
+    familyReviewRows,
+    familyProcessedData,
+    familyCollegeName,
+    familyCollegeValidationError,
+  ]);
 
-  const exportExcel = () => {
+  const exportStudentList = (exportMode: "passed" | "failed") => {
     if (processedData.length === 0) {
       alert("没有可导出数据");
       return;
@@ -416,21 +475,23 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
         templateFirstRow,
         highlightCellMap,
         disqualifiedRows,
+        exportMode,
       });
-      pushLog("success", `Excel导出成功，不通过名单人数：${result.failCount}`);
+      pushLog("success", `${exportMode === "passed" ? "通过名单" : "不通过名单"}导出成功，不通过人数：${result.failCount}`);
     } catch (error) {
       console.error(error);
       alert("导出失败，请检查模板是否存在。");
     }
   };
 
+  const exportExcel = () => exportStudentList("passed");
+
   const exportStudentErrorReport = () => {
-    if (studentErrorReports.length === 0) {
+    if (disqualifiedRows.length === 0) {
       alert("暂无不通过名单");
       return;
     }
-
-    exportErrorReport(studentErrorReports);
+    exportStudentList("failed");
   };
 
   const uploadFamilyTemplate = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -474,8 +535,11 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const detectedCollege = detectCollegeName(file.name);
-    setFamilyCollegeName(detectedCollege);
+    const collegeDetection = resolveCollegeUpload(file.name);
+    setFamilyCollegeName(collegeDetection.collegeName);
+    setFamilyCollegeValidationError(collegeDetection.error);
+    if (collegeDetection.error) pushFamilyLog("error", collegeDetection.error);
+    else pushFamilyLog("success", `所属学院已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
 
     try {
       const workbookData = await readWorkbook(file);
@@ -516,6 +580,11 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
       alert("请先上传家庭成员数据");
       return;
     }
+    if (familyCollegeValidationError) {
+      pushFamilyLog("error", familyCollegeValidationError);
+      alert(familyCollegeValidationError);
+      return;
+    }
 
     try {
       setIsFamilyProcessing(true);
@@ -544,6 +613,24 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
       setFamilyStats(result.familyStats);
       setFamilyStatus("家庭成员治理完成");
 
+      window.dispatchEvent(
+        new CustomEvent("bos:college-upload-result", {
+          detail: {
+            errorCount: result.familyStats.review,
+            totalCount: result.familyStats.total,
+            fixedCount: result.familyStats.repaired,
+            validationErrors: result.familyReviewRows.map((item) => ({
+              row: item.rowNumber,
+              column: "家庭成员信息",
+              field: "家庭成员信息",
+              value: item.studentId,
+              reason: item.reason,
+              level: "error",
+            })),
+          },
+        })
+      );
+
       alert(`
 家庭成员信息处理完成
 
@@ -563,7 +650,7 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
     }
   };
 
-  const exportFamilyResult = () => {
+  const exportFamilyList = (exportMode: "passed" | "failed") => {
     if (familyProcessedData.length === 0) {
       alert("没有可导出的家庭成员处理结果");
       return;
@@ -583,12 +670,23 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
         familyTemplateFirstRow,
         familyHighlightCellMap,
         familyReviewRows,
+        familyCollegeName,
+        exportMode,
       });
-      pushFamilyLog("success", `Excel导出成功，待复核行数：${result.reviewCount}`);
+      pushFamilyLog("success", `${exportMode === "passed" ? "通过名单" : "不通过名单"}导出成功，不通过行数：${result.reviewCount}`);
     } catch (error) {
       console.error(error);
       alert("家庭成员结果导出失败，请检查模板是否存在。");
     }
+  };
+
+  const exportFamilyResult = () => exportFamilyList("passed");
+  const exportFamilyErrorReport = () => {
+    if (familyReviewRows.length === 0) {
+      alert("暂无家庭成员不通过名单");
+      return;
+    }
+    exportFamilyList("failed");
   };
 
   const renderTable = (data: Record<string, unknown>[] | DisqualifiedRow[] | FamilyReviewRow[]) => {
@@ -739,6 +837,7 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
               isFamilyProcessing={isFamilyProcessing}
               processFamilyData={processFamilyData}
               exportFamilyResult={exportFamilyResult}
+              exportFamilyErrorReport={exportFamilyErrorReport}
               addFamilyResultToMergePool={addFamilyResultToMergePool}
               hideSubmitAction={collegeMode}
               familyStatus={familyStatus}
@@ -1025,7 +1124,7 @@ const styles: Record<string, React.CSSProperties> = {
     margin: "0 0 12px 0",
   },
   logBox: {
-    flex: 1,
+    maxHeight: 320,
     overflowY: "auto",
     fontFamily: "Consolas, monospace",
     fontSize: 13,

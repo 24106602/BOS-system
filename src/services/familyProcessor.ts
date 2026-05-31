@@ -387,7 +387,7 @@ const markFamilyDuplicates = (
     [2, 3, 5].forEach((colIndex) => {
       const markKey = `${rowIndex}_${colIndex}`;
       if (!highlightMap[markKey]) marked++;
-      addMark(highlightMap, rowIndex, colIndex, "purple", reason);
+      addMark(highlightMap, rowIndex, colIndex, "yellow", reason);
       fieldErrors[familyTemplateFields[colIndex]] = (fieldErrors[familyTemplateFields[colIndex]] || 0) + 1;
     });
   });
@@ -609,6 +609,8 @@ export const exportFamilyExcel = ({
   familyTemplateFirstRow,
   familyHighlightCellMap,
   familyReviewRows,
+  familyCollegeName = "",
+  exportMode = "all",
 }: {
   familyProcessedData: Record<string, unknown>[];
   familyTemplateWorkbook: WorkbookData;
@@ -618,6 +620,8 @@ export const exportFamilyExcel = ({
   familyTemplateFirstRow: unknown[];
   familyHighlightCellMap: Record<string, HighlightInfo>;
   familyReviewRows: FamilyReviewRow[];
+  familyCollegeName?: string;
+  exportMode?: "all" | "passed" | "failed";
 }) => {
   const originalSheet = familyTemplateWorkbook.worksheets[familyTemplateOutputSheet];
   if (!originalSheet) throw new Error("家庭成员模板输出表不存在");
@@ -656,9 +660,11 @@ export const exportFamilyExcel = ({
   if (originalSheet["!rows"]) worksheet["!rows"] = JSON.parse(JSON.stringify(originalSheet["!rows"]));
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, familyTemplateOutputSheet || "家庭成员处理结果");
+  if (exportMode === "all") {
+    XLSX.utils.book_append_sheet(workbook, worksheet, familyTemplateOutputSheet || "家庭成员处理结果");
+  }
 
-  if (familyTemplateDictSheet && familyTemplateWorkbook.worksheets[familyTemplateDictSheet]) {
+  if (exportMode === "all" && familyTemplateDictSheet && familyTemplateWorkbook.worksheets[familyTemplateDictSheet]) {
     XLSX.utils.book_append_sheet(
       workbook,
       cloneWorksheet(familyTemplateWorkbook.worksheets[familyTemplateDictSheet]),
@@ -666,25 +672,29 @@ export const exportFamilyExcel = ({
     );
   }
 
-  const reviewSheetRows = [
-    ["源数据行号", "学生身份证号", "家庭成员姓名", "与学生关系", "待复核原因"],
-    ...familyReviewRows.map((item) => [
-      item.rowNumber,
-      item.studentId,
-      item.memberName,
-      item.relation,
-      item.reason,
-    ]),
-  ];
-  const reviewSheet = XLSX.utils.aoa_to_sheet(reviewSheetRows);
-  reviewSheet["!cols"] = [
-    { wch: 12 },
-    { wch: 24 },
-    { wch: 16 },
-    { wch: 16 },
-    { wch: 90 },
-  ];
-  XLSX.utils.book_append_sheet(workbook, reviewSheet, "家庭成员待复核名单");
+  const failRowNumberSet = new Set(familyReviewRows.map((item) => item.rowNumber));
+  const passedRows = familyProcessedData.filter((_, index) => !failRowNumberSet.has(index + 1));
+  const passedSheet = XLSX.utils.json_to_sheet(passedRows, { header: familyTemplateFields });
+  passedSheet["!cols"] = familyTemplateFields.map(() => ({ wch: 18 }));
+  if (exportMode !== "failed") XLSX.utils.book_append_sheet(workbook, passedSheet, "通过名单");
+
+  const failedRows = familyProcessedData
+    .map((row, rowIndex) => ({ row, rowIndex }))
+    .filter(({ rowIndex }) => failRowNumberSet.has(rowIndex + 1));
+  const failSheet = XLSX.utils.json_to_sheet(failedRows.map(({ row }) => row), { header: familyTemplateFields });
+  failSheet["!cols"] = familyTemplateFields.map(() => ({ wch: 18 }));
+  failedRows.forEach(({ rowIndex }, failIndex) => {
+    familyTemplateFields.forEach((_, colIndex) => {
+      if (!familyHighlightCellMap[`${rowIndex}_${colIndex}`]) return;
+      const address = XLSX.utils.encode_cell({ r: failIndex + 1, c: colIndex });
+      const cell = (failSheet as Record<string, Record<string, unknown>>)[address] || { v: "", t: "s" };
+      (failSheet as Record<string, Record<string, unknown>>)[address] = applyHighlightStyle(cell, {
+        color: "yellow",
+        reason: familyHighlightCellMap[`${rowIndex}_${colIndex}`].reason,
+      });
+    });
+  });
+  if (exportMode !== "passed") XLSX.utils.book_append_sheet(workbook, failSheet, "不通过名单");
 
   const issueEntries = Object.entries(familyHighlightCellMap)
     .map(([key, info]) => {
@@ -702,29 +712,34 @@ export const exportFamilyExcel = ({
     issueEntries.length === 0
       ? [["暂无问题"]]
       : [
-          ["源数据行号", "字段名", "当前值", "标记颜色", "问题原因"],
+          ["行号", "学院", "姓名", "学号", "身份证号", "错误字段", "原值", "错误原因", "严重程度", "修改建议"],
           ...issueEntries.map(({ rowIndex, colIndex, info }) => {
             const fieldName = familyTemplateFields[colIndex] || `第${colIndex + 1}列`;
             return [
               rowIndex + 1,
+              familyCollegeName,
+              familyProcessedData[rowIndex]?.[familyTemplateFields[3]] ?? "",
+              "",
+              familyProcessedData[rowIndex]?.[familyTemplateFields[2]] ?? "",
               fieldName,
               familyProcessedData[rowIndex]?.[fieldName] ?? "",
-              info.color,
               info.reason,
+              "error",
+              "请按错误原因核对并修改该字段",
             ];
           }),
         ];
   const issueSheet = XLSX.utils.aoa_to_sheet(issueSheetRows);
   issueSheet["!cols"] = [
-    { wch: 12 },
-    { wch: 28 },
-    { wch: 28 },
-    { wch: 12 },
-    { wch: 80 },
+    { wch: 10 }, { wch: 18 }, { wch: 14 }, { wch: 18 }, { wch: 24 },
+    { wch: 18 }, { wch: 20 }, { wch: 60 }, { wch: 12 }, { wch: 42 },
   ];
-  XLSX.utils.book_append_sheet(workbook, issueSheet, "问题清单");
+  if (exportMode !== "passed") XLSX.utils.book_append_sheet(workbook, issueSheet, "问题说明");
 
-  XLSX.writeFile(workbook, `家庭成员信息处理结果_${Date.now()}.xlsx`);
+  XLSX.writeFile(
+    workbook,
+    `${exportMode === "passed" ? "家庭成员通过名单" : exportMode === "failed" ? "家庭成员不通过名单" : "家庭成员信息处理结果"}_${Date.now()}.xlsx`
+  );
 
   return { reviewCount: familyReviewRows.length };
 };

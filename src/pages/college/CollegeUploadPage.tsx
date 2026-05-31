@@ -4,6 +4,8 @@ import ErrorReportTable, { type ValidationError } from "../../components/ErrorRe
 
 type CollegeUploadEventDetail = {
   errorCount: number;
+  totalCount: number;
+  fixedCount: number;
   validationErrors: ValidationError[];
 };
 
@@ -14,6 +16,8 @@ type SyncWindow = Window & {
 
 export default function CollegeUploadPage() {
   const [errorCount, setErrorCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [fixedCount, setFixedCount] = useState(0);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [hasProcessed, setHasProcessed] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("等待提交");
@@ -24,6 +28,8 @@ export default function CollegeUploadPage() {
       if (!detail) return;
       setHasProcessed(true);
       setErrorCount(detail.errorCount || 0);
+      setTotalCount(detail.totalCount || 0);
+      setFixedCount(detail.fixedCount || 0);
       setValidationErrors(detail.validationErrors || []);
       setSubmitMessage(
         detail.errorCount > 0 ? "上载失败：当前数据仍存在不通过项" : "治理通过：可以上载到学校端"
@@ -77,8 +83,12 @@ export default function CollegeUploadPage() {
         <div style={styles.eyebrow}>困难生业务 / 数据处理</div>
         <h1 style={styles.title}>学院数据治理与上载</h1>
         <div style={styles.tip}>流程：选择模板文件 → 选择数据文件 → 开始治理 → 查看不通过预览 → 上载到学校端</div>
-        <div style={styles.tip}>总数据行数：{hasProcessed ? "已治理" : "未治理"}</div>
-        <div style={styles.tip}>不通过数量：{errorCount}</div>
+        <div style={styles.resultGrid}>
+          <ResultStat label="总人数" value={hasProcessed ? totalCount : 0} />
+          <ResultStat label="通过人数" value={hasProcessed ? Math.max(0, totalCount - errorCount) : 0} tone="#087b5b" />
+          <ResultStat label="不通过人数" value={errorCount} tone="#b42336" />
+          <ResultStat label="自动修复项" value={fixedCount} tone="#0f766e" />
+        </div>
         {hasProcessed && hasBlockingErrors ? (
           <div style={styles.warn}>当前数据存在不通过项，不能上载到学校端</div>
         ) : hasProcessed ? (
@@ -98,6 +108,15 @@ export default function CollegeUploadPage() {
 
       <ProcessingWorkbench collegeMode />
     </section>
+  );
+}
+
+function ResultStat({ label, value, tone = "#0077d4" }: { label: string; value: number; tone?: string }) {
+  return (
+    <div style={styles.resultStat}>
+      <div style={styles.resultLabel}>{label}</div>
+      <strong style={{ ...styles.resultValue, color: tone }}>{value}</strong>
+    </div>
   );
 }
 
@@ -133,6 +152,26 @@ const styles: Record<string, CSSProperties> = {
     color: "#63738a",
     fontSize: 13,
     marginBottom: 8,
+  },
+  resultGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+    gap: 8,
+    margin: "12px 0",
+  },
+  resultStat: {
+    padding: 10,
+    borderRadius: 6,
+    border: "1px solid #d7e1ed",
+    background: "#f8fbfe",
+  },
+  resultLabel: {
+    color: "#63738a",
+    fontSize: 12,
+    marginBottom: 5,
+  },
+  resultValue: {
+    fontSize: 20,
   },
   warn: {
     color: "#b42336",

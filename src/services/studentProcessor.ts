@@ -47,6 +47,7 @@ type StudentProcessorInput = {
   dictionaryMap: Record<string, string[]>;
   fieldDictMap: Record<string, string>;
   sourceRows: unknown[][];
+  collegeName?: string;
   onLog?: (log: ProcessLog) => void;
   onProgress?: (stats: ProcessingStats, status: string) => void;
 };
@@ -811,6 +812,7 @@ export const processStudentRows = async ({
   dictionaryMap,
   fieldDictMap,
   sourceRows,
+  collegeName: resolvedCollegeName,
   onLog,
   onProgress,
 }: StudentProcessorInput): Promise<StudentProcessorResult> => {
@@ -990,6 +992,8 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
         issueType: "严重错误",
         action: "学号和身份证号都为空，禁止上传到学校端",
       });
+      if (studentIdFieldIndex >= 0) addMark(highlightMap, index, studentIdFieldIndex, "yellow", "学号和身份证号都为空，禁止上传到学校端");
+      addMark(highlightMap, index, 2, "yellow", "学号和身份证号都为空，禁止上传到学校端");
       if (!finalFailRowNumbers.has(index + 1)) {
         finalFailRows.push({
           rowNumber: index + 1,
@@ -1020,6 +1024,13 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
       issueType: "严重错误",
       action: duplicateReason,
     });
+    addMark(
+      highlightMap,
+      index,
+      studentId ? studentIdFieldIndex : 2,
+      "yellow",
+      duplicateReason
+    );
     if (!finalFailRowNumbers.has(index + 1)) {
       finalFailRows.push({
         rowNumber: index + 1,
@@ -1062,7 +1073,7 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
   } else {
     try {
       const cloudRows: StudentCloudRow[] = result.map((row) => ({
-        college_name: String(row[templateFields[1]] ?? "").trim() || "未填学院",
+        college_name: resolvedCollegeName || String(row[templateFields[1]] ?? "").trim() || "未填学院",
         student_id: studentIdField ? String(row[studentIdField] ?? "").trim() : "",
         name: String(row[templateFields[0]] ?? "").trim(),
         id_card: String(row[templateFields[2]] ?? "").trim(),
@@ -1180,6 +1191,7 @@ export const exportStudentExcel = ({
   templateFirstRow,
   highlightCellMap,
   disqualifiedRows,
+  exportMode = "all",
 }: {
   processedData: Record<string, unknown>[];
   templateWorkbook: WorkbookData;
@@ -1189,6 +1201,7 @@ export const exportStudentExcel = ({
   templateFirstRow: unknown[];
   highlightCellMap: Record<string, HighlightInfo>;
   disqualifiedRows: DisqualifiedRow[];
+  exportMode?: "all" | "passed" | "failed";
 }) => {
   const originalSheet = templateWorkbook.worksheets[templateOutputSheet];
   if (!originalSheet) throw new Error("模板输出表不存在");
@@ -1229,9 +1242,11 @@ export const exportStudentExcel = ({
   if (originalSheet["!rows"]) worksheet["!rows"] = JSON.parse(JSON.stringify(originalSheet["!rows"]));
 
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, templateOutputSheet || "治理结果");
+  if (exportMode === "all") {
+    XLSX.utils.book_append_sheet(workbook, worksheet, templateOutputSheet || "治理结果");
+  }
 
-  if (templateDictSheet && templateWorkbook.worksheets[templateDictSheet]) {
+  if (exportMode === "all" && templateDictSheet && templateWorkbook.worksheets[templateDictSheet]) {
     XLSX.utils.book_append_sheet(workbook, cloneWorksheet(templateWorkbook.worksheets[templateDictSheet]), templateDictSheet);
   }
 
@@ -1251,11 +1266,13 @@ export const exportStudentExcel = ({
   const passedRows = processedData.filter((_, index) => !failRowNumberSet.has(index + 1));
   const passedSheet = XLSX.utils.json_to_sheet(passedRows, { header: templateFields });
   passedSheet["!cols"] = templateFields.map(() => ({ wch: 18 }));
-  XLSX.utils.book_append_sheet(workbook, passedSheet, "通过数据");
+  if (exportMode !== "failed") XLSX.utils.book_append_sheet(workbook, passedSheet, "通过名单");
 
   const studentIdFieldIndex = templateFields.findIndex((field) => cleanFieldName(field).includes("学号"));
   const studentIdField = studentIdFieldIndex >= 0 ? templateFields[studentIdFieldIndex] : "";
-  const failIssueRows = issueEntries.map(({ rowIndex, colIndex, info }) => {
+  const failIssueRows = issueEntries
+    .filter(({ rowIndex }) => failRowNumberSet.has(rowIndex + 1))
+    .map(({ rowIndex, colIndex, info }) => {
     const row = processedData[rowIndex] || {};
     const fieldName = templateFields[colIndex] || `第${colIndex + 1}列`;
     return [
@@ -1268,6 +1285,7 @@ export const exportStudentExcel = ({
       String(row[fieldName] ?? ""),
       info.reason,
       info.color === "red" ? "error" : "warning",
+      "请按错误原因核对并修改该字段",
     ];
   });
 
@@ -1285,32 +1303,47 @@ export const exportStudentExcel = ({
         "",
         item.reason,
         "error",
+        "请核对并补充可用于识别学生的完整信息",
       ];
     });
 
   const failDataRows = [...failIssueRows, ...noIssueFailRows];
-  const failSheetRows =
+  const failedRows = processedData
+    .map((row, rowIndex) => ({ row, rowIndex }))
+    .filter(({ rowIndex }) => failRowNumberSet.has(rowIndex + 1));
+  const failSheet = XLSX.utils.json_to_sheet(failedRows.map(({ row }) => row), { header: templateFields });
+  failSheet["!cols"] = templateFields.map(() => ({ wch: 18 }));
+  failedRows.forEach(({ rowIndex }, failIndex) => {
+    templateFields.forEach((_, colIndex) => {
+      if (!highlightCellMap[`${rowIndex}_${colIndex}`]) return;
+      const address = XLSX.utils.encode_cell({ r: failIndex + 1, c: colIndex });
+      const cell = (failSheet as Record<string, Record<string, unknown>>)[address] || { v: "", t: "s" };
+      (failSheet as Record<string, Record<string, unknown>>)[address] = applyHighlightStyle(cell, {
+        color: "yellow",
+        reason: highlightCellMap[`${rowIndex}_${colIndex}`].reason,
+      });
+    });
+  });
+  if (exportMode !== "passed") XLSX.utils.book_append_sheet(workbook, failSheet, "不通过名单");
+
+  const issueSheetRows =
     failDataRows.length === 0
       ? [["暂无问题"]]
       : [
-          ["行号", "学院", "姓名", "学号", "身份证号", "错误字段", "原值", "错误原因", "严重程度"],
+          ["行号", "学院", "姓名", "学号", "身份证号", "错误字段", "原值", "错误原因", "严重程度", "修改建议"],
           ...failDataRows,
         ];
-  const failSheet = XLSX.utils.aoa_to_sheet(failSheetRows);
-  failSheet["!cols"] = [
-    { wch: 10 },
-    { wch: 18 },
-    { wch: 14 },
-    { wch: 18 },
-    { wch: 24 },
-    { wch: 18 },
-    { wch: 20 },
-    { wch: 60 },
-    { wch: 12 },
+  const issueSheet = XLSX.utils.aoa_to_sheet(issueSheetRows);
+  issueSheet["!cols"] = [
+    { wch: 10 }, { wch: 18 }, { wch: 14 }, { wch: 18 }, { wch: 24 },
+    { wch: 18 }, { wch: 20 }, { wch: 60 }, { wch: 12 }, { wch: 42 },
   ];
-  XLSX.utils.book_append_sheet(workbook, failSheet, "不通过数据");
+  if (exportMode !== "passed") XLSX.utils.book_append_sheet(workbook, issueSheet, "问题说明");
 
-  XLSX.writeFile(workbook, `困难生数据处理结果_${Date.now()}.xlsx`);
+  XLSX.writeFile(
+    workbook,
+    `${exportMode === "passed" ? "本专科通过名单" : exportMode === "failed" ? "本专科不通过名单" : "困难生数据处理结果"}_${Date.now()}.xlsx`
+  );
 
   return { failCount: disqualifiedRows.length };
 };

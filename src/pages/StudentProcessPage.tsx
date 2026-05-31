@@ -69,7 +69,7 @@ export default function StudentProcessPage({
           <button disabled={isProcessing} onClick={processData} style={styles.orangeButton}>
             {isProcessing ? "治理执行中..." : "开始治理"}
           </button>
-          <button onClick={exportExcel} style={styles.purpleButton}>导出结果</button>
+          <button onClick={exportExcel} style={styles.purpleButton}>导出通过名单</button>
           <button onClick={exportStudentErrorReport} style={styles.purpleButton}>导出不通过名单</button>
           {!hideSubmitAction && <button onClick={addStudentResultToMergePool} style={styles.mergeButton}>上载到学校端</button>}
         </div>
@@ -78,11 +78,10 @@ export default function StudentProcessPage({
         <div style={styles.status}>当前识别学院：{studentCollegeName}</div>
 
         <div style={styles.statsGrid}>
-          <div style={styles.statCard}><div>数据行数</div><strong>{stats.total}</strong></div>
-          <div style={styles.statCard}><div>修复</div><strong style={{ color: "#16a34a" }}>{stats.repaired}</strong></div>
-          <div style={styles.statCard}><div>异常</div><strong style={{ color: "#dc2626" }}>{stats.errors}</strong></div>
-          <div style={styles.statCard}><div>标记</div><strong style={{ color: "#7c3aed" }}>{stats.highlighted}</strong></div>
-          <div style={styles.statCard}><div>不通过</div><strong style={{ color: "#dc2626" }}>{stats.disqualified}</strong></div>
+          <div style={styles.statCard}><div>总人数</div><strong>{stats.total}</strong></div>
+          <div style={styles.statCard}><div>通过人数</div><strong style={{ color: "#16a34a" }}>{Math.max(0, stats.total - stats.disqualified)}</strong></div>
+          <div style={styles.statCard}><div>不通过人数</div><strong style={{ color: "#dc2626" }}>{stats.disqualified}</strong></div>
+          <div style={styles.statCard}><div>自动修复项</div><strong style={{ color: "#0f766e" }}>{stats.repaired}</strong></div>
         </div>
 
         <section style={styles.section}><h2>模板预览</h2>{renderTemplatePreview()}</section>
