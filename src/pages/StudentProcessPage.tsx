@@ -13,6 +13,7 @@ type StudentProcessPageProps = {
   exportExcel: () => void;
   exportStudentErrorReport: () => void;
   addStudentResultToMergePool: () => void;
+  hideSubmitAction?: boolean;
   status: string;
   studentCollegeName: string;
   stats: ProcessingStats;
@@ -38,6 +39,7 @@ export default function StudentProcessPage({
   exportExcel,
   exportStudentErrorReport,
   addStudentResultToMergePool,
+  hideSubmitAction = false,
   status,
   studentCollegeName,
   stats,
@@ -61,15 +63,15 @@ export default function StudentProcessPage({
 
         <div style={styles.buttonGrid}>
           <input ref={templateRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={uploadTemplate} />
-          <button onClick={() => templateRef.current?.click()} style={styles.blueButton}>上传模板</button>
+          <button onClick={() => templateRef.current?.click()} style={styles.blueButton}>选择模板文件</button>
           <input ref={dataRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={uploadData} />
-          <button onClick={() => dataRef.current?.click()} style={styles.greenButton}>上传待处理数据</button>
+          <button onClick={() => dataRef.current?.click()} style={styles.greenButton}>选择数据文件</button>
           <button disabled={isProcessing} onClick={processData} style={styles.orangeButton}>
             {isProcessing ? "治理执行中..." : "开始治理"}
           </button>
           <button onClick={exportExcel} style={styles.purpleButton}>导出结果</button>
           <button onClick={exportStudentErrorReport} style={styles.purpleButton}>导出不通过名单</button>
-          <button onClick={addStudentResultToMergePool} style={styles.mergeButton}>上载</button>
+          {!hideSubmitAction && <button onClick={addStudentResultToMergePool} style={styles.mergeButton}>上载到学校端</button>}
         </div>
 
         <div style={styles.status}>{status}</div>

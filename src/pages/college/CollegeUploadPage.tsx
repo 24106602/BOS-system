@@ -75,8 +75,8 @@ export default function CollegeUploadPage() {
     <section style={styles.wrap}>
       <div style={styles.card}>
         <div style={styles.eyebrow}>困难生业务 / 数据处理</div>
-        <h1 style={styles.title}>学院数据上传与治理</h1>
-        <div style={styles.tip}>流程：上传模板 → 上传待处理数据 → 开始治理 → 查看不通过预览 → 上载到学校端</div>
+        <h1 style={styles.title}>学院数据治理与上载</h1>
+        <div style={styles.tip}>流程：选择模板文件 → 选择数据文件 → 开始治理 → 查看不通过预览 → 上载到学校端</div>
         <div style={styles.tip}>总数据行数：{hasProcessed ? "已治理" : "未治理"}</div>
         <div style={styles.tip}>不通过数量：{errorCount}</div>
         {hasProcessed && hasBlockingErrors ? (

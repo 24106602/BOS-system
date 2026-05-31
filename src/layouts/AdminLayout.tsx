@@ -8,11 +8,10 @@ type AdminLayoutProps = {
 };
 
 const menus = [
-  { path: "/admin/colleges", label: "学院提交情况", mark: "▦" },
+  { path: "/admin/summary", label: "全校数据汇总", mark: "◫" },
   { path: "/admin/student-summary", label: "本专科信息汇总", mark: "▤" },
   { path: "/admin/family-summary", label: "家庭成员信息汇总", mark: "♧" },
   { path: "/admin/students", label: "困难生数据库", mark: "◉" },
-  { path: "/admin/summary", label: "全校数据汇总", mark: "◫" },
 ];
 
 export default function AdminLayout({ path, onNavigate, onLogout, children }: AdminLayoutProps) {

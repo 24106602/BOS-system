@@ -11,6 +11,7 @@ type FamilyProcessPageProps = {
   processFamilyData: () => void;
   exportFamilyResult: () => void;
   addFamilyResultToMergePool: () => void;
+  hideSubmitAction?: boolean;
   familyStatus: string;
   familyCollegeName: string;
   familyStats: FamilyProcessingStats;
@@ -36,6 +37,7 @@ export default function FamilyProcessPage({
   processFamilyData,
   exportFamilyResult,
   addFamilyResultToMergePool,
+  hideSubmitAction = false,
   familyStatus,
   familyCollegeName,
   familyStats,
@@ -60,14 +62,14 @@ export default function FamilyProcessPage({
 
         <div style={styles.buttonGrid}>
           <input ref={familyTemplateRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={uploadFamilyTemplate} />
-          <button onClick={() => familyTemplateRef.current?.click()} style={styles.blueButton}>上传模板</button>
+          <button onClick={() => familyTemplateRef.current?.click()} style={styles.blueButton}>选择模板文件</button>
           <input ref={familyDataRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={uploadFamilyData} />
-          <button onClick={() => familyDataRef.current?.click()} style={styles.greenButton}>上传家庭成员数据</button>
+          <button onClick={() => familyDataRef.current?.click()} style={styles.greenButton}>选择数据文件</button>
           <button disabled={isFamilyProcessing} onClick={processFamilyData} style={styles.orangeButton}>
             {isFamilyProcessing ? "处理中..." : "开始处理"}
           </button>
           <button onClick={exportFamilyResult} style={styles.purpleButton}>导出结果</button>
-          <button onClick={addFamilyResultToMergePool} style={styles.mergeButton}>上载</button>
+          {!hideSubmitAction && <button onClick={addFamilyResultToMergePool} style={styles.mergeButton}>上载到学校端</button>}
         </div>
 
         <div style={styles.status}>{familyStatus}</div>

@@ -715,6 +715,7 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
               exportExcel={exportExcel}
               exportStudentErrorReport={exportStudentErrorReport}
               addStudentResultToMergePool={addStudentResultToMergePool}
+              hideSubmitAction={collegeMode}
               status={status}
               studentCollegeName={studentCollegeName}
               stats={stats}
@@ -739,6 +740,7 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
               processFamilyData={processFamilyData}
               exportFamilyResult={exportFamilyResult}
               addFamilyResultToMergePool={addFamilyResultToMergePool}
+              hideSubmitAction={collegeMode}
               familyStatus={familyStatus}
               familyCollegeName={familyCollegeName}
               familyStats={familyStats}
