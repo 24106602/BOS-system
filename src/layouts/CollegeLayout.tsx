@@ -7,9 +7,15 @@ type CollegeLayoutProps = {
   children: ReactNode;
 };
 
-const menus = [
+const difficultyMenus = [
   { path: "/college/upload", label: "数据处理", mark: "▦" },
   { path: "/college/records", label: "提交记录", mark: "▤" },
+];
+
+const awardMenus = [
+  { path: "/college/awards/national", label: "国家奖学金数据处理", mark: "★" },
+  { path: "/college/awards/inspirational", label: "国家励志奖学金数据处理", mark: "★" },
+  { path: "/college/awards/shanghai", label: "上海市奖学金数据处理", mark: "★" },
 ];
 
 export default function CollegeLayout({ path, onNavigate, onLogout, children }: CollegeLayoutProps) {
@@ -31,7 +37,18 @@ export default function CollegeLayout({ path, onNavigate, onLogout, children }: 
 
         <nav style={styles.nav}>
           <div style={styles.groupLabel}>困难生业务</div>
-          {menus.map((item) => (
+          {difficultyMenus.map((item) => (
+            <button
+              key={item.path}
+              onClick={() => onNavigate(item.path)}
+              style={path === item.path ? styles.activeMenu : styles.menu}
+            >
+              <span style={styles.menuMark}>{item.mark}</span>
+              {item.label}
+            </button>
+          ))}
+          <div style={styles.groupLabel}>三奖业务</div>
+          {awardMenus.map((item) => (
             <button
               key={item.path}
               onClick={() => onNavigate(item.path)}
@@ -55,7 +72,9 @@ export default function CollegeLayout({ path, onNavigate, onLogout, children }: 
         <header style={styles.topbar}>
           <div>
             <div style={styles.topTitle}>学生事务数据治理平台</div>
-            <div style={styles.breadcrumb}>学院（部）端 / 困难生业务 / 数据处理</div>
+            <div style={styles.breadcrumb}>
+              {path.startsWith("/college/awards/") ? "学院（部）端 / 三奖业务 / 数据处理" : "学院（部）端 / 困难生业务 / 数据处理"}
+            </div>
           </div>
           <div style={styles.topRight}>
             <span style={styles.topBadge}>学院数据上载</span>

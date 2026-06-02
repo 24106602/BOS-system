@@ -8,9 +8,16 @@ import AdminStudentsPage from "./pages/admin/AdminStudentsPage";
 import AdminSummaryPage from "./pages/admin/AdminSummaryPage";
 import AdminStudentSummaryPage from "./pages/admin/AdminStudentSummaryPage";
 import AdminFamilySummaryPage from "./pages/admin/AdminFamilySummaryPage";
+import AdminAwardsOverviewPage from "./pages/admin/awards/AdminAwardsOverviewPage";
+import AdminNationalScholarshipPage from "./pages/admin/awards/AdminNationalScholarshipPage";
+import AdminNationalInspirationalPage from "./pages/admin/awards/AdminNationalInspirationalPage";
+import AdminShanghaiScholarshipPage from "./pages/admin/awards/AdminShanghaiScholarshipPage";
 import CollegeHomePage from "./pages/college/CollegeHomePage";
 import CollegeUploadPage from "./pages/college/CollegeUploadPage";
 import CollegeRecordsPage from "./pages/college/CollegeRecordsPage";
+import NationalScholarshipPage from "./pages/awards/NationalScholarshipPage";
+import NationalInspirationalPage from "./pages/awards/NationalInspirationalPage";
+import ShanghaiScholarshipPage from "./pages/awards/ShanghaiScholarshipPage";
 
 type Role = "admin" | "college";
 
@@ -25,9 +32,16 @@ const normalizePath = (path: string) => {
     "/admin/summary",
     "/admin/student-summary",
     "/admin/family-summary",
+    "/admin/awards",
+    "/admin/awards/national",
+    "/admin/awards/inspirational",
+    "/admin/awards/shanghai",
     "/college",
     "/college/upload",
     "/college/records",
+    "/college/awards/national",
+    "/college/awards/inspirational",
+    "/college/awards/shanghai",
   ];
   return known.includes(path) ? path : "/login";
 };
@@ -95,6 +109,14 @@ export default function PlatformApp() {
           <AdminStudentSummaryPage />
         ) : path === "/admin/family-summary" ? (
           <AdminFamilySummaryPage />
+        ) : path === "/admin/awards" ? (
+          <AdminAwardsOverviewPage />
+        ) : path === "/admin/awards/national" ? (
+          <AdminNationalScholarshipPage />
+        ) : path === "/admin/awards/inspirational" ? (
+          <AdminNationalInspirationalPage />
+        ) : path === "/admin/awards/shanghai" ? (
+          <AdminShanghaiScholarshipPage />
         ) : path === "/admin/students" ? (
           <AdminStudentsPage />
         ) : path === "/admin/summary" ? (
@@ -115,6 +137,12 @@ export default function PlatformApp() {
         <CollegeUploadPage />
       ) : path === "/college/records" ? (
         <CollegeRecordsPage />
+      ) : path === "/college/awards/national" ? (
+        <NationalScholarshipPage />
+      ) : path === "/college/awards/inspirational" ? (
+        <NationalInspirationalPage />
+      ) : path === "/college/awards/shanghai" ? (
+        <ShanghaiScholarshipPage />
       ) : (
         <CollegeHomePage />
       );
