@@ -1,12 +1,20 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import type { CollegeProcessedBatch } from "../../types/merge";
 import { getMergeBatches } from "../../db/localMergeDb";
+import { getCurrentCollegeAccount, isSameSubmissionCollege } from "../../utils/collegeDetector";
 
 export default function CollegeRecordsPage() {
   const [rows, setRows] = useState<CollegeProcessedBatch[]>([]);
 
   useEffect(() => {
-    getMergeBatches().then(setRows);
+    const currentAccount = getCurrentCollegeAccount();
+    getMergeBatches().then((batches) =>
+      setRows(
+        currentAccount
+          ? batches.filter((batch) => isSameSubmissionCollege(batch.collegeName, currentAccount.college_name))
+          : batches
+      )
+    );
   }, []);
 
   return (

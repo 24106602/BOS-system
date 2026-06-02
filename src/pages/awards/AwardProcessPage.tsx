@@ -39,6 +39,8 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
   const [status, setStatus] = useState("等待上传 Excel");
   const [logs, setLogs] = useState<PageLog[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
   useEffect(() => {
@@ -49,9 +51,35 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
     setLogs((current) => [...current, addTime(type, message)]);
   };
 
+  const resetProcessingState = () => {
+    setTemplate(null);
+    setResult(null);
+    setCollegeName("未知学院");
+    setCollegeError("");
+    setFileName("");
+    setStatus("等待上传 Excel");
+    setLogs([]);
+    setIsProcessing(false);
+    setIsLoading(false);
+    setErrorMessage("");
+    setHasSubmitted(false);
+  };
+
+  const selectFile = () => {
+    if (!fileRef.current) return;
+    fileRef.current.value = "";
+    fileRef.current.click();
+  };
+
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const input = event.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
+
+    resetProcessingState();
+    setIsLoading(true);
+    setFileName(file.name);
+    setStatus("正在读取 Excel...");
 
     try {
       const nextTemplate = parseAwardWorkbook(await readWorkbook(file));
@@ -75,12 +103,17 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
       ]);
     } catch (error) {
       console.error("Award Excel parse failed:", error);
+      const message = error instanceof Error ? error.message : "Excel 读取失败";
       setTemplate(null);
       setResult(null);
       setStatus("Excel 读取失败");
-      setLogs([addTime("error", error instanceof Error ? error.message : "Excel 读取失败")]);
+      setErrorMessage(message);
+      setLogs([addTime("error", message)]);
     } finally {
-      event.target.value = "";
+      setIsProcessing(false);
+      setIsLoading(false);
+      input.value = "";
+      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
@@ -91,32 +124,47 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
     }
 
     setIsProcessing(true);
-    setStatus("正在检查并自动修复...");
-    const nextResult = processAwardWorkbook(template, awardType);
-    setResult(nextResult);
+    setIsLoading(false);
+    setResult(null);
     setHasSubmitted(false);
-    setLogs((current) => [
-      ...current,
-      ...nextResult.logs.map((item) =>
+    setErrorMessage("");
+    setStatus("正在检查并自动修复...");
+
+    try {
+      const nextResult = processAwardWorkbook(template, awardType);
+      setResult(nextResult);
+      setLogs((current) => [
+        ...current,
+        ...nextResult.logs.map((item) =>
+          addTime(
+            "success",
+            `第 ${item.rowNumber} 行 ${item.field}：${item.reason}\n原值：${String(item.originalValue ?? "")}\n修复后：${String(item.fixedValue ?? "")}`
+          )
+        ),
+        ...nextResult.issues.map((item) =>
+          addTime("error", `第 ${item.rowNumber} 行 ${item.field}：${item.reason}`)
+        ),
         addTime(
-          "success",
-          `第 ${item.rowNumber} 行 ${item.field}：${item.reason}\n原值：${String(item.originalValue ?? "")}\n修复后：${String(item.fixedValue ?? "")}`
-        )
-      ),
-      ...nextResult.issues.map((item) =>
-        addTime("error", `第 ${item.rowNumber} 行 ${item.field}：${item.reason}`)
-      ),
-      addTime(
-        nextResult.failedRows.length > 0 ? "error" : "success",
-        `处理完成：通过 ${nextResult.passedRows.length} 行，不通过 ${nextResult.failedRows.length} 行，自动修复 ${nextResult.logs.length} 项`
-      ),
-    ]);
-    setStatus(
-      nextResult.failedRows.length > 0
-        ? "处理完成：存在不通过项，请导出不通过名单修改"
-        : "处理完成：全部通过，可以上载到学校端"
-    );
-    setIsProcessing(false);
+          nextResult.failedRows.length > 0 ? "error" : "success",
+          `处理完成：通过 ${nextResult.passedRows.length} 行，不通过 ${nextResult.failedRows.length} 行，自动修复 ${nextResult.logs.length} 项`
+        ),
+      ]);
+      setStatus(
+        nextResult.failedRows.length > 0
+          ? "处理完成：存在不通过项，请导出不通过名单修改"
+          : "处理完成：全部通过，可以上载到学校端"
+      );
+    } catch (error) {
+      console.error("Award data processing failed:", error);
+      const message = error instanceof Error ? error.message : "数据处理失败";
+      setResult(null);
+      setErrorMessage(message);
+      setStatus("数据处理失败");
+      pushLog("error", message);
+    } finally {
+      setIsProcessing(false);
+      setIsLoading(false);
+    }
   };
 
   const exportPassedRows = () => {
@@ -124,7 +172,7 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
       alert("暂无可导出的通过名单");
       return;
     }
-    exportAwardExcel({ template, result, exportMode: "passed" });
+    exportAwardExcel({ awardType, template, result, exportMode: "passed" });
   };
 
   const exportFailedRows = () => {
@@ -132,7 +180,7 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
       alert("暂无可导出的不通过名单");
       return;
     }
-    exportAwardExcel({ template, result, exportMode: "failed" });
+    exportAwardExcel({ awardType, template, result, exportMode: "failed" });
   };
 
   const uploadToSchool = () => {
@@ -164,6 +212,8 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
   const canUpload =
     Boolean(template && result) &&
     !collegeError &&
+    !isLoading &&
+    !isProcessing &&
     result?.failedRows.length === 0 &&
     (result?.passedRows.length || 0) > 0;
 
@@ -201,11 +251,17 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
               <strong style={styles.uploadTitle}>上传{awardName} Excel</strong>
               <div style={styles.description}>{fileName || "请选择包含填写要求、字段名和数据的 Excel 文件"}</div>
             </div>
-            <button style={styles.blueButton} onClick={() => fileRef.current?.click()}>选择 Excel 文件</button>
+            <button
+              style={isLoading || isProcessing ? styles.disabledButton : styles.blueButton}
+              disabled={isLoading || isProcessing}
+              onClick={selectFile}
+            >
+              {isLoading ? "读取中..." : "选择 Excel 文件"}
+            </button>
           </div>
 
           <div style={styles.buttonGrid}>
-            <button style={styles.orangeButton} disabled={isProcessing} onClick={startProcessing}>
+            <button style={isProcessing || isLoading ? styles.disabledButton : styles.orangeButton} disabled={isProcessing || isLoading} onClick={startProcessing}>
               {isProcessing ? "处理中..." : "开始处理"}
             </button>
             <button style={styles.purpleButton} onClick={exportPassedRows}>导出通过名单</button>
@@ -216,6 +272,7 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
           </div>
 
           <div style={styles.status}>{status}</div>
+          {errorMessage && <div style={styles.errorStatus}>{errorMessage}</div>}
           <div style={collegeError ? styles.errorStatus : styles.status}>当前识别学院：{collegeName}{collegeError ? `；${collegeError}` : ""}</div>
           {hasSubmitted && <div style={styles.successStatus}>本次{awardName}数据已上载，学校端汇总页面会自动读取。</div>}
 

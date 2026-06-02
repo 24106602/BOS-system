@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { getCurrentCollegeAccount } from "../utils/collegeDetector";
 
 type CollegeLayoutProps = {
   path: string;
@@ -19,6 +20,8 @@ const awardMenus = [
 ];
 
 export default function CollegeLayout({ path, onNavigate, onLogout, children }: CollegeLayoutProps) {
+  const currentAccount = getCurrentCollegeAccount();
+
   return (
     <div style={styles.page}>
       <aside style={styles.sidebar}>
@@ -77,8 +80,8 @@ export default function CollegeLayout({ path, onNavigate, onLogout, children }: 
             </div>
           </div>
           <div style={styles.topRight}>
-            <span style={styles.topBadge}>学院数据上载</span>
-            <span style={styles.adminName}>学院经办人</span>
+            <span style={styles.topBadge}>{currentAccount?.college_name || "学院数据上载"}</span>
+            <span style={styles.adminName}>{currentAccount ? `${currentAccount.account_name} 经办人` : "学院经办人"}</span>
           </div>
         </header>
         <main style={styles.main}>{children}</main>

@@ -1,11 +1,12 @@
 import { checkMergeDuplicates } from "./mergeDuplicateChecker";
 import * as XLSX from "xlsx-js-style";
 import type { CollegeProcessedBatch, MergeResult } from "../types/merge";
+import { normalizeSubmissionCollegeName } from "../utils/collegeDetector";
 
 export function mergeBatches(batches: CollegeProcessedBatch[]): MergeResult {
   const rows = batches.flatMap((batch) =>
     batch.rows.map((row) => ({
-      来源学院: batch.collegeName,
+      来源学院: normalizeSubmissionCollegeName(batch.collegeName),
       数据类型: batch.dataType === "student" ? "本专科信息" : "家庭成员信息",
       批次时间: batch.createdAt,
       ...row,
@@ -14,7 +15,7 @@ export function mergeBatches(batches: CollegeProcessedBatch[]): MergeResult {
 
   return {
     totalRows: rows.length,
-    collegeCount: new Set(batches.map((item) => item.collegeName)).size,
+    collegeCount: new Set(batches.map((item) => normalizeSubmissionCollegeName(item.collegeName))).size,
     rows,
   };
 }

@@ -1,19 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { getMergeBatches } from "../../db/localMergeDb";
 import type { CollegeProcessedBatch } from "../../types/merge";
-
-const allColleges = [
-  "外国语学院",
-  "艺术与设计学院",
-  "人文学院",
-  "理学院",
-  "经济与管理学院",
-  "香料香精化妆品学部",
-  "材料科学与工程学院",
-  "化工与能源技术学部",
-  "城市建设与生态技术学部",
-  "智能技术学部",
-];
+import { collegeAccounts, isSameSubmissionCollege } from "../../utils/collegeDetector";
 
 type CollegeSummary = {
   collegeName: string;
@@ -25,7 +13,7 @@ type CollegeSummary = {
 };
 
 const makeSummary = (collegeName: string, batches: CollegeProcessedBatch[]): CollegeSummary => {
-  const collegeBatches = batches.filter((item) => item.collegeName === collegeName);
+  const collegeBatches = batches.filter((item) => isSameSubmissionCollege(item.collegeName, collegeName));
   const studentRows = collegeBatches
     .filter((item) => item.dataType === "student")
     .reduce((sum, item) => sum + item.rowCount, 0);
@@ -55,7 +43,7 @@ export default function AdminCollegesPage() {
   }, []);
 
   const summaries = useMemo(
-    () => allColleges.map((collegeName) => makeSummary(collegeName, batches)),
+    () => collegeAccounts.map((account) => makeSummary(account.college_name, batches)),
     [batches]
   );
 

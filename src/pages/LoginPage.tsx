@@ -1,4 +1,9 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
+import {
+  collegeAccounts,
+  getCurrentCollegeAccount,
+  setCurrentCollegeAccount,
+} from "../utils/collegeDetector";
 
 type Role = "admin" | "college";
 
@@ -9,6 +14,14 @@ type LoginPageProps = {
 
 export default function LoginPage({ currentRole, onSelectRole }: LoginPageProps) {
   const roleText = currentRole === "admin" ? "学校管理员端" : currentRole === "college" ? "学院端" : "请选择身份";
+  const [collegeCode, setCollegeCode] = useState(
+    () => getCurrentCollegeAccount()?.college_code || collegeAccounts[0].college_code
+  );
+
+  const selectCollegeRole = () => {
+    setCurrentCollegeAccount(collegeCode);
+    onSelectRole("college");
+  };
 
   return (
     <main style={styles.page}>
@@ -25,12 +38,22 @@ export default function LoginPage({ currentRole, onSelectRole }: LoginPageProps)
           <p style={styles.loginEyebrow}>平台入口</p>
           <h2 style={styles.title}>选择工作端</h2>
           <p style={styles.tip}>当前身份：{roleText}</p>
+          <label style={styles.accountLabel}>
+            <span>学院账号 / 提交单位</span>
+            <select style={styles.accountSelect} value={collegeCode} onChange={(event) => setCollegeCode(event.target.value)}>
+              {collegeAccounts.map((account) => (
+                <option key={account.college_code} value={account.college_code}>
+                  {account.college_name}
+                </option>
+              ))}
+            </select>
+          </label>
           <div style={styles.buttons}>
             <button style={styles.admin} onClick={() => onSelectRole("admin")}>
               <span style={styles.buttonTitle}>学校管理员端</span>
               <span style={styles.buttonDescription}>查看学院上载、困难生总库与全校汇总</span>
             </button>
-            <button style={styles.college} onClick={() => onSelectRole("college")}>
+            <button style={styles.college} onClick={selectCollegeRole}>
               <span style={styles.buttonTitle}>学院端</span>
               <span style={styles.buttonDescription}>治理本学院数据并上载到学校端</span>
             </button>
@@ -129,6 +152,23 @@ const styles: Record<string, CSSProperties> = {
   buttons: {
     display: "grid",
     gap: 12,
+  },
+  accountLabel: {
+    display: "grid",
+    gap: 7,
+    marginBottom: 15,
+    color: "#40526a",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  accountSelect: {
+    width: "100%",
+    border: "1px solid #cfdbe7",
+    borderRadius: 6,
+    padding: "10px 11px",
+    color: "#15304f",
+    background: "#fff",
+    fontSize: 14,
   },
   admin: {
     display: "grid",

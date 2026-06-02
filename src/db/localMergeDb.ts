@@ -1,8 +1,14 @@
 import type { CollegeProcessedBatch } from "../types/merge";
+import { normalizeSubmissionCollegeName } from "../utils/collegeDetector";
 
 const DB_NAME = "bos_merge_db";
 const STORE_NAME = "batches";
 const LOCAL_KEY = "bos_merge_batches";
+
+const normalizeBatch = (batch: CollegeProcessedBatch): CollegeProcessedBatch => ({
+  ...batch,
+  collegeName: normalizeSubmissionCollegeName(batch.collegeName),
+});
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -22,28 +28,29 @@ function openDb(): Promise<IDBDatabase> {
 
 async function getFromLocalStorage(): Promise<CollegeProcessedBatch[]> {
   try {
-    return JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]");
+    return (JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]") as CollegeProcessedBatch[]).map(normalizeBatch);
   } catch {
     return [];
   }
 }
 
 async function saveToLocalStorage(batches: CollegeProcessedBatch[]) {
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(batches));
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(batches.map(normalizeBatch)));
 }
 
 export async function saveMergeBatch(batch: CollegeProcessedBatch) {
+  const normalizedBatch = normalizeBatch(batch);
   try {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).put(batch);
+      tx.objectStore(STORE_NAME).put(normalizedBatch);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } catch {
     const batches = await getFromLocalStorage();
-    const next = [...batches.filter((item) => item.id !== batch.id), batch];
+    const next = [...batches.filter((item) => item.id !== normalizedBatch.id), normalizedBatch];
     await saveToLocalStorage(next);
   }
 }
@@ -54,7 +61,7 @@ export async function getMergeBatches(): Promise<CollegeProcessedBatch[]> {
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readonly");
       const request = tx.objectStore(STORE_NAME).getAll();
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => resolve((request.result || []).map(normalizeBatch));
       request.onerror = () => reject(request.error);
     });
   } catch {

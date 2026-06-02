@@ -2,7 +2,8 @@ import * as XLSX from "xlsx-js-style";
 import { applyHighlightStyle, cloneWorksheet } from "./excelExport";
 import type { WorkbookData } from "./types";
 import { parseTemplateRules } from "./templateRuleParser";
-import { awardStorageKeys } from "./awardConfig";
+import { awardStorageKeys, awardTypeLabels } from "./awardConfig";
+import { normalizeSubmissionCollegeName } from "../utils/collegeDetector";
 import type {
   AwardDateFormat,
   AwardFieldRule,
@@ -950,28 +951,31 @@ const makeIssueSheet = (issues: AwardIssue[]) => {
 };
 
 export const exportAwardExcel = ({
+  awardType,
   template,
   result,
   exportMode,
 }: {
+  awardType: AwardType;
   template: AwardTemplate;
   result: AwardProcessResult;
   exportMode: "passed" | "failed";
 }) => {
   const workbook = XLSX.utils.book_new();
+  const listName = `${awardTypeLabels[awardType]}${exportMode === "passed" ? "通过名单" : "不通过名单"}`;
 
   if (exportMode === "passed") {
-    XLSX.utils.book_append_sheet(workbook, makeAwardSheet({ template, rows: result.passedRows }), "通过名单");
+    XLSX.utils.book_append_sheet(workbook, makeAwardSheet({ template, rows: result.passedRows }), listName);
   } else {
     XLSX.utils.book_append_sheet(
       workbook,
       makeAwardSheet({ template, rows: result.failedRows, issues: result.issues }),
-      "不通过名单"
+      listName
     );
     XLSX.utils.book_append_sheet(workbook, makeIssueSheet(result.issues), "问题说明");
   }
 
-  XLSX.writeFile(workbook, `三大奖${exportMode === "passed" ? "通过名单" : "不通过名单"}_${Date.now()}.xlsx`);
+  XLSX.writeFile(workbook, `${listName}.xlsx`);
 };
 
 export const findAwardTypeField = (fields: string[]) =>
@@ -999,7 +1003,7 @@ export const makeAwardSubmission = ({
 }): AwardSubmission => ({
   id: crypto.randomUUID(),
   awardType,
-  collegeName,
+  collegeName: normalizeSubmissionCollegeName(collegeName),
   createdAt: new Date().toISOString(),
   rowCount: result.passedRows.length,
   awardTypeCounts: buildAwardTypeCounts(result.passedRows, fields),
@@ -1008,7 +1012,12 @@ export const makeAwardSubmission = ({
 
 export const getAwardSubmissions = (awardType: AwardType): AwardSubmission[] => {
   try {
-    return JSON.parse(localStorage.getItem(awardStorageKeys[awardType]) || "[]") as AwardSubmission[];
+    return (JSON.parse(localStorage.getItem(awardStorageKeys[awardType]) || "[]") as AwardSubmission[]).map(
+      (submission) => ({
+        ...submission,
+        collegeName: normalizeSubmissionCollegeName(submission.collegeName),
+      })
+    );
   } catch {
     return [];
   }
@@ -1016,7 +1025,13 @@ export const getAwardSubmissions = (awardType: AwardType): AwardSubmission[] => 
 
 export const saveAwardSubmission = (awardType: AwardType, submission: AwardSubmission) => {
   const submissions = getAwardSubmissions(awardType);
-  localStorage.setItem(awardStorageKeys[awardType], JSON.stringify([...submissions, submission]));
+  localStorage.setItem(
+    awardStorageKeys[awardType],
+    JSON.stringify([
+      ...submissions,
+      { ...submission, collegeName: normalizeSubmissionCollegeName(submission.collegeName) },
+    ])
+  );
 };
 
 export const exportAwardSummary = (submissions: AwardSubmission[], awardName = "三大奖") => {
