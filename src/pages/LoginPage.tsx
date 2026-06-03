@@ -1,26 +1,38 @@
-import { useState, type CSSProperties } from "react";
-import {
-  collegeAccounts,
-  getCurrentCollegeAccount,
-  setCurrentCollegeAccount,
-} from "../utils/collegeDetector";
-
-type Role = "admin" | "college";
+import { useState, type CSSProperties, type FormEvent } from "react";
+import { isSupabaseConfigured, SUPABASE_ENV_ERROR } from "../lib/supabaseClient";
+import { getProfileLandingPath, signInWithPassword } from "../services/authService";
+import type { UserProfile } from "../types/auth";
 
 type LoginPageProps = {
-  currentRole: Role | null;
-  onSelectRole: (role: Role) => void;
+  currentProfile: UserProfile | null;
+  initialError?: string;
+  onLogin: (profile: UserProfile, nextPath: string) => void;
 };
 
-export default function LoginPage({ currentRole, onSelectRole }: LoginPageProps) {
-  const roleText = currentRole === "admin" ? "学校管理员端" : currentRole === "college" ? "学院端" : "请选择身份";
-  const [collegeCode, setCollegeCode] = useState(
-    () => getCurrentCollegeAccount()?.college_code || collegeAccounts[0].college_code
-  );
+export default function LoginPage({ currentProfile, initialError = "", onLogin }: LoginPageProps) {
+  const [account, setAccount] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState(initialError);
+  const [loading, setLoading] = useState(false);
+  const envMessage = isSupabaseConfigured ? "" : SUPABASE_ENV_ERROR;
 
-  const selectCollegeRole = () => {
-    setCurrentCollegeAccount(collegeCode);
-    onSelectRole("college");
+  const submitLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (envMessage) {
+      setMessage(envMessage);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setMessage("");
+      const profile = await signInWithPassword(account, password);
+      onLogin(profile, getProfileLandingPath(profile));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "登录失败，请稍后重试");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -28,37 +40,54 @@ export default function LoginPage({ currentRole, onSelectRole }: LoginPageProps)
       <section style={styles.shell}>
         <div style={styles.brandPanel}>
           <div style={styles.logo}>校</div>
-          <p style={styles.eyebrow}>STUDENT AFFAIRS DATA PLATFORM</p>
-          <h1 style={styles.brandTitle}>困难生业务系统</h1>
-          <p style={styles.brandText}>面向学校管理部门与学院的数据治理平台</p>
+          <p style={styles.eyebrow}>BOS DATA GOVERNANCE PLATFORM</p>
+          <h1 style={styles.brandTitle}>BOS 数据治理平台</h1>
+          <p style={styles.brandText}>面向学校管理部门与学院的数据治理平台，支持线上多人登录与权限隔离。</p>
           <div style={styles.brandLine} />
           <p style={styles.brandNote}>规范上载、自动治理、集中汇总</p>
         </div>
-        <div style={styles.loginPanel}>
-          <p style={styles.loginEyebrow}>平台入口</p>
-          <h2 style={styles.title}>选择工作端</h2>
-          <p style={styles.tip}>当前身份：{roleText}</p>
-          <label style={styles.accountLabel}>
-            <span>学院账号 / 提交单位</span>
-            <select style={styles.accountSelect} value={collegeCode} onChange={(event) => setCollegeCode(event.target.value)}>
-              {collegeAccounts.map((account) => (
-                <option key={account.college_code} value={account.college_code}>
-                  {account.college_name}
-                </option>
-              ))}
-            </select>
+
+        <form style={styles.loginPanel} onSubmit={submitLogin}>
+          <p style={styles.loginEyebrow}>账号登录</p>
+          <h2 style={styles.title}>BOS 数据治理平台</h2>
+          <p style={styles.tip}>
+            {currentProfile
+              ? `当前已登录：${currentProfile.display_name || currentProfile.college_name || "已登录用户"}`
+              : "请输入 Supabase Auth 账号和密码"}
+          </p>
+
+          {envMessage && <div style={styles.errorBox}>{envMessage}</div>}
+          {message && !envMessage && <div style={styles.errorBox}>{message}</div>}
+
+          <label style={styles.fieldLabel}>
+            <span>账号 / 邮箱</span>
+            <input
+              style={styles.input}
+              value={account}
+              autoComplete="username"
+              placeholder="请输入账号或邮箱"
+              disabled={loading || Boolean(envMessage)}
+              onChange={(event) => setAccount(event.target.value)}
+            />
           </label>
-          <div style={styles.buttons}>
-            <button style={styles.admin} onClick={() => onSelectRole("admin")}>
-              <span style={styles.buttonTitle}>学校管理员端</span>
-              <span style={styles.buttonDescription}>查看学院上载、困难生总库与全校汇总</span>
-            </button>
-            <button style={styles.college} onClick={selectCollegeRole}>
-              <span style={styles.buttonTitle}>学院端</span>
-              <span style={styles.buttonDescription}>治理本学院数据并上载到学校端</span>
-            </button>
-          </div>
-        </div>
+
+          <label style={styles.fieldLabel}>
+            <span>密码</span>
+            <input
+              style={styles.input}
+              value={password}
+              type="password"
+              autoComplete="current-password"
+              placeholder="请输入密码"
+              disabled={loading || Boolean(envMessage)}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </label>
+
+          <button style={loading || envMessage ? styles.submitDisabled : styles.submit} disabled={loading || Boolean(envMessage)}>
+            {loading ? "登录中..." : "登录"}
+          </button>
+        </form>
       </section>
     </main>
   );
@@ -74,7 +103,7 @@ const styles: Record<string, CSSProperties> = {
   },
   shell: {
     width: "min(900px, 100%)",
-    minHeight: 430,
+    minHeight: 460,
     display: "grid",
     gridTemplateColumns: "minmax(260px, 0.85fr) minmax(360px, 1.15fr)",
     overflow: "hidden",
@@ -145,59 +174,58 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 28,
   },
   tip: {
-    margin: "0 0 26px",
+    margin: "0 0 22px",
     color: "#718096",
     fontSize: 14,
   },
-  buttons: {
-    display: "grid",
-    gap: 12,
-  },
-  accountLabel: {
+  fieldLabel: {
     display: "grid",
     gap: 7,
-    marginBottom: 15,
+    marginBottom: 14,
     color: "#40526a",
     fontSize: 13,
     fontWeight: 700,
   },
-  accountSelect: {
+  input: {
     width: "100%",
+    boxSizing: "border-box",
     border: "1px solid #cfdbe7",
     borderRadius: 6,
-    padding: "10px 11px",
+    padding: "11px 12px",
     color: "#15304f",
     background: "#fff",
     fontSize: 14,
   },
-  admin: {
-    display: "grid",
-    gap: 5,
-    padding: "16px 18px",
-    border: "1px solid #0077d4",
-    borderRadius: 8,
+  errorBox: {
+    marginBottom: 14,
+    border: "1px solid #ffd4da",
+    borderRadius: 6,
+    padding: "10px 12px",
+    background: "#fff1f2",
+    color: "#b42336",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  submit: {
+    width: "100%",
+    border: "none",
+    borderRadius: 7,
+    padding: "12px 14px",
     color: "#fff",
     background: "#0077d4",
-    textAlign: "left",
     cursor: "pointer",
-  },
-  college: {
-    display: "grid",
-    gap: 5,
-    padding: "16px 18px",
-    border: "1px solid #cfdbe7",
-    borderRadius: 8,
-    color: "#15304f",
-    background: "#f8fbfe",
-    textAlign: "left",
-    cursor: "pointer",
-  },
-  buttonTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 800,
   },
-  buttonDescription: {
-    fontSize: 13,
-    opacity: 0.82,
+  submitDisabled: {
+    width: "100%",
+    border: "none",
+    borderRadius: 7,
+    padding: "12px 14px",
+    color: "#fff",
+    background: "#a6b4c5",
+    cursor: "not-allowed",
+    fontSize: 15,
+    fontWeight: 800,
   },
 };

@@ -1,8 +1,10 @@
 import type { CSSProperties, ReactNode } from "react";
-import { getCurrentCollegeAccount } from "../utils/collegeDetector";
+import type { UserProfile } from "../types/auth";
+import { getCollegeAccountLabel } from "../services/routeGuard";
 
 type CollegeLayoutProps = {
   path: string;
+  profile: UserProfile;
   onNavigate: (to: string) => void;
   onLogout: () => void;
   children: ReactNode;
@@ -19,9 +21,7 @@ const awardMenus = [
   { path: "/college/awards/shanghai", label: "上海市奖学金数据处理", mark: "★" },
 ];
 
-export default function CollegeLayout({ path, onNavigate, onLogout, children }: CollegeLayoutProps) {
-  const currentAccount = getCurrentCollegeAccount();
-
+export default function CollegeLayout({ path, profile, onNavigate, onLogout, children }: CollegeLayoutProps) {
   return (
     <div style={styles.page}>
       <aside style={styles.sidebar}>
@@ -80,8 +80,8 @@ export default function CollegeLayout({ path, onNavigate, onLogout, children }: 
             </div>
           </div>
           <div style={styles.topRight}>
-            <span style={styles.topBadge}>{currentAccount?.college_name || "学院数据上载"}</span>
-            <span style={styles.adminName}>{currentAccount ? `${currentAccount.account_name} 经办人` : "学院经办人"}</span>
+            <span style={styles.topBadge}>{getCollegeAccountLabel(profile)}</span>
+            <span style={styles.adminName}>{profile.display_name || "学院经办人"}</span>
           </div>
         </header>
         <main style={styles.main}>{children}</main>

@@ -1,7 +1,10 @@
 import type { CSSProperties, ReactNode } from "react";
+import type { UserProfile } from "../types/auth";
+import { getAdminAccountLabel } from "../services/routeGuard";
 
 type AdminLayoutProps = {
   path: string;
+  profile: UserProfile;
   onNavigate: (to: string) => void;
   onLogout: () => void;
   children: ReactNode;
@@ -21,7 +24,7 @@ const awardMenus = [
   { path: "/admin/awards/shanghai", label: "上海市奖学金汇总", mark: "★" },
 ];
 
-export default function AdminLayout({ path, onNavigate, onLogout, children }: AdminLayoutProps) {
+export default function AdminLayout({ path, profile, onNavigate, onLogout, children }: AdminLayoutProps) {
   return (
     <div style={styles.page}>
       <aside style={styles.sidebar}>
@@ -88,7 +91,7 @@ export default function AdminLayout({ path, onNavigate, onLogout, children }: Ad
           </div>
           <div style={styles.topRight}>
             <span style={styles.topBadge}>校级数据管理</span>
-            <span style={styles.adminName}>学校管理员</span>
+            <span style={styles.adminName}>{getAdminAccountLabel(profile)}</span>
           </div>
         </header>
         <main style={styles.main}>{children}</main>

@@ -92,7 +92,7 @@ export default function AdminSummaryPage() {
             <thead>
               <tr>
                 <th style={styles.th}>学院名称</th>
-                <th style={styles.th}>账号</th>
+                <th style={styles.th}>登录账号</th>
                 <th style={styles.th}>是否提交</th>
                 <th style={styles.th}>本专科信息人数</th>
                 <th style={styles.th}>家庭成员信息人数</th>
@@ -108,7 +108,7 @@ export default function AdminSummaryPage() {
                 return (
                   <tr key={item.college.college_code}>
                     <td style={styles.nameCell}>{item.college.college_name}</td>
-                    <td style={styles.td}>{item.college.account_name}</td>
+                    <td style={styles.td}>{item.college.login_email}</td>
                     <td style={styles.td}>{submitted ? "是" : "否"}</td>
                     <td style={styles.td}>{item.studentRows}</td>
                     <td style={styles.td}>{item.familyRows}</td>

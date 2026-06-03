@@ -1,25 +1,23 @@
+import { getStoredUserProfile } from "../services/profileService";
+import { finalCollegeDirectory } from "../services/accountDirectory";
+
 export type CollegeAccount = {
   college_code: string;
+  login_email: string;
   college_name: string;
   account_name: string;
   role: "college";
   enabled: true;
-  initialPassword?: string;
 };
 
-export const collegeAccounts: CollegeAccount[] = [
-  { college_code: "FL", college_name: "外国语学院", account_name: "FL", role: "college", enabled: true },
-  { college_code: "AD", college_name: "艺术与设计学院", account_name: "AD", role: "college", enabled: true },
-  { college_code: "HUM", college_name: "人文学院", account_name: "HUM", role: "college", enabled: true },
-  { college_code: "SCI", college_name: "理学院", account_name: "SCI", role: "college", enabled: true },
-  { college_code: "SEM", college_name: "经济与管理学院", account_name: "SEM", role: "college", enabled: true },
-  { college_code: "FFC", college_name: "香精香料化妆品学部", account_name: "FFC", role: "college", enabled: true },
-  { college_code: "MAT", college_name: "材料技术学部", account_name: "MAT", role: "college", enabled: true },
-  { college_code: "CEET", college_name: "化工与能源技术学部", account_name: "CEET", role: "college", enabled: true },
-  { college_code: "UCC", college_name: "城建学院", account_name: "UCC", role: "college", enabled: true },
-  { college_code: "ECO", college_name: "生态学院", account_name: "ECO", role: "college", enabled: true },
-  { college_code: "INFO", college_name: "智能技术学部", account_name: "INFO", role: "college", enabled: true },
-];
+export const collegeAccounts: CollegeAccount[] = finalCollegeDirectory.map((entry) => ({
+  college_code: entry.loginEmail,
+  login_email: entry.loginEmail,
+  college_name: entry.collegeName || "",
+  account_name: entry.loginEmail,
+  role: "college",
+  enabled: true,
+}));
 
 export const collegeNames = collegeAccounts.map((account) => account.college_name);
 
@@ -99,10 +97,12 @@ const findCollegeAccount = (value: string) => {
   return collegeAccounts.find((account) => account.college_name === collegeName);
 };
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const detectCollegeAccountFromFileName = (fileName: string) => {
   const normalized = fileName.toUpperCase();
   const accountByCode = collegeAccounts.find((account) =>
-    new RegExp(`(^|[^A-Z0-9])${account.college_code}([^A-Z0-9]|$)`).test(normalized)
+    new RegExp(`(^|[^A-Z0-9])${escapeRegExp(account.college_code.toUpperCase())}([^A-Z0-9]|$)`).test(normalized)
   );
   if (accountByCode) return accountByCode;
 
@@ -111,6 +111,10 @@ const detectCollegeAccountFromFileName = (fileName: string) => {
 };
 
 export const getCurrentCollegeAccount = () => {
+  const profile = getStoredUserProfile();
+  if (profile?.role === "college" && profile.college_name) return findCollegeAccount(profile.college_name);
+  if (profile?.role === "admin") return undefined;
+
   const accountName = window.localStorage.getItem(CURRENT_COLLEGE_ACCOUNT_KEY)?.trim() || "";
   return accountName ? findCollegeAccount(accountName) : undefined;
 };

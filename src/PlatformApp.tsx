@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import AdminLayout from "./layouts/AdminLayout";
 import CollegeLayout from "./layouts/CollegeLayout";
 import LoginPage from "./pages/LoginPage";
@@ -18,13 +18,17 @@ import CollegeRecordsPage from "./pages/college/CollegeRecordsPage";
 import NationalScholarshipPage from "./pages/awards/NationalScholarshipPage";
 import NationalInspirationalPage from "./pages/awards/NationalInspirationalPage";
 import ShanghaiScholarshipPage from "./pages/awards/ShanghaiScholarshipPage";
-
-type Role = "admin" | "college";
-
-const ROLE_KEY = "bos_role";
+import ProtectedRoute, { RootRedirect } from "./components/ProtectedRoute";
+import {
+  getCurrentSessionProfile,
+  signOut,
+  subscribeAuthProfile,
+} from "./services/authService";
+import type { AuthUserContext, UserProfile } from "./types/auth";
 
 const normalizePath = (path: string) => {
   const known = [
+    "/",
     "/login",
     "/admin",
     "/admin/colleges",
@@ -46,23 +50,26 @@ const normalizePath = (path: string) => {
   return known.includes(path) ? path : "/login";
 };
 
-const readRole = (): Role | null => {
-  const raw = localStorage.getItem(ROLE_KEY);
-  return raw === "admin" || raw === "college" ? raw : null;
-};
-
 const readPath = () => normalizePath(window.location.pathname || "/login");
 
+const initialAuthState: AuthUserContext = {
+  profile: null,
+  loading: true,
+  error: "",
+};
+
 export default function PlatformApp() {
-  const [role, setRole] = useState<Role | null>(() => readRole());
+  const [authState, setAuthState] = useState<AuthUserContext>(initialAuthState);
   const [path, setPath] = useState(readPath);
 
-  const navigate = (to: string) => {
+  const navigate = useCallback((to: string, replace = false) => {
     const next = normalizePath(to);
-    if (next === path) return;
-    window.history.pushState({}, "", next);
+    if (window.location.pathname !== next) {
+      if (replace) window.history.replaceState({}, "", next);
+      else window.history.pushState({}, "", next);
+    }
     setPath(next);
-  };
+  }, []);
 
   useEffect(() => {
     const onPop = () => setPath(readPath());
@@ -71,34 +78,61 @@ export default function PlatformApp() {
   }, []);
 
   useEffect(() => {
-    if (!role && path !== "/login") {
-      navigate("/login");
-      return;
-    }
-    if (role === "admin" && path.startsWith("/college")) {
-      navigate("/admin");
-      return;
-    }
-    if (role === "college" && path.startsWith("/admin")) {
-      navigate("/college");
-    }
-  }, [path, role]);
+    let active = true;
 
-  const selectRole = (nextRole: Role) => {
-    localStorage.setItem(ROLE_KEY, nextRole);
-    setRole(nextRole);
-    navigate(nextRole === "admin" ? "/admin" : "/college");
-  };
+    void getCurrentSessionProfile()
+      .then((profile) => {
+        if (active) setAuthState({ profile, loading: false, error: "" });
+      })
+      .catch((error) => {
+        if (!active) return;
+        setAuthState({
+          profile: null,
+          loading: false,
+          error: error instanceof Error ? error.message : "读取登录状态失败",
+        });
+      });
 
-  const logout = () => {
-    localStorage.removeItem(ROLE_KEY);
-    setRole(null);
-    navigate("/login");
-  };
+    const unsubscribe = subscribeAuthProfile((profile, error) => {
+      setAuthState({ profile, loading: false, error: error || "" });
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const handleLogin = useCallback(
+    (profile: UserProfile, nextPath: string) => {
+      setAuthState({ profile, loading: false, error: "" });
+      navigate(nextPath);
+    },
+    [navigate]
+  );
+
+  const logout = useCallback(async () => {
+    try {
+      await signOut();
+    } finally {
+      setAuthState({ profile: null, loading: false, error: "" });
+      navigate("/login", true);
+    }
+  }, [navigate]);
 
   const content = useMemo<ReactNode>(() => {
-    if (!role || path === "/login") {
-      return <LoginPage onSelectRole={selectRole} currentRole={role} />;
+    if (path === "/") {
+      return <RootRedirect profile={authState.profile} loading={authState.loading} onNavigate={navigate} />;
+    }
+
+    if (path === "/login") {
+      return (
+        <LoginPage
+          currentProfile={authState.profile}
+          initialError={authState.error}
+          onLogin={handleLogin}
+        />
+      );
     }
 
     if (path.startsWith("/admin")) {
@@ -126,9 +160,17 @@ export default function PlatformApp() {
         );
 
       return (
-        <AdminLayout path={path} onNavigate={navigate} onLogout={logout}>
-          {page}
-        </AdminLayout>
+        <ProtectedRoute
+          requiredRole="admin"
+          profile={authState.profile}
+          loading={authState.loading}
+          path={path}
+          onNavigate={navigate}
+        >
+          <AdminLayout path={path} profile={authState.profile!} onNavigate={navigate} onLogout={logout}>
+            {page}
+          </AdminLayout>
+        </ProtectedRoute>
       );
     }
 
@@ -148,11 +190,19 @@ export default function PlatformApp() {
       );
 
     return (
-      <CollegeLayout path={path} onNavigate={navigate} onLogout={logout}>
-        {page}
-      </CollegeLayout>
+      <ProtectedRoute
+        requiredRole="college"
+        profile={authState.profile}
+        loading={authState.loading}
+        path={path}
+        onNavigate={navigate}
+      >
+        <CollegeLayout path={path} profile={authState.profile!} onNavigate={navigate} onLogout={logout}>
+          {page}
+        </CollegeLayout>
+      </ProtectedRoute>
     );
-  }, [role, path]);
+  }, [authState.error, authState.loading, authState.profile, handleLogin, logout, navigate, path]);
 
   return <>{content}</>;
 }
