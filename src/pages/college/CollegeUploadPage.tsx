@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import ProcessingWorkbench from "../../App";
-import ErrorReportTable, { type ValidationError } from "../../components/ErrorReportTable";
+import type { ValidationError } from "../../components/ErrorReportTable";
 
 type CollegeUploadEventDetail = {
   errorCount: number;
@@ -9,18 +9,11 @@ type CollegeUploadEventDetail = {
   validationErrors: ValidationError[];
 };
 
-type SyncWindow = Window & {
-  __bosSyncToSchool?: () => Promise<void>;
-  __bosHasBlockingErrors?: () => boolean;
-};
-
 export default function CollegeUploadPage() {
   const [errorCount, setErrorCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [fixedCount, setFixedCount] = useState(0);
-  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [hasProcessed, setHasProcessed] = useState(false);
-  const [submitMessage, setSubmitMessage] = useState("等待提交");
 
   useEffect(() => {
     const onResult = (event: Event) => {
@@ -30,87 +23,46 @@ export default function CollegeUploadPage() {
       setErrorCount(detail.errorCount || 0);
       setTotalCount(detail.totalCount || 0);
       setFixedCount(detail.fixedCount || 0);
-      setValidationErrors(detail.validationErrors || []);
-      setSubmitMessage(
-        detail.errorCount > 0 ? "上载失败：当前数据仍存在不通过项" : "治理通过：可以上载到学校端"
-      );
     };
 
     window.addEventListener("bos:college-upload-result", onResult);
     return () => window.removeEventListener("bos:college-upload-result", onResult);
   }, []);
 
-  const hasBlockingErrors = useMemo(
-    () =>
-      !hasProcessed ||
-      errorCount > 0 ||
-      validationErrors.some((item) => item.level === "error"),
-    [hasProcessed, errorCount, validationErrors]
-  );
-
-  const canSubmit = !hasBlockingErrors;
-
   const enterProcessing = (panel: "student" | "family") => {
     window.dispatchEvent(new CustomEvent("bos:switch-processing-panel", { detail: panel }));
     document.getElementById("difficulty-processing-workbench")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const uploadToSchool = async () => {
-    const globalBlocking = (window as SyncWindow).__bosHasBlockingErrors?.() ?? false;
-    if (hasBlockingErrors || globalBlocking) {
-      setSubmitMessage("上载失败：当前数据仍存在不通过项，请查看不通过预览");
-      alert("上载失败：当前数据仍存在不通过项，请查看不通过预览");
-      return;
-    }
-
-    const syncFn = (window as SyncWindow).__bosSyncToSchool;
-    if (!syncFn) {
-      setSubmitMessage("上载失败：未找到学校端上载入口");
-      alert("上载失败：未找到学校端上载入口");
-      return;
-    }
-
-    try {
-      setSubmitMessage("正在上载到学校端...");
-      await syncFn();
-      setSubmitMessage("已上载到学校端");
-      alert("已上载到学校端");
-    } catch (error) {
-      console.error("College upload sync failed:", error);
-      setSubmitMessage("上载失败：云端写入异常");
-      alert("上载失败：云端写入异常");
-    }
+  const enterRecords = () => {
+    window.history.pushState({}, "", "/college/records");
+    window.dispatchEvent(new PopStateEvent("popstate"));
   };
 
   return (
     <section style={styles.wrap}>
       <div style={styles.card}>
         <div style={styles.eyebrow}>困难生业务 / 数据处理</div>
-        <h1 style={styles.title}>学院数据治理与上载</h1>
-        <div style={styles.tip}>流程：选择模板文件 → 选择数据文件 → 开始治理 → 查看不通过预览 → 上载到学校端</div>
+        <h1 style={styles.title}>学院困难生数据处理</h1>
+        <div style={styles.tip}>选择具体业务入口，上传 Excel 后系统会自动识别、治理并拆分通过名单与不通过名单。</div>
         <div style={styles.resultGrid}>
           <ResultStat label="总人数" value={hasProcessed ? totalCount : 0} />
           <ResultStat label="通过人数" value={hasProcessed ? Math.max(0, totalCount - errorCount) : 0} tone="#087b5b" />
           <ResultStat label="不通过人数" value={errorCount} tone="#b42336" />
           <ResultStat label="自动修复项" value={fixedCount} tone="#0f766e" />
         </div>
-        {hasProcessed && hasBlockingErrors ? (
+        {hasProcessed && errorCount > 0 ? (
           <div style={styles.warn}>当前数据存在不通过项，不能上载到学校端</div>
         ) : hasProcessed ? (
           <div style={styles.ok}>当前数据已全部通过，可以上载到学校端</div>
         ) : null}
-
-        <button style={canSubmit ? styles.submit : styles.submitDisabled} onClick={uploadToSchool} disabled={!canSubmit}>
-          上载到学校端
-        </button>
-        <div style={styles.tip}>提交状态：{submitMessage}</div>
       </div>
 
       <div style={styles.processGrid}>
         <ProcessCard
           title="本专科信息处理"
           description="治理学生本人困难生主信息，生成通过名单、不通过名单和问题说明。"
-          fileState={hasProcessed ? "已完成一次治理" : "等待选择模板和数据"}
+          fileState={hasProcessed ? "已完成一次治理" : "等待上传 Excel"}
           total={hasProcessed ? totalCount : 0}
           passed={hasProcessed ? Math.max(0, totalCount - errorCount) : 0}
           failed={hasProcessed ? errorCount : 0}
@@ -127,11 +79,16 @@ export default function CollegeUploadPage() {
           fixed={0}
           onEnter={() => enterProcessing("family")}
         />
-      </div>
-
-      <div style={styles.card}>
-        <h2 style={styles.subTitle}>不通过预览</h2>
-        <ErrorReportTable errors={validationErrors} />
+        <ProcessCard
+          title="提交记录"
+          description="查看本学院已上载的本专科信息和家庭成员信息记录。"
+          fileState="本学院可见"
+          total={0}
+          passed={0}
+          failed={0}
+          fixed={0}
+          onEnter={enterRecords}
+        />
       </div>
 
       <div id="difficulty-processing-workbench">

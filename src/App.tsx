@@ -10,7 +10,6 @@ import { exportFamilyExcel, processFamilyRows } from "./services/familyProcessor
 import { exportStudentExcel, processStudentRows } from "./services/studentProcessor";
 
 import {
-  makeSourcePreview,
   parseFamilyTemplate,
   parseStudentTemplate,
   readWorkbook,
@@ -25,6 +24,7 @@ import type {
   LogItem,
   LogType,
   ProcessingStats,
+  TemplateParseResult,
   WorkbookData,
 } from "./services/types";
 
@@ -80,14 +80,33 @@ const toCollegeValidationErrors = (items: ErrorReportItem[]): CollegeValidationE
     };
     });
 
+const isExcelFile = (file: File) => /\.(xlsx|xls)$/i.test(file.name);
+
+const getWorkbookText = (workbookData: WorkbookData) =>
+  workbookData.sheetNames
+    .slice(0, 3)
+    .flatMap((sheetName) => workbookData.sheets[sheetName] || [])
+    .slice(0, 20)
+    .flat()
+    .map((item) => String(item ?? ""))
+    .join(" ");
+
+const looksLikeFamilyFile = (fileName: string, workbookData: WorkbookData) => {
+  const text = `${fileName} ${getWorkbookText(workbookData)}`;
+  return /家庭成员|成员信息|与学生关系|家庭成员姓名|工作或学习单位|健康状况|family/i.test(text);
+};
+
+const looksLikeStudentFile = (fileName: string, workbookData: WorkbookData) => {
+  const text = `${fileName} ${getWorkbookText(workbookData)}`;
+  return /本专科|困难生信息|特殊困难类型|家庭年均收入|陈述理由|收入来源|身份证号/i.test(text);
+};
+
 type AppProps = {
   collegeMode?: boolean;
 };
 
 export default function App({ collegeMode = false }: AppProps) {
-  const templateRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef<HTMLInputElement>(null);
-  const familyTemplateRef = useRef<HTMLInputElement>(null);
   const familyDataRef = useRef<HTMLInputElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const familyLogEndRef = useRef<HTMLDivElement>(null);
@@ -96,7 +115,7 @@ export default function App({ collegeMode = false }: AppProps) {
   const [templateOutputSheet, setTemplateOutputSheet] = useState("");
   const [templateDictSheet, setTemplateDictSheet] = useState("");
   const [templateFirstRow, setTemplateFirstRow] = useState<unknown[]>([]);
-  const [templateSecondRow, setTemplateSecondRow] = useState<unknown[]>([]);
+  const [, setTemplateSecondRow] = useState<unknown[]>([]);
   const [templateFields, setTemplateFields] = useState<string[]>([]);
   const [dictionaryMap, setDictionaryMap] = useState<Record<string, string[]>>({});
   const [fieldDictMap, setFieldDictMap] = useState<Record<string, string>>({});
@@ -110,6 +129,7 @@ export default function App({ collegeMode = false }: AppProps) {
   const [logs, setLogs] = useState<LogItem[]>([]);
   const [status, setStatus] = useState("等待任务");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [studentAutoProcessRequested, setStudentAutoProcessRequested] = useState(false);
   const [analysis, setAnalysis] = useState<Record<string, number>>({});
   const [activeModule, setActiveModule] = useState<"processing" | "database" | "merge">("processing");
   const [activeProcessingPanel, setActiveProcessingPanel] = useState<"student" | "family">("student");
@@ -119,7 +139,7 @@ export default function App({ collegeMode = false }: AppProps) {
   const [familyTemplateOutputSheet, setFamilyTemplateOutputSheet] = useState("");
   const [familyTemplateDictSheet, setFamilyTemplateDictSheet] = useState("");
   const [familyTemplateFirstRow, setFamilyTemplateFirstRow] = useState<unknown[]>([]);
-  const [familyTemplateSecondRow, setFamilyTemplateSecondRow] = useState<unknown[]>([]);
+  const [, setFamilyTemplateSecondRow] = useState<unknown[]>([]);
   const [familyTemplateFields, setFamilyTemplateFields] = useState<string[]>([]);
   const [familyDictionaryMap, setFamilyDictionaryMap] = useState<Record<string, string[]>>({});
   const [familyFieldDictMap, setFamilyFieldDictMap] = useState<Record<string, string>>({});
@@ -132,6 +152,7 @@ export default function App({ collegeMode = false }: AppProps) {
   const [familyLogs, setFamilyLogs] = useState<LogItem[]>([]);
   const [familyStatus, setFamilyStatus] = useState("等待任务");
   const [isFamilyProcessing, setIsFamilyProcessing] = useState(false);
+  const [familyAutoProcessRequested, setFamilyAutoProcessRequested] = useState(false);
   const [familyAnalysis, setFamilyAnalysis] = useState<Record<string, number>>({});
   const [familyStats, setFamilyStats] = useState<FamilyProcessingStats>(initialFamilyStats);
 
@@ -262,46 +283,57 @@ export default function App({ collegeMode = false }: AppProps) {
     alert("家庭成员信息已上载到学校端");
   };
 
-  const uploadTemplate = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const parsed = parseStudentTemplate(await readWorkbook(file));
-      setTemplateWorkbook(parsed.workbookData);
-      setTemplateOutputSheet(parsed.outputSheet);
-      setTemplateDictSheet(parsed.dictSheet);
-      setTemplateFirstRow(parsed.firstRow);
-      setTemplateSecondRow(parsed.secondRow);
-      setTemplateFields(parsed.fields);
-      setDictionaryMap(parsed.dictionaries);
-      setFieldDictMap(parsed.fieldToDict);
-      setStatus("模板加载完成");
-
-      pushLog(
-        "success",
-        `模板上传成功：${file.name}
-功能板块：困难生数据处理
-输出范围：A 到 AN，共 ${parsed.fields.length} 列
-输出表：${parsed.outputSheet}
-字典表：${parsed.dictSheet}
-
-已启用：
-AA、AB、AD列统一填写“同意”；
-W列只检查是否超过60字，超过则自动精简，不标黄；
-其它原有规则保留。`
-      );
-    } catch {
-      pushLog("error", "模板读取失败");
-      alert("模板读取失败");
-    } finally {
-      event.target.value = "";
-    }
+  const applyStudentTemplate = (parsed: TemplateParseResult) => {
+    setTemplateWorkbook(parsed.workbookData);
+    setTemplateOutputSheet(parsed.outputSheet);
+    setTemplateDictSheet(parsed.dictSheet);
+    setTemplateFirstRow(parsed.firstRow);
+    setTemplateSecondRow(parsed.secondRow);
+    setTemplateFields(parsed.fields);
+    setDictionaryMap(parsed.dictionaries);
+    setFieldDictMap(parsed.fieldToDict);
   };
 
-  const uploadData = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const applyFamilyTemplate = (parsed: TemplateParseResult) => {
+    setFamilyTemplateWorkbook(parsed.workbookData);
+    setFamilyTemplateOutputSheet(parsed.outputSheet);
+    setFamilyTemplateDictSheet(parsed.dictSheet);
+    setFamilyTemplateFirstRow(parsed.firstRow);
+    setFamilyTemplateSecondRow(parsed.secondRow);
+    setFamilyTemplateFields(parsed.fields);
+    setFamilyDictionaryMap(parsed.dictionaries);
+    setFamilyFieldDictMap(parsed.fieldToDict);
+  };
+
+  const loadStudentDataFile = async (file: File) => {
+    if (!isExcelFile(file)) {
+      throw new Error("当前页面仅支持困难生本专科信息 Excel 文件");
+    }
+
+    setStudentAutoProcessRequested(false);
+    setIsProcessing(true);
+    setProcessedData([]);
+    setHighlightCellMap({});
+    setDisqualifiedRows([]);
+    setStudentErrorReports([]);
+    setAnalysis({});
+    setStats(initialStats);
+    setStatus("正在读取本专科信息 Excel...");
+
+    const workbookData = await readWorkbook(file);
+    if (looksLikeFamilyFile(file.name, workbookData)) {
+      throw new Error("当前页面仅支持困难生本专科信息文件");
+    }
+    if (!looksLikeStudentFile(file.name, workbookData)) {
+      throw new Error("当前页面仅支持困难生本专科信息文件");
+    }
+
+    const parsed = parseStudentTemplate(workbookData);
+    if (!parsed.fields.some((field) => /姓名|身份证|困难|收入|陈述理由/.test(field))) {
+      throw new Error("当前页面仅支持困难生本专科信息文件");
+    }
+
+    applyStudentTemplate(parsed);
 
     const collegeDetection = resolveCollegeUpload(file.name);
     setStudentCollegeName(collegeDetection.collegeName);
@@ -309,27 +341,43 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
     if (collegeDetection.error) pushLog("error", collegeDetection.error);
     else pushLog("success", `所属学院已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
 
-    try {
-      const workbookData = await readWorkbook(file);
-      const firstSheet = workbookData.sheetNames[0];
-      const rows = workbookData.sheets[firstSheet] || [];
-      setSourceRows(rows);
-      setProcessedData([]);
-      setHighlightCellMap({});
-      setDisqualifiedRows([]);
-      setStatus("待处理数据已加载");
+    const firstSheet = workbookData.sheetNames[0];
+    const rows = workbookData.sheets[firstSheet] || [];
+    setSourceRows(rows);
+    setStatus("已读取 Excel，正在自动治理...");
 
-      pushLog(
-        "success",
-        `待处理数据上传成功：${file.name}
+    pushLog(
+      "success",
+      `本专科信息 Excel 已读取：${file.name}
 数据表：${firstSheet}
-原始行数：${rows.length}`
-      );
-    } catch {
-      pushLog("error", "数据读取失败");
-      alert("数据读取失败");
+原始行数：${rows.length}
+系统将自动执行既有治理规则。`
+    );
+    setStudentAutoProcessRequested(true);
+  };
+
+  const uploadData = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    await uploadStudentDataFile(file);
+    input.value = "";
+    if (dataRef.current) dataRef.current.value = "";
+  };
+
+  const uploadStudentDataFile = async (file: File) => {
+    try {
+      await loadStudentDataFile(file);
+    } catch (error) {
+      console.error("Student Excel load failed:", error);
+      const message = error instanceof Error ? error.message : "本专科信息读取失败";
+      setStatus("Excel 读取失败");
+      pushLog("error", message);
+      alert(message);
     } finally {
-      event.target.value = "";
+      setIsProcessing(false);
+      if (dataRef.current) dataRef.current.value = "";
     }
   };
 
@@ -421,6 +469,18 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
   };
 
   useEffect(() => {
+    if (!studentAutoProcessRequested) return;
+    if (isProcessing || templateFields.length === 0 || sourceRows.length === 0) return;
+
+    const timer = window.setTimeout(() => {
+      setStudentAutoProcessRequested(false);
+      void processData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [studentAutoProcessRequested, isProcessing, templateFields.length, sourceRows.length]);
+
+  useEffect(() => {
     const win = window as typeof window & {
       __bosHasBlockingErrors?: () => boolean;
       __bosSyncToSchool?: () => Promise<void>;
@@ -504,46 +564,31 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
     exportStudentList("failed");
   };
 
-  const uploadFamilyTemplate = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const parsed = parseFamilyTemplate(await readWorkbook(file));
-      setFamilyTemplateWorkbook(parsed.workbookData);
-      setFamilyTemplateOutputSheet(parsed.outputSheet);
-      setFamilyTemplateDictSheet(parsed.dictSheet);
-      setFamilyTemplateFirstRow(parsed.firstRow);
-      setFamilyTemplateSecondRow(parsed.secondRow);
-      setFamilyTemplateFields(parsed.fields);
-      setFamilyDictionaryMap(parsed.dictionaries);
-      setFamilyFieldDictMap(parsed.fieldToDict);
-      setFamilyStatus("家庭成员模板加载完成");
-
-      pushFamilyLog(
-        "success",
-        `家庭成员模板上传成功：${file.name}
-输出表：${parsed.outputSheet}
-字典表：${parsed.dictSheet}
-识别字段：${parsed.fields.join("、")}
-
-已启用：
-年度、学期、与学生关系、健康状况按字典校验；
-姓名、年龄、单位、年收入、职业按模板填写要求校验；
-家庭成员信息处理默认只进行格式治理，不强制匹配困难生数据库。`
-      );
-    } catch (error) {
-      console.error(error);
-      pushFamilyLog("error", "家庭成员模板读取失败");
-      alert("家庭成员模板读取失败");
-    } finally {
-      event.target.value = "";
+  const loadFamilyDataFile = async (file: File) => {
+    if (!isExcelFile(file)) {
+      throw new Error("当前页面仅支持困难生家庭成员信息 Excel 文件");
     }
-  };
 
-  const uploadFamilyData = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    setFamilyAutoProcessRequested(false);
+    setIsFamilyProcessing(true);
+    setFamilyProcessedData([]);
+    setFamilyHighlightCellMap({});
+    setFamilyReviewRows([]);
+    setFamilyAnalysis({});
+    setFamilyStats(initialFamilyStats);
+    setFamilyStatus("正在读取家庭成员信息 Excel...");
+
+    const workbookData = await readWorkbook(file);
+    if (!looksLikeFamilyFile(file.name, workbookData)) {
+      throw new Error("当前页面仅支持困难生家庭成员信息文件");
+    }
+
+    const parsed = parseFamilyTemplate(workbookData);
+    if (!parsed.fields.some((field) => /家庭成员|学生身份证|关系|健康|职业|年收入/.test(field))) {
+      throw new Error("当前页面仅支持困难生家庭成员信息文件");
+    }
+
+    applyFamilyTemplate(parsed);
 
     const collegeDetection = resolveCollegeUpload(file.name);
     setFamilyCollegeName(collegeDetection.collegeName);
@@ -551,29 +596,43 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
     if (collegeDetection.error) pushFamilyLog("error", collegeDetection.error);
     else pushFamilyLog("success", `所属学院已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
 
-    try {
-      const workbookData = await readWorkbook(file);
-      const firstSheet = workbookData.sheetNames[0];
-      const rows = workbookData.sheets[firstSheet] || [];
-      setFamilySourceRows(rows);
-      setFamilyProcessedData([]);
-      setFamilyHighlightCellMap({});
-      setFamilyReviewRows([]);
-      setFamilyAnalysis({});
-      setFamilyStatus("家庭成员数据已加载");
+    const firstSheet = workbookData.sheetNames[0];
+    const rows = workbookData.sheets[firstSheet] || [];
+    setFamilySourceRows(rows);
+    setFamilyStatus("已读取 Excel，正在自动治理...");
 
-      pushFamilyLog(
-        "success",
-        `家庭成员数据上传成功：${file.name}
+    pushFamilyLog(
+      "success",
+      `家庭成员信息 Excel 已读取：${file.name}
 数据表：${firstSheet}
-原始行数：${rows.length}`
-      );
+原始行数：${rows.length}
+系统将自动执行既有治理规则。`
+    );
+    setFamilyAutoProcessRequested(true);
+  };
+
+  const uploadFamilyData = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    await uploadFamilyDataFile(file);
+    input.value = "";
+    if (familyDataRef.current) familyDataRef.current.value = "";
+  };
+
+  const uploadFamilyDataFile = async (file: File) => {
+    try {
+      await loadFamilyDataFile(file);
     } catch (error) {
-      console.error(error);
-      pushFamilyLog("error", "家庭成员数据读取失败");
-      alert("家庭成员数据读取失败");
+      console.error("Family Excel load failed:", error);
+      const message = error instanceof Error ? error.message : "家庭成员信息读取失败";
+      setFamilyStatus("Excel 读取失败");
+      pushFamilyLog("error", message);
+      alert(message);
     } finally {
-      event.target.value = "";
+      setIsFamilyProcessing(false);
+      if (familyDataRef.current) familyDataRef.current.value = "";
     }
   };
 
@@ -660,6 +719,18 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
     }
   };
 
+  useEffect(() => {
+    if (!familyAutoProcessRequested) return;
+    if (isFamilyProcessing || familyTemplateFields.length === 0 || familySourceRows.length === 0) return;
+
+    const timer = window.setTimeout(() => {
+      setFamilyAutoProcessRequested(false);
+      void processFamilyData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [familyAutoProcessRequested, isFamilyProcessing, familyTemplateFields.length, familySourceRows.length]);
+
   const exportFamilyList = (exportMode: "passed" | "failed") => {
     if (familyProcessedData.length === 0) {
       alert("没有可导出的家庭成员处理结果");
@@ -727,36 +798,6 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
     );
   };
 
-  const renderTemplatePreview = () => {
-    if (templateFields.length === 0) return <div style={styles.empty}>暂无模板</div>;
-    const previewRows = [
-      templateFields.reduce<Record<string, unknown>>((obj, field, index) => {
-        obj[field] = templateFirstRow[index] ?? "";
-        return obj;
-      }, {}),
-      templateFields.reduce<Record<string, unknown>>((obj, field, index) => {
-        obj[field] = templateSecondRow[index] ?? field;
-        return obj;
-      }, {}),
-    ];
-    return renderTable(previewRows);
-  };
-
-  const renderFamilyTemplatePreview = () => {
-    if (familyTemplateFields.length === 0) return <div style={styles.empty}>暂无模板</div>;
-    const previewRows = [
-      familyTemplateFields.reduce<Record<string, unknown>>((obj, field, index) => {
-        obj[field] = familyTemplateFirstRow[index] ?? "";
-        return obj;
-      }, {}),
-      familyTemplateFields.reduce<Record<string, unknown>>((obj, field, index) => {
-        obj[field] = familyTemplateSecondRow[index] ?? field;
-        return obj;
-      }, {}),
-    ];
-    return renderTable(previewRows);
-  };
-
   return (
     <div style={collegeMode ? { ...styles.page, ...styles.embeddedPage } : styles.page}>
       <div style={collegeMode ? { ...styles.moduleBar, ...styles.embeddedModuleBar } : styles.moduleBar}>
@@ -813,24 +854,18 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
 
           {activeProcessingPanel === "student" ? (
             <StudentProcessPage
-              styles={styles}
-              templateRef={templateRef}
               dataRef={dataRef}
-              uploadTemplate={uploadTemplate}
               uploadData={uploadData}
+              uploadDataFile={uploadStudentDataFile}
               isProcessing={isProcessing}
-              processData={processData}
               exportExcel={exportExcel}
               exportStudentErrorReport={exportStudentErrorReport}
               addStudentResultToMergePool={addStudentResultToMergePool}
-              hideSubmitAction={collegeMode}
+              hideSubmitAction={false}
               status={status}
               studentCollegeName={studentCollegeName}
               stats={stats}
-              renderTemplatePreview={renderTemplatePreview}
               renderTable={renderTable}
-              sourceRows={sourceRows}
-              templateFields={templateFields}
               processedData={processedData}
               disqualifiedRows={disqualifiedRows}
               analysis={analysis}
@@ -839,25 +874,18 @@ W列只检查是否超过60字，超过则自动精简，不标黄；
             />
           ) : (
             <FamilyProcessPage
-              styles={styles}
-              familyTemplateRef={familyTemplateRef}
               familyDataRef={familyDataRef}
-              uploadFamilyTemplate={uploadFamilyTemplate}
               uploadFamilyData={uploadFamilyData}
+              uploadFamilyDataFile={uploadFamilyDataFile}
               isFamilyProcessing={isFamilyProcessing}
-              processFamilyData={processFamilyData}
               exportFamilyResult={exportFamilyResult}
               exportFamilyErrorReport={exportFamilyErrorReport}
               addFamilyResultToMergePool={addFamilyResultToMergePool}
-              hideSubmitAction={collegeMode}
+              hideSubmitAction={false}
               familyStatus={familyStatus}
               familyCollegeName={familyCollegeName}
               familyStats={familyStats}
-              renderFamilyTemplatePreview={renderFamilyTemplatePreview}
               renderTable={renderTable}
-              makeSourcePreview={makeSourcePreview}
-              familySourceRows={familySourceRows}
-              familyTemplateFields={familyTemplateFields}
               familyProcessedData={familyProcessedData}
               familyReviewRows={familyReviewRows}
               familyAnalysis={familyAnalysis}

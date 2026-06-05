@@ -24,23 +24,27 @@ export default function CollegeRecordsPage() {
         <table style={styles.table}>
           <thead>
             <tr>
-              <th style={styles.th}>学院</th>
+              <th style={styles.th}>提交单位</th>
               <th style={styles.th}>数据类型</th>
-              <th style={styles.th}>行数</th>
-              <th style={styles.th}>时间</th>
+              <th style={styles.th}>通过人数</th>
+              <th style={styles.th}>不通过人数</th>
+              <th style={styles.th}>提交状态</th>
+              <th style={styles.th}>最近提交时间</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td style={styles.td} colSpan={4}>暂无记录</td>
+                <td style={styles.td} colSpan={6}>暂无记录</td>
               </tr>
             ) : (
               rows.map((item) => (
                 <tr key={item.id}>
                   <td style={styles.td}>{item.collegeName}</td>
-                  <td style={styles.td}>{item.dataType}</td>
+                  <td style={styles.td}>{item.dataType === "student" ? "本专科信息" : "家庭成员信息"}</td>
                   <td style={styles.td}>{item.rowCount}</td>
+                  <td style={styles.td}>0</td>
+                  <td style={styles.td}>已上载</td>
                   <td style={styles.td}>{new Date(item.createdAt).toLocaleString()}</td>
                 </tr>
               ))
