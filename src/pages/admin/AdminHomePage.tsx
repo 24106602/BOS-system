@@ -1,47 +1,84 @@
 import type { CSSProperties } from "react";
 
-const stats = [
-  ["11", "学院（部）总数", "#0077d4"],
-  ["0", "本专科已上载", "#0b9b6f"],
-  ["0", "家庭成员已上载", "#7c5ce6"],
-  ["0", "待处理异常", "#d83a4e"],
-];
+type AdminHomePageProps = {
+  onNavigate?: (to: string) => void;
+};
 
-export default function AdminHomePage() {
+export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
   return (
     <section>
       <div style={styles.hero}>
         <div>
-          <div style={styles.eyebrow}>学校管理员端</div>
-          <h1 style={styles.title}>困难生业务总览</h1>
-          <p style={styles.text}>统一查看学院上载进度、学校困难生总库和全校汇总数据。</p>
+          <div style={styles.eyebrow}>学校管理员端 / 业务模块入口</div>
+          <h1 style={styles.title}>学生事务数据治理平台</h1>
+          <p style={styles.text}>按业务模块进入对应工作区。困难生业务已启用，后续业务会沿用同一套上载、治理、汇总和总库框架。</p>
         </div>
-        <div style={styles.heroBadge}>系统运行正常</div>
+        <div style={styles.heroBadge}>平台运行正常</div>
       </div>
 
-      <div style={styles.statGrid}>
-        {stats.map(([value, label, color]) => (
-          <div key={label} style={styles.statCard}>
-            <strong style={{ ...styles.statValue, color }}>{value}</strong>
-            <div style={styles.statLabel}>{label}</div>
-          </div>
+      <div style={styles.businessGrid}>
+        <BusinessCard
+          icon="困"
+          title="困难生业务"
+          description="困难生数据治理、学院上载、全校汇总与家庭成员关联。"
+          status="已启用"
+          statusTone="enabled"
+          metrics={["本专科信息汇总", "家庭成员信息汇总", "困难生数据库"]}
+          actionText="进入业务"
+          onClick={() => onNavigate?.("/admin/difficulty")}
+        />
+        <BusinessCard
+          icon="奖"
+          title="三大奖业务"
+          description="后续用于三大奖申报、审核和汇总。"
+          status="暂未开放"
+          statusTone="pending"
+          metrics={["国家奖学金", "国家励志奖学金", "上海市奖学金"]}
+          actionText="敬请期待"
+          disabled
+        />
+      </div>
+    </section>
+  );
+}
+
+function BusinessCard({
+  icon,
+  title,
+  description,
+  status,
+  statusTone,
+  metrics,
+  actionText,
+  disabled,
+  onClick,
+}: {
+  icon: string;
+  title: string;
+  description: string;
+  status: string;
+  statusTone: "enabled" | "pending";
+  metrics: string[];
+  actionText: string;
+  disabled?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <section style={styles.businessCard}>
+      <div style={styles.cardTop}>
+        <div style={statusTone === "enabled" ? styles.cardIcon : styles.cardIconMuted}>{icon}</div>
+        <span style={statusTone === "enabled" ? styles.enabledBadge : styles.pendingBadge}>{status}</span>
+      </div>
+      <h2 style={styles.cardTitle}>{title}</h2>
+      <p style={styles.cardText}>{description}</p>
+      <div style={styles.metricList}>
+        {metrics.map((item) => (
+          <span key={item} style={styles.metricPill}>{item}</span>
         ))}
       </div>
-
-      <div style={styles.grid}>
-        <section style={styles.card}>
-          <h2 style={styles.cardTitle}>业务流程</h2>
-          <div style={styles.step}>1. 学院完成本专科与家庭成员信息治理</div>
-          <div style={styles.step}>2. 数据无不通过项后上载到学校端</div>
-          <div style={styles.step}>3. 系统按身份证号自动关联并形成总库</div>
-        </section>
-        <section style={styles.card}>
-          <h2 style={styles.cardTitle}>数据同步状态</h2>
-          <div style={styles.statusRow}><span style={styles.dot} />本专科信息汇总：等待学院上载</div>
-          <div style={styles.statusRow}><span style={styles.dot} />家庭成员信息汇总：等待学院上载</div>
-          <div style={styles.statusRow}><span style={styles.dot} />全校汇总看板：自动统计已通过数据</div>
-        </section>
-      </div>
+      <button style={disabled ? styles.disabledButton : styles.primaryButton} disabled={disabled} onClick={onClick}>
+        {actionText}
+      </button>
     </section>
   );
 }
@@ -60,7 +97,7 @@ const styles: Record<string, CSSProperties> = {
   },
   eyebrow: { color: "#0077d4", fontSize: 13, fontWeight: 800 },
   title: { margin: "5px 0 7px", color: "#172033", fontSize: 26 },
-  text: { margin: 0, color: "#63738a", fontSize: 14 },
+  text: { margin: 0, color: "#63738a", fontSize: 14, lineHeight: 1.7 },
   heroBadge: {
     padding: "7px 10px",
     borderRadius: 999,
@@ -70,46 +107,84 @@ const styles: Record<string, CSSProperties> = {
     fontWeight: 800,
     whiteSpace: "nowrap",
   },
-  statGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-    gap: 12,
-    margin: "14px 0",
-  },
-  statCard: {
-    padding: 16,
-    border: "1px solid #d7e1ed",
-    borderRadius: 8,
-    background: "#fff",
-  },
-  statValue: { display: "block", marginBottom: 5, fontSize: 25 },
-  statLabel: { color: "#63738a", fontSize: 13 },
-  grid: {
+  businessGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
     gap: 14,
+    marginTop: 14,
   },
-  card: {
-    padding: 16,
+  businessCard: {
+    padding: 18,
     border: "1px solid #d7e1ed",
     borderRadius: 8,
     background: "#fff",
+    boxShadow: "0 4px 14px rgba(15, 35, 64, 0.05)",
   },
-  cardTitle: { margin: "0 0 12px", color: "#172033", fontSize: 17 },
-  step: {
-    padding: "9px 0",
-    borderBottom: "1px solid #edf1f6",
-    color: "#54657c",
-    fontSize: 13,
+  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },
+  cardIcon: {
+    width: 44,
+    height: 44,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 8,
+    background: "#0077d4",
+    color: "#fff",
+    fontWeight: 900,
   },
-  statusRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "9px 0",
-    borderBottom: "1px solid #edf1f6",
-    color: "#54657c",
-    fontSize: 13,
+  cardIconMuted: {
+    width: 44,
+    height: 44,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 8,
+    background: "#e8eef5",
+    color: "#6b7c92",
+    fontWeight: 900,
   },
-  dot: { width: 7, height: 7, borderRadius: 999, background: "#0b9b6f" },
+  enabledBadge: {
+    padding: "4px 8px",
+    borderRadius: 999,
+    background: "#e9f8f2",
+    color: "#087b5b",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  pendingBadge: {
+    padding: "4px 8px",
+    borderRadius: 999,
+    background: "#f2f5f8",
+    color: "#728197",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  cardTitle: { margin: "14px 0 8px", color: "#172033", fontSize: 20 },
+  cardText: { margin: 0, minHeight: 45, color: "#63738a", fontSize: 13, lineHeight: 1.7 },
+  metricList: { display: "flex", flexWrap: "wrap", gap: 7, margin: "14px 0" },
+  metricPill: {
+    padding: "5px 8px",
+    borderRadius: 999,
+    background: "#f3f8fd",
+    color: "#52647b",
+    fontSize: 12,
+  },
+  primaryButton: {
+    width: "100%",
+    border: "none",
+    borderRadius: 6,
+    padding: "10px 12px",
+    background: "#0077d4",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  disabledButton: {
+    width: "100%",
+    border: "none",
+    borderRadius: 6,
+    padding: "10px 12px",
+    background: "#a7b3c2",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "not-allowed",
+  },
 };

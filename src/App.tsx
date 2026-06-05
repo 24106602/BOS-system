@@ -143,6 +143,16 @@ export default function App({ collegeMode = false }: AppProps) {
     familyLogEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [familyLogs]);
 
+  useEffect(() => {
+    const onSwitchPanel = (event: Event) => {
+      const panel = (event as CustomEvent<"student" | "family">).detail;
+      if (panel === "student" || panel === "family") setActiveProcessingPanel(panel);
+    };
+
+    window.addEventListener("bos:switch-processing-panel", onSwitchPanel);
+    return () => window.removeEventListener("bos:switch-processing-panel", onSwitchPanel);
+  }, []);
+
 
   const pushLog = (type: LogType, message: string) => {
     setLogs((prev) => [...prev, { type, message, time: new Date().toLocaleTimeString() }]);

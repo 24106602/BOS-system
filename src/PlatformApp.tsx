@@ -4,6 +4,7 @@ import CollegeLayout from "./layouts/CollegeLayout";
 import LoginPage from "./pages/LoginPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AdminHomePage from "./pages/admin/AdminHomePage";
+import AdminDifficultyOverviewPage from "./pages/admin/AdminDifficultyOverviewPage";
 import AdminCollegesPage from "./pages/admin/AdminCollegesPage";
 import AdminStudentsPage from "./pages/admin/AdminStudentsPage";
 import AdminSummaryPage from "./pages/admin/AdminSummaryPage";
@@ -14,6 +15,7 @@ import AdminNationalScholarshipPage from "./pages/admin/awards/AdminNationalScho
 import AdminNationalInspirationalPage from "./pages/admin/awards/AdminNationalInspirationalPage";
 import AdminShanghaiScholarshipPage from "./pages/admin/awards/AdminShanghaiScholarshipPage";
 import CollegeHomePage from "./pages/college/CollegeHomePage";
+import CollegeDifficultyPage from "./pages/college/CollegeDifficultyPage";
 import CollegeUploadPage from "./pages/college/CollegeUploadPage";
 import CollegeRecordsPage from "./pages/college/CollegeRecordsPage";
 import NationalScholarshipPage from "./pages/awards/NationalScholarshipPage";
@@ -33,6 +35,7 @@ const normalizePath = (path: string) => {
     "/login",
     "/reset-password",
     "/admin",
+    "/admin/difficulty",
     "/admin/colleges",
     "/admin/students",
     "/admin/summary",
@@ -43,6 +46,7 @@ const normalizePath = (path: string) => {
     "/admin/awards/inspirational",
     "/admin/awards/shanghai",
     "/college",
+    "/college/difficulty",
     "/college/upload",
     "/college/records",
     "/college/awards/national",
@@ -155,6 +159,8 @@ export default function PlatformApp() {
       const page =
         path === "/admin/colleges" ? (
           <AdminCollegesPage />
+        ) : path === "/admin/difficulty" ? (
+          <AdminDifficultyOverviewPage onNavigate={navigate} />
         ) : path === "/admin/student-summary" ? (
           <AdminStudentSummaryPage />
         ) : path === "/admin/family-summary" ? (
@@ -172,7 +178,7 @@ export default function PlatformApp() {
         ) : path === "/admin/summary" ? (
           <AdminSummaryPage />
         ) : (
-          <AdminHomePage />
+          <AdminHomePage onNavigate={navigate} />
         );
 
       return (
@@ -193,6 +199,8 @@ export default function PlatformApp() {
     const page =
       path === "/college/upload" ? (
         <CollegeUploadPage />
+      ) : path === "/college/difficulty" ? (
+        <CollegeDifficultyPage profile={authState.profile!} onNavigate={navigate} />
       ) : path === "/college/records" ? (
         <CollegeRecordsPage />
       ) : path === "/college/awards/national" ? (
@@ -202,7 +210,7 @@ export default function PlatformApp() {
       ) : path === "/college/awards/shanghai" ? (
         <ShanghaiScholarshipPage />
       ) : (
-        <CollegeHomePage />
+        <CollegeHomePage onNavigate={navigate} />
       );
 
     return (
