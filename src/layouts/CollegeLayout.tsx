@@ -12,8 +12,8 @@ type CollegeLayoutProps = {
 
 const difficultyMenus = [
   { path: "/college/difficulty", label: "业务首页", mark: "◎" },
-  { path: "/college/upload", label: "数据处理", mark: "▦" },
-  { path: "/college/records", label: "提交记录", mark: "▤" },
+  { path: "/college/difficulty/student", label: "本专科信息处理", mark: "▦" },
+  { path: "/college/difficulty/family", label: "家庭成员信息处理", mark: "家" },
 ];
 
 const awardMenus = [
@@ -28,17 +28,17 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
   return (
     <div style={styles.page}>
       <aside style={styles.sidebar}>
-        <div style={styles.brand}>
+          <div style={styles.brand}>
           <div style={styles.brandIcon}>校</div>
           <div>
-            <div style={styles.brandTitle}>学院业务工作台</div>
+            <div style={styles.brandTitle}>学部（院）业务工作台</div>
             <div style={styles.brandSub}>学生事务数据治理</div>
           </div>
         </div>
 
         <div style={styles.sideBlock}>
           <div style={styles.caption}>当前视图</div>
-          <div style={styles.roleBadge}>学院（部）端</div>
+          <div style={styles.roleBadge}>学部（院）端</div>
         </div>
 
         <nav style={styles.nav}>
@@ -77,12 +77,12 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
           <div>
             <div style={styles.topTitle}>学生事务数据治理平台</div>
             <div style={styles.breadcrumb}>
-              {path === "/college" ? "学院（部）端 / 平台业务入口" : `学院（部）端 / ${breadcrumbBusiness}`}
+              {path === "/college" ? "学部（院）端 / 平台业务入口" : `学部（院）端 / ${breadcrumbBusiness}`}
             </div>
           </div>
           <div style={styles.topRight}>
             <span style={styles.topBadge}>{getCollegeAccountLabel(profile)}</span>
-            <span style={styles.adminName}>{profile.display_name || "学院经办人"}</span>
+            <span style={styles.adminName}>{profile.display_name || "学部（院）经办人"}</span>
           </div>
         </header>
         <main style={styles.main}>{children}</main>

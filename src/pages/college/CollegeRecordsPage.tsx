@@ -19,7 +19,7 @@ export default function CollegeRecordsPage() {
 
   return (
     <section style={styles.card}>
-      <h1 style={styles.title}>学院提交记录</h1>
+      <h1 style={styles.title}>学部（院）提交记录</h1>
       <div style={styles.tableWrap}>
         <table style={styles.table}>
           <thead>

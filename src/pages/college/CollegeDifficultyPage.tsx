@@ -16,56 +16,147 @@ export default function CollegeDifficultyPage({ profile, onNavigate }: CollegeDi
     getMergeBatches().then(setBatches);
   }, []);
 
-  const collegeName = profile.college_name || profile.display_name || "当前学院";
+  const unitName = profile.college_name || profile.display_name || "当前学部（院）";
   const myBatches = useMemo(
-    () => batches.filter((item) => isSameSubmissionCollege(item.collegeName, collegeName)),
-    [batches, collegeName]
+    () => batches.filter((item) => isSameSubmissionCollege(item.collegeName, unitName)),
+    [batches, unitName]
   );
-  const studentCount = myBatches.filter((item) => item.dataType === "student").reduce((sum, item) => sum + item.rowCount, 0);
-  const familyCount = myBatches.filter((item) => item.dataType === "family").reduce((sum, item) => sum + item.rowCount, 0);
+  const studentBatches = myBatches.filter((item) => item.dataType === "student");
+  const familyBatches = myBatches.filter((item) => item.dataType === "family");
+  const studentCount = studentBatches.reduce((sum, item) => sum + item.rowCount, 0);
+  const familyCount = familyBatches.reduce((sum, item) => sum + item.rowCount, 0);
   const lastAt = myBatches.map((item) => item.createdAt).sort().at(-1) || "";
+  const latestStudentAt = studentBatches.map((item) => item.createdAt).sort().at(-1) || "";
+  const latestFamilyAt = familyBatches.map((item) => item.createdAt).sort().at(-1) || "";
 
   return (
-    <section>
+    <section style={styles.page}>
       <div style={styles.hero}>
         <div>
-          <div style={styles.eyebrow}>困难生业务 / 学院业务首页</div>
-          <h1 style={styles.title}>{collegeName}</h1>
-          <p style={styles.description}>这里展示本学院困难生业务处理进度。完成本专科信息和家庭成员信息治理后，全部通过才可上载到学校端。</p>
+          <div style={styles.eyebrow}>困难生业务 / 学部（院）端业务首页</div>
+          <h1 style={styles.title}>困难生业务</h1>
+          <p style={styles.description}>当前学部（院）提交与处理情况概览。业务首页只展示入口、状态和最近提交记录。</p>
         </div>
-        <span style={styles.enabledBadge}>已启用</span>
+        <span style={styles.enabledBadge}>当前学部（院）：{unitName}</span>
       </div>
 
-      <div style={styles.stats}>
-        <Stat label="本专科通过人数" value={studentCount} />
-        <Stat label="本专科不通过人数" value={0} tone="#c2414d" />
-        <Stat label="家庭成员通过人数" value={familyCount} />
-        <Stat label="家庭成员不通过人数" value={0} tone="#c2414d" />
-        <Stat label="最近上载时间" value={lastAt ? new Date(lastAt).toLocaleString() : "暂无"} />
-        <Stat label="数据关联状态" value={studentCount > 0 && familyCount > 0 ? "待学校端关联" : "待完善"} />
+      <div style={styles.entryGrid}>
+        <BusinessEntryCard
+          title="本专科信息处理"
+          description="上传学生本人困难生主信息，系统自动治理并拆分通过名单和不通过名单。"
+          total={studentCount}
+          passed={studentCount}
+          failed={0}
+          repaired={0}
+          status={studentCount > 0 ? "已上载" : "待处理"}
+          onEnter={() => onNavigate?.("/college/difficulty/student")}
+        />
+        <BusinessEntryCard
+          title="家庭成员信息处理"
+          description="上传学生家庭成员附属信息，后续通过学生身份证号与本专科信息关联。"
+          total={familyCount}
+          passed={familyCount}
+          failed={0}
+          repaired={0}
+          status={familyCount > 0 ? "已上载" : "待处理"}
+          onEnter={() => onNavigate?.("/college/difficulty/family")}
+        />
       </div>
 
-      <div style={styles.cardGrid}>
-        <section style={styles.card}>
-          <h2 style={styles.cardTitle}>本专科信息处理状态</h2>
-          <p style={styles.cardText}>学生本人困难生主信息，一名学生一行。通过后进入学校端本专科信息汇总。</p>
-          <StatusRow label="当前状态" value={studentCount > 0 ? "已上载" : "待处理"} />
-          <StatusRow label="通过数量" value={studentCount} />
-          <StatusRow label="不通过数量" value={0} />
-        </section>
-        <section style={styles.card}>
-          <h2 style={styles.cardTitle}>家庭成员信息处理状态</h2>
-          <p style={styles.cardText}>学生家庭成员附属信息，通过学生身份证号与本专科信息关联。</p>
-          <StatusRow label="当前状态" value={familyCount > 0 ? "已上载" : "待处理"} />
-          <StatusRow label="通过数量" value={familyCount} />
-          <StatusRow label="不通过数量" value={0} />
-        </section>
-      </div>
+      <section style={styles.card}>
+        <h2 style={styles.subTitle}>数据提交概览</h2>
+        <div style={styles.stats}>
+          <Stat label="本专科信息最近提交状态" value={studentCount > 0 ? "已上载" : "暂无提交"} />
+          <Stat label="家庭成员信息最近提交状态" value={familyCount > 0 ? "已上载" : "暂无提交"} />
+          <Stat label="最近提交时间" value={lastAt ? new Date(lastAt).toLocaleString() : "暂无"} />
+          <Stat label="当前待整改数量" value={0} tone="#b42336" />
+        </div>
+        <div style={styles.hint}>
+          具体 Excel 上传、通过/不通过预览、导出名单和处理日志只在对应处理页面中显示。
+        </div>
+      </section>
 
-      <div style={styles.actions}>
-        <button style={styles.primaryButton} onClick={() => onNavigate?.("/college/upload")}>快速进入数据处理</button>
-        <button style={styles.secondaryButton} onClick={() => onNavigate?.("/college/records")}>查看提交记录</button>
+      <section style={styles.card}>
+        <h2 style={styles.subTitle}>最近提交记录</h2>
+        <div style={styles.tableWrap}>
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={styles.th}>数据类型</th>
+                <th style={styles.th}>提交单位</th>
+                <th style={styles.th}>通过人数</th>
+                <th style={styles.th}>不通过人数</th>
+                <th style={styles.th}>提交状态</th>
+                <th style={styles.th}>最近提交时间</th>
+              </tr>
+            </thead>
+            <tbody>
+              {myBatches.length === 0 ? (
+                <tr>
+                  <td style={styles.td} colSpan={6}>暂无提交记录</td>
+                </tr>
+              ) : (
+                myBatches
+                  .slice()
+                  .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+                  .slice(0, 8)
+                  .map((item) => (
+                    <tr key={item.id}>
+                      <td style={styles.td}>{item.dataType === "student" ? "本专科信息" : "家庭成员信息"}</td>
+                      <td style={styles.td}>{item.collegeName}</td>
+                      <td style={styles.td}>{item.rowCount}</td>
+                      <td style={styles.td}>0</td>
+                      <td style={styles.td}>已上载</td>
+                      <td style={styles.td}>{new Date(item.createdAt).toLocaleString()}</td>
+                    </tr>
+                  ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div style={styles.hiddenMeta}>
+        {latestStudentAt}
+        {latestFamilyAt}
       </div>
+    </section>
+  );
+}
+
+function BusinessEntryCard({
+  title,
+  description,
+  total,
+  passed,
+  failed,
+  repaired,
+  status,
+  onEnter,
+}: {
+  title: string;
+  description: string;
+  total: number;
+  passed: number;
+  failed: number;
+  repaired: number;
+  status: string;
+  onEnter: () => void;
+}) {
+  return (
+    <section style={styles.entryCard}>
+      <div style={styles.cardHead}>
+        <h2 style={styles.cardTitle}>{title}</h2>
+        <span style={status === "已上载" ? styles.okBadge : styles.waitBadge}>{status}</span>
+      </div>
+      <p style={styles.cardText}>{description}</p>
+      <div style={styles.miniStats}>
+        <MiniStat label="数据总量" value={total} />
+        <MiniStat label="通过人数" value={passed} tone="#087b5b" />
+        <MiniStat label="不通过人数" value={failed} tone="#b42336" />
+        <MiniStat label="自动修复数量" value={repaired} tone="#0f766e" />
+      </div>
+      <button style={styles.primaryButton} onClick={onEnter}>进入处理</button>
     </section>
   );
 }
@@ -79,31 +170,42 @@ function Stat({ label, value, tone = "#0077d4" }: { label: string; value: number
   );
 }
 
-function StatusRow({ label, value }: { label: string; value: number | string }) {
+function MiniStat({ label, value, tone = "#0077d4" }: { label: string; value: number; tone?: string }) {
   return (
-    <div style={styles.statusRow}>
+    <div style={styles.miniStat}>
       <span>{label}</span>
-      <strong>{value}</strong>
+      <strong style={{ color: tone }}>{value}</strong>
     </div>
   );
 }
 
 const styles: Record<string, CSSProperties> = {
+  page: { display: "grid", gap: 14 },
   hero: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: 20, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
   eyebrow: { color: "#0077d4", fontSize: 13, fontWeight: 800 },
   title: { margin: "5px 0 7px", color: "#172033", fontSize: 26 },
   description: { margin: 0, color: "#63738a", fontSize: 14, lineHeight: 1.7 },
   enabledBadge: { padding: "6px 10px", borderRadius: 999, background: "#e9f8f2", color: "#087b5b", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" },
-  stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, margin: "14px 0" },
-  stat: { padding: 14, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff" },
-  statLabel: { color: "#63738a", marginBottom: 7, fontSize: 13 },
-  statValue: { fontSize: 20 },
-  cardGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14 },
-  card: { padding: 16, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff" },
-  cardTitle: { margin: "0 0 8px", color: "#172033", fontSize: 18 },
+  entryGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14 },
+  entryCard: { padding: 16, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0 },
+  card: { padding: 16, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0 },
+  cardHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 },
+  cardTitle: { margin: 0, color: "#172033", fontSize: 18 },
+  subTitle: { margin: "0 0 12px", color: "#172033", fontSize: 18 },
   cardText: { margin: "0 0 12px", color: "#63738a", fontSize: 13, lineHeight: 1.7 },
-  statusRow: { display: "flex", justifyContent: "space-between", gap: 12, padding: "9px 0", borderTop: "1px solid #edf1f6", color: "#52647b", fontSize: 13 },
-  actions: { display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 },
+  okBadge: { padding: "4px 8px", borderRadius: 999, background: "#e9f8f2", color: "#087b5b", fontSize: 12, fontWeight: 800 },
+  waitBadge: { padding: "4px 8px", borderRadius: 999, background: "#f3f8fd", color: "#52647b", fontSize: 12, fontWeight: 800 },
+  miniStats: { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, marginBottom: 12 },
+  miniStat: { display: "grid", gap: 4, padding: 8, borderRadius: 6, border: "1px solid #d7e1ed", background: "#f8fbfe", color: "#63738a", fontSize: 12 },
   primaryButton: { border: "none", borderRadius: 6, padding: "10px 14px", background: "#0077d4", color: "#fff", fontWeight: 800, cursor: "pointer" },
-  secondaryButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "10px 14px", background: "#fff", color: "#26364e", fontWeight: 800, cursor: "pointer" },
+  stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 },
+  stat: { padding: 13, border: "1px solid #d7e1ed", borderRadius: 8, background: "#f8fbfe" },
+  statLabel: { color: "#63738a", marginBottom: 7, fontSize: 13 },
+  statValue: { fontSize: 18 },
+  hint: { marginTop: 12, padding: 10, borderRadius: 6, background: "#f3f9ff", color: "#0875bd", border: "1px solid #cce3f8", fontSize: 13 },
+  tableWrap: { overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+  th: { border: "1px solid #d7e1ed", background: "#edf4fa", padding: 9, whiteSpace: "nowrap", textAlign: "center" },
+  td: { border: "1px solid #cbd5e1", padding: 9, textAlign: "center", whiteSpace: "nowrap" },
+  hiddenMeta: { display: "none" },
 };

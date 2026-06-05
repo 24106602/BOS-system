@@ -19,6 +19,7 @@ type FamilyProcessPageProps = {
   familyAnalysis: Record<string, number>;
   familyLogs: LogItem[];
   familyLogEndRef: RefObject<HTMLDivElement | null>;
+  onBackToDifficulty?: () => void;
 };
 
 export default function FamilyProcessPage({
@@ -39,6 +40,7 @@ export default function FamilyProcessPage({
   familyAnalysis,
   familyLogs,
   familyLogEndRef,
+  onBackToDifficulty,
 }: FamilyProcessPageProps) {
   const [previewMode, setPreviewMode] = useState<"passed" | "failed">("passed");
   const failedRowNumbers = useMemo(
@@ -67,6 +69,11 @@ export default function FamilyProcessPage({
     <section style={pageStyles.page}>
       <div style={pageStyles.mainColumn}>
         <section style={pageStyles.card}>
+          {onBackToDifficulty && (
+            <button style={pageStyles.backButton} onClick={onBackToDifficulty}>
+              返回业务首页
+            </button>
+          )}
           <div style={pageStyles.header}>
             <div>
               <div style={pageStyles.eyebrow}>困难生业务 / 学院端数据处理</div>
@@ -101,7 +108,7 @@ export default function FamilyProcessPage({
           </div>
 
           <div style={pageStyles.status}>{familyStatus}</div>
-          <div style={pageStyles.status}>当前识别学院：{familyCollegeName}</div>
+          <div style={pageStyles.status}>当前识别学部（院）：{familyCollegeName}</div>
 
           <div style={pageStyles.statsGrid}>
             <Stat label="总数据" value={familyStats.total} />
@@ -205,7 +212,7 @@ const button = (background: string): CSSProperties => ({
 });
 
 const pageStyles: Record<string, CSSProperties> = {
-  page: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(300px, 34%)", gap: 12, alignItems: "start" },
+  page: { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12, alignItems: "start" },
   mainColumn: { display: "grid", gap: 12, minWidth: 0 },
   card: { background: "#fff", borderRadius: 8, border: "1px solid #d7e1ed", padding: 16, boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0 },
   header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 },
@@ -221,6 +228,7 @@ const pageStyles: Record<string, CSSProperties> = {
   purpleButton: button("#6757c8"),
   greenButton: button("#0b9b6f"),
   disabledButton: { ...button("#a6b4c5"), cursor: "not-allowed" },
+  backButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "8px 11px", background: "#fff", color: "#26364e", fontWeight: 800, cursor: "pointer", marginBottom: 12 },
   status: { background: "#f3f9ff", color: "#0875bd", border: "1px solid #cce3f8", borderRadius: 6, padding: 9, marginTop: 7, fontSize: 13 },
   errorStatus: { background: "#fff1f2", color: "#b42336", border: "1px solid #ffd4da", borderRadius: 6, padding: 9, marginTop: 10, fontSize: 13, fontWeight: 700 },
   successStatus: { background: "#e9f8f2", color: "#087b5b", border: "1px solid #c7eedf", borderRadius: 6, padding: 9, marginTop: 10, fontSize: 13, fontWeight: 700 },
@@ -233,7 +241,7 @@ const pageStyles: Record<string, CSSProperties> = {
   activeTab: { border: "1px solid #0077d4", borderRadius: 6, padding: "8px 12px", background: "#0077d4", color: "#fff", fontWeight: 800, cursor: "pointer" },
   empty: { color: "#8190a4", padding: 12 },
   problemItem: { background: "#fff1f2", color: "#b42336", padding: 10, borderRadius: 6, marginBottom: 8 },
-  logPanel: { position: "sticky", top: 18, padding: 16, borderRadius: 8, background: "#0b1428", overflow: "hidden" },
+  logPanel: { padding: 16, borderRadius: 8, background: "#0b1428", overflow: "hidden" },
   logTitle: { color: "#e5efff", fontSize: 18, margin: "0 0 12px" },
   logBox: { maxHeight: 320, overflowY: "auto", fontFamily: "Consolas, monospace", fontSize: 13, lineHeight: 1.6 },
   logItem: { color: "#fff", whiteSpace: "pre-line", marginBottom: 10 },

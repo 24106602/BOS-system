@@ -47,6 +47,8 @@ const normalizePath = (path: string) => {
     "/admin/awards/shanghai",
     "/college",
     "/college/difficulty",
+    "/college/difficulty/student",
+    "/college/difficulty/family",
     "/college/upload",
     "/college/records",
     "/college/awards/national",
@@ -198,7 +200,11 @@ export default function PlatformApp() {
 
     const page =
       path === "/college/upload" ? (
-        <CollegeUploadPage />
+        <CollegeUploadPage panel="student" onNavigate={navigate} />
+      ) : path === "/college/difficulty/student" ? (
+        <CollegeUploadPage panel="student" onNavigate={navigate} />
+      ) : path === "/college/difficulty/family" ? (
+        <CollegeUploadPage panel="family" onNavigate={navigate} />
       ) : path === "/college/difficulty" ? (
         <CollegeDifficultyPage profile={authState.profile!} onNavigate={navigate} />
       ) : path === "/college/records" ? (

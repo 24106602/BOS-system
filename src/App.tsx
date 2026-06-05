@@ -103,9 +103,11 @@ const looksLikeStudentFile = (fileName: string, workbookData: WorkbookData) => {
 
 type AppProps = {
   collegeMode?: boolean;
+  fixedProcessingPanel?: "student" | "family";
+  onBackToDifficulty?: () => void;
 };
 
-export default function App({ collegeMode = false }: AppProps) {
+export default function App({ collegeMode = false, fixedProcessingPanel, onBackToDifficulty }: AppProps) {
   const dataRef = useRef<HTMLInputElement>(null);
   const familyDataRef = useRef<HTMLInputElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -132,7 +134,7 @@ export default function App({ collegeMode = false }: AppProps) {
   const [studentAutoProcessRequested, setStudentAutoProcessRequested] = useState(false);
   const [analysis, setAnalysis] = useState<Record<string, number>>({});
   const [activeModule, setActiveModule] = useState<"processing" | "database" | "merge">("processing");
-  const [activeProcessingPanel, setActiveProcessingPanel] = useState<"student" | "family">("student");
+  const [activeProcessingPanel, setActiveProcessingPanel] = useState<"student" | "family">(fixedProcessingPanel || "student");
   const [stats, setStats] = useState<ProcessingStats>(initialStats);
 
   const [familyTemplateWorkbook, setFamilyTemplateWorkbook] = useState<WorkbookData | null>(null);
@@ -166,13 +168,24 @@ export default function App({ collegeMode = false }: AppProps) {
 
   useEffect(() => {
     const onSwitchPanel = (event: Event) => {
+      if (fixedProcessingPanel) return;
       const panel = (event as CustomEvent<"student" | "family">).detail;
       if (panel === "student" || panel === "family") setActiveProcessingPanel(panel);
     };
 
     window.addEventListener("bos:switch-processing-panel", onSwitchPanel);
     return () => window.removeEventListener("bos:switch-processing-panel", onSwitchPanel);
-  }, []);
+  }, [fixedProcessingPanel]);
+
+  useEffect(() => {
+    if (!fixedProcessingPanel) return;
+
+    const timer = window.setTimeout(() => {
+      setActiveProcessingPanel(fixedProcessingPanel);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [fixedProcessingPanel]);
 
 
   const pushLog = (type: LogType, message: string) => {
@@ -223,7 +236,7 @@ export default function App({ collegeMode = false }: AppProps) {
 
     if (
       possibleDuplicate &&
-      !confirm("检测到该学院本专科信息可能已上载，是否仍然继续上载？")
+      !confirm("检测到该学部（院）本专科信息可能已上载，是否仍然继续上载？")
     ) {
       return;
     }
@@ -265,7 +278,7 @@ export default function App({ collegeMode = false }: AppProps) {
 
     if (
       possibleDuplicate &&
-      !confirm("检测到该学院家庭成员信息可能已上载，是否仍然继续上载？")
+      !confirm("检测到该学部（院）家庭成员信息可能已上载，是否仍然继续上载？")
     ) {
       return;
     }
@@ -339,7 +352,7 @@ export default function App({ collegeMode = false }: AppProps) {
     setStudentCollegeName(collegeDetection.collegeName);
     setStudentCollegeValidationError(collegeDetection.error);
     if (collegeDetection.error) pushLog("error", collegeDetection.error);
-    else pushLog("success", `所属学院已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
+    else pushLog("success", `所属学部（院）已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
 
     const firstSheet = workbookData.sheetNames[0];
     const rows = workbookData.sheets[firstSheet] || [];
@@ -594,7 +607,7 @@ export default function App({ collegeMode = false }: AppProps) {
     setFamilyCollegeName(collegeDetection.collegeName);
     setFamilyCollegeValidationError(collegeDetection.error);
     if (collegeDetection.error) pushFamilyLog("error", collegeDetection.error);
-    else pushFamilyLog("success", `所属学院已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
+    else pushFamilyLog("success", `所属学部（院）已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
 
     const firstSheet = workbookData.sheetNames[0];
     const rows = workbookData.sheets[firstSheet] || [];
@@ -837,20 +850,22 @@ export default function App({ collegeMode = false }: AppProps) {
 
       {activeModule === "processing" && (
         <div style={styles.processingWorkspace}>
-          <div style={styles.subModuleBar}>
-            <button
-              onClick={() => setActiveProcessingPanel("student")}
-              style={activeProcessingPanel === "student" ? styles.activeSubModule : styles.inactiveSubModule}
-            >
-              本专科困难生信息处理
-            </button>
-            <button
-              onClick={() => setActiveProcessingPanel("family")}
-              style={activeProcessingPanel === "family" ? styles.activeSubModule : styles.inactiveSubModule}
-            >
-              家庭成员信息处理
-            </button>
-          </div>
+          {!fixedProcessingPanel && (
+            <div style={styles.subModuleBar}>
+              <button
+                onClick={() => setActiveProcessingPanel("student")}
+                style={activeProcessingPanel === "student" ? styles.activeSubModule : styles.inactiveSubModule}
+              >
+                本专科困难生信息处理
+              </button>
+              <button
+                onClick={() => setActiveProcessingPanel("family")}
+                style={activeProcessingPanel === "family" ? styles.activeSubModule : styles.inactiveSubModule}
+              >
+                家庭成员信息处理
+              </button>
+            </div>
+          )}
 
           {activeProcessingPanel === "student" ? (
             <StudentProcessPage
@@ -871,6 +886,7 @@ export default function App({ collegeMode = false }: AppProps) {
               analysis={analysis}
               logs={logs}
               logEndRef={logEndRef}
+              onBackToDifficulty={onBackToDifficulty}
             />
           ) : (
             <FamilyProcessPage
@@ -891,6 +907,7 @@ export default function App({ collegeMode = false }: AppProps) {
               familyAnalysis={familyAnalysis}
               familyLogs={familyLogs}
               familyLogEndRef={familyLogEndRef}
+              onBackToDifficulty={onBackToDifficulty}
             />
           )}
         </div>

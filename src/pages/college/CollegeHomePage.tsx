@@ -9,9 +9,9 @@ export default function CollegeHomePage({ onNavigate }: CollegeHomePageProps) {
     <section>
       <div style={styles.hero}>
         <div>
-          <div style={styles.eyebrow}>学院端 / 业务模块入口</div>
+          <div style={styles.eyebrow}>学部（院）端 / 业务模块入口</div>
           <h1 style={styles.title}>学生事务业务工作台</h1>
-          <p style={styles.text}>学院只处理本学院业务数据。困难生业务已启用，三大奖业务保留后续扩展入口。</p>
+          <p style={styles.text}>学部（院）只处理本单位业务数据。困难生业务和三奖业务可分别进入对应工作区。</p>
         </div>
         <div style={styles.heroBadge}>学院数据治理</div>
       </div>
