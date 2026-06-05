@@ -18,7 +18,16 @@ const difficultyMenus = [
   { path: "/admin/students", label: "困难生数据库", mark: "◉" },
 ];
 
+const awardMenus = [
+  { path: "/admin/awards", label: "三奖提交总览", mark: "奖" },
+  { path: "/admin/awards/national", label: "国家奖学金汇总", mark: "国" },
+  { path: "/admin/awards/inspirational", label: "国家励志奖学金汇总", mark: "励" },
+  { path: "/admin/awards/shanghai", label: "上海市奖学金汇总", mark: "沪" },
+];
+
 export default function AdminLayout({ path, profile, onNavigate, onLogout, children }: AdminLayoutProps) {
+  const breadcrumbBusiness = path.startsWith("/admin/awards") ? "三奖业务" : "困难生业务";
+
   return (
     <div style={styles.page}>
       <aside style={styles.sidebar}>
@@ -49,12 +58,13 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
             </button>
           ))}
 
-          <div style={styles.groupLabel}>后续业务预留</div>
-          <button style={styles.disabledMenu} disabled>
-            <span style={styles.menuMark}>奖</span>
-            三大奖业务
-            <span style={styles.newBadge}>暂未开放</span>
-          </button>
+          <div style={styles.groupLabel}>三奖业务</div>
+          {awardMenus.map((item) => (
+            <button key={item.path} onClick={() => onNavigate(item.path)} style={path === item.path ? styles.activeMenu : styles.menu}>
+              <span style={styles.menuMark}>{item.mark}</span>
+              {item.label}
+            </button>
+          ))}
         </nav>
 
         <div style={styles.syncCard}>
@@ -70,7 +80,7 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
           <div>
             <div style={styles.topTitle}>学生事务数据治理平台</div>
             <div style={styles.breadcrumb}>
-              {path === "/admin" ? "学校管理员端 / 平台业务入口" : "学校管理员端 / 困难生业务"}
+              {path === "/admin" ? "学校管理员端 / 平台业务入口" : `学校管理员端 / ${breadcrumbBusiness}`}
             </div>
           </div>
           <div style={styles.topRight}>

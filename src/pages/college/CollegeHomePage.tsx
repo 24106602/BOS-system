@@ -30,12 +30,12 @@ export default function CollegeHomePage({ onNavigate }: CollegeHomePageProps) {
         <BusinessCard
           icon="奖"
           title="三大奖业务"
-          description="后续用于三大奖申报、审核和学院数据上载。"
-          status="暂未开放"
-          statusTone="pending"
+          description="用于国家奖学金、国家励志奖学金、上海市奖学金数据治理和上载。"
+          status="已启用"
+          statusTone="enabled"
           metrics={["国家奖学金", "国家励志奖学金", "上海市奖学金"]}
-          actionText="敬请期待"
-          disabled
+          actionText="进入业务"
+          onClick={() => onNavigate?.("/college/awards/national")}
         />
       </div>
     </section>

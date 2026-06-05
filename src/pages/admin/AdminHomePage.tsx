@@ -30,12 +30,12 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
         <BusinessCard
           icon="奖"
           title="三大奖业务"
-          description="后续用于三大奖申报、审核和汇总。"
-          status="暂未开放"
-          statusTone="pending"
+          description="用于三大奖申报数据治理、学院上载审核和学校端汇总。"
+          status="已启用"
+          statusTone="enabled"
           metrics={["国家奖学金", "国家励志奖学金", "上海市奖学金"]}
-          actionText="敬请期待"
-          disabled
+          actionText="进入业务"
+          onClick={() => onNavigate?.("/admin/awards")}
         />
       </div>
     </section>
