@@ -1,4 +1,4 @@
-import type { Session } from "@supabase/supabase-js";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase, SUPABASE_ENV_ERROR } from "../lib/supabaseClient";
 import {
   clearStoredUserProfile,
@@ -71,6 +71,18 @@ export const signInWithPassword = async (account: string, password: string) => {
   return profile;
 };
 
+export const sendPasswordResetEmail = async (account: string) => {
+  ensureSupabaseReady();
+  const email = account.trim();
+  if (!email) throw new Error("请输入账号或邮箱");
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+  if (error) throw new Error(error.message || "发送密码重置邮件失败");
+  return "密码重置邮件已发送，请前往邮箱查收";
+};
+
 export const getCurrentSessionProfile = async () => {
   if (!isSupabaseConfigured) {
     clearStoredUserProfile();
@@ -89,15 +101,31 @@ export const signOut = async () => {
   syncLegacyProfileState(null);
 };
 
+export const updateRecoveryPassword = async (newPassword: string) => {
+  ensureSupabaseReady();
+  if (!newPassword) throw new Error("请输入新密码");
+
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message || "修改密码失败");
+  await signOut();
+};
+
 export const subscribeAuthProfile = (
-  onChange: (profile: UserProfile | null, error?: string) => void
+  onChange: (profile: UserProfile | null, error?: string, event?: AuthChangeEvent) => void
 ) => {
   if (!isSupabaseConfigured) return () => undefined;
 
-  const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+  const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY") {
+      clearStoredUserProfile();
+      syncLegacyProfileState(null);
+      onChange(null, undefined, event);
+      return;
+    }
+
     void resolveSessionProfile(session)
-      .then((profile) => onChange(profile))
-      .catch((error) => onChange(null, error instanceof Error ? error.message : "登录状态异常"));
+      .then((profile) => onChange(profile, undefined, event))
+      .catch((error) => onChange(null, error instanceof Error ? error.message : "登录状态异常", event));
   });
 
   return () => data.subscription.unsubscribe();

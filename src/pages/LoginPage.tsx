@@ -1,6 +1,6 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
 import { isSupabaseConfigured, SUPABASE_ENV_ERROR } from "../lib/supabaseClient";
-import { getProfileLandingPath, signInWithPassword } from "../services/authService";
+import { getProfileLandingPath, sendPasswordResetEmail, signInWithPassword } from "../services/authService";
 import type { UserProfile } from "../types/auth";
 
 type LoginPageProps = {
@@ -13,25 +13,52 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState(initialError);
+  const [messageType, setMessageType] = useState<"error" | "success">("error");
   const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const envMessage = isSupabaseConfigured ? "" : SUPABASE_ENV_ERROR;
+  const busy = loading || resetting;
 
   const submitLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (envMessage) {
       setMessage(envMessage);
+      setMessageType("error");
       return;
     }
 
     try {
       setLoading(true);
       setMessage("");
+      setMessageType("error");
       const profile = await signInWithPassword(account, password);
       onLogin(profile, getProfileLandingPath(profile));
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "登录失败，请稍后重试");
+      setMessageType("error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const sendResetEmail = async () => {
+    if (envMessage) {
+      setMessage(envMessage);
+      setMessageType("error");
+      return;
+    }
+
+    try {
+      setResetting(true);
+      setMessage("");
+      const result = await sendPasswordResetEmail(account);
+      setMessage(result);
+      setMessageType("success");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "发送密码重置邮件失败");
+      setMessageType("error");
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -57,7 +84,9 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
           </p>
 
           {envMessage && <div style={styles.errorBox}>{envMessage}</div>}
-          {message && !envMessage && <div style={styles.errorBox}>{message}</div>}
+          {message && !envMessage && (
+            <div style={messageType === "success" ? styles.successBox : styles.errorBox}>{message}</div>
+          )}
 
           <label style={styles.fieldLabel}>
             <span>账号 / 邮箱</span>
@@ -66,7 +95,7 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
               value={account}
               autoComplete="username"
               placeholder="请输入账号或邮箱"
-              disabled={loading || Boolean(envMessage)}
+              disabled={busy || Boolean(envMessage)}
               onChange={(event) => setAccount(event.target.value)}
             />
           </label>
@@ -79,13 +108,16 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
               type="password"
               autoComplete="current-password"
               placeholder="请输入密码"
-              disabled={loading || Boolean(envMessage)}
+              disabled={busy || Boolean(envMessage)}
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
 
-          <button style={loading || envMessage ? styles.submitDisabled : styles.submit} disabled={loading || Boolean(envMessage)}>
+          <button type="submit" style={busy || envMessage ? styles.submitDisabled : styles.submit} disabled={busy || Boolean(envMessage)}>
             {loading ? "登录中..." : "登录"}
+          </button>
+          <button type="button" style={styles.forgotButton} disabled={busy} onClick={sendResetEmail}>
+            {resetting ? "正在发送..." : "忘记密码"}
           </button>
         </form>
       </section>
@@ -206,6 +238,16 @@ const styles: Record<string, CSSProperties> = {
     fontSize: 13,
     fontWeight: 700,
   },
+  successBox: {
+    marginBottom: 14,
+    border: "1px solid #bbf7d0",
+    borderRadius: 6,
+    padding: "10px 12px",
+    background: "#f0fdf4",
+    color: "#047857",
+    fontSize: 13,
+    fontWeight: 700,
+  },
   submit: {
     width: "100%",
     border: "none",
@@ -226,6 +268,16 @@ const styles: Record<string, CSSProperties> = {
     background: "#a6b4c5",
     cursor: "not-allowed",
     fontSize: 15,
+    fontWeight: 800,
+  },
+  forgotButton: {
+    width: "100%",
+    marginTop: 10,
+    border: "none",
+    background: "transparent",
+    color: "#0077d4",
+    cursor: "pointer",
+    fontSize: 13,
     fontWeight: 800,
   },
 };

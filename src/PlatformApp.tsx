@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import AdminLayout from "./layouts/AdminLayout";
 import CollegeLayout from "./layouts/CollegeLayout";
 import LoginPage from "./pages/LoginPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AdminHomePage from "./pages/admin/AdminHomePage";
 import AdminCollegesPage from "./pages/admin/AdminCollegesPage";
 import AdminStudentsPage from "./pages/admin/AdminStudentsPage";
@@ -30,6 +31,7 @@ const normalizePath = (path: string) => {
   const known = [
     "/",
     "/login",
+    "/reset-password",
     "/admin",
     "/admin/colleges",
     "/admin/students",
@@ -93,7 +95,12 @@ export default function PlatformApp() {
         });
       });
 
-    const unsubscribe = subscribeAuthProfile((profile, error) => {
+    const unsubscribe = subscribeAuthProfile((profile, error, event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setAuthState({ profile: null, loading: false, error: "" });
+        navigate("/reset-password", true);
+        return;
+      }
       setAuthState({ profile, loading: false, error: error || "" });
     });
 
@@ -101,7 +108,7 @@ export default function PlatformApp() {
       active = false;
       unsubscribe();
     };
-  }, []);
+  }, [navigate]);
 
   const handleLogin = useCallback(
     (profile: UserProfile, nextPath: string) => {
@@ -120,6 +127,11 @@ export default function PlatformApp() {
     }
   }, [navigate]);
 
+  const handlePasswordResetComplete = useCallback(() => {
+    setAuthState({ profile: null, loading: false, error: "" });
+    navigate("/login", true);
+  }, [navigate]);
+
   const content = useMemo<ReactNode>(() => {
     if (path === "/") {
       return <RootRedirect profile={authState.profile} loading={authState.loading} onNavigate={navigate} />;
@@ -133,6 +145,10 @@ export default function PlatformApp() {
           onLogin={handleLogin}
         />
       );
+    }
+
+    if (path === "/reset-password") {
+      return <ResetPasswordPage onComplete={handlePasswordResetComplete} />;
     }
 
     if (path.startsWith("/admin")) {
@@ -202,7 +218,7 @@ export default function PlatformApp() {
         </CollegeLayout>
       </ProtectedRoute>
     );
-  }, [authState.error, authState.loading, authState.profile, handleLogin, logout, navigate, path]);
+  }, [authState.error, authState.loading, authState.profile, handleLogin, handlePasswordResetComplete, logout, navigate, path]);
 
   return <>{content}</>;
 }
