@@ -530,6 +530,15 @@ const validateRankingRules = (context: AwardBusinessContext, forceComprehensiveR
   const courseCount = ensureInteger(context, "必修课程数量", "必修课程数量");
   const passedCourseCount = ensureInteger(context, "及格课程数量", "及格课程数量");
 
+  if (courseCount !== null && (courseCount < 10 || courseCount > 30)) {
+    addBusinessIssue(
+      context,
+      "必修课程数量",
+      "必修课程数量不在 10-30 门范围内",
+      "请核对该学生本学年必修课程数量，范围应为 10-30 门。"
+    );
+  }
+
   if (courseCount !== null && passedCourseCount !== null && courseCount !== passedCourseCount) {
     const reason = "必修课程数量必须等于及格课程数量";
     addBusinessIssue(context, "必修课程数量", reason, "请核对必修课程数量");
@@ -630,6 +639,18 @@ const validateDepartmentOpinion = (context: AwardBusinessContext) => {
 type AwardGroupColumns = Partial<Record<"year" | "month" | "name" | "issuer", number>>;
 
 const getAwardGroupColumns = (context: AwardBusinessContext) => {
+  const fields = [1, 2, 3, 4].map((groupNumber) => ({
+    year: context.resolver.getColumn(`获奖年份${groupNumber}` as AwardStandardField) ?? undefined,
+    month: context.resolver.getColumn(`获奖月份${groupNumber}` as AwardStandardField) ?? undefined,
+    name: context.resolver.getColumn(`获奖名称${groupNumber}` as AwardStandardField) ?? undefined,
+    issuer: context.resolver.getColumn(`颁奖单位${groupNumber}` as AwardStandardField) ?? undefined,
+  }));
+
+  const resolvedGroups = fields.filter((group) =>
+    [group.year, group.month, group.name, group.issuer].some((columnIndex) => columnIndex !== undefined)
+  );
+  if (resolvedGroups.length > 0) return resolvedGroups;
+
   const groups = new Map<string, AwardGroupColumns>();
   const kindRules: Array<[keyof AwardGroupColumns, string]> = [
     ["year", "获奖年份"],
@@ -661,7 +682,100 @@ const SHANGHAI_AWARD_ISSUERS: Record<string, string> = {
   上海市奖学金: "上海市教育委员会",
 };
 
+type YearMonth = {
+  year: number;
+  month: number;
+};
+
+const parseYearMonthFromText = (text: string): YearMonth[] => {
+  const normalized = normalizeFullWidthSymbols(text);
+  const matches: YearMonth[] = [];
+  const yearMonthPattern = /((?:19|20)\d{2})\s*(?:年|[./-])\s*(1[0-2]|0?[1-9])\s*月?/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = yearMonthPattern.exec(normalized)) !== null) {
+    matches.push({ year: Number(match[1]), month: Number(match[2]) });
+  }
+
+  return matches;
+};
+
+const parseYearMonthFromColumns = (yearValue: unknown, monthValue: unknown): YearMonth | null => {
+  const year = parseInteger(yearValue);
+  const month = parseInteger(monthValue);
+  if (year === null || month === null || year < 1900 || year > 2100 || month < 1 || month > 12) return null;
+  return { year, month };
+};
+
+const getApplicationYearMonth = (context: AwardBusinessContext): YearMonth | null => {
+  if (!context.resolver.hasField("申请日期")) return null;
+  const parts = parseDateParts(getBusinessValue(context, "申请日期"));
+  if (!parts) return null;
+  return { year: parts[0], month: parts[1] };
+};
+
+const isAwardBeforeApplyDate = (awardYear: number, awardMonth: number, applyDate: YearMonth) =>
+  awardYear < applyDate.year || (awardYear === applyDate.year && awardMonth < applyDate.month);
+
+const SCHOOL_LEVEL_KEYWORDS = ["校级", "学校", "校内", "校奖学金", "校优秀", "上海应用技术大学"];
+const NON_SCHOOL_LEVEL_KEYWORDS = ["国家奖学金", "国家励志奖学金", "上海市奖学金", "教育部", "上海市教育委员会"];
+
+const isSchoolLevelAward = (...texts: unknown[]) => {
+  const content = texts.map((item) => toText(item)).filter(Boolean).join(" ");
+  if (!content) return false;
+  if (NON_SCHOOL_LEVEL_KEYWORDS.some((keyword) => content.includes(keyword))) return false;
+  return SCHOOL_LEVEL_KEYWORDS.some((keyword) => content.includes(keyword));
+};
+
+const validateFreeTextAwardTime = (context: AwardBusinessContext) => {
+  if (!context.resolver.hasField("曾获何种奖励")) return;
+  const rawText = toText(getBusinessValue(context, "曾获何种奖励"));
+  if (!rawText) return;
+
+  const awardTimes = parseYearMonthFromText(rawText);
+  if (awardTimes.length === 0) {
+    addBusinessIssue(
+      context,
+      "曾获何种奖励",
+      "无法识别曾获奖励时间，请按“2023年5月获得……”格式填写。",
+      "请按“2023年5月获得……”格式填写。"
+    );
+    return;
+  }
+
+  const applyDate = getApplicationYearMonth(context);
+  if (applyDate && awardTimes.some((item) => !isAwardBeforeApplyDate(item.year, item.month, applyDate))) {
+    addBusinessIssue(
+      context,
+      "曾获何种奖励",
+      "曾获奖励时间必须早于申请日期",
+      "请核对奖励获得时间，奖励时间应早于申请日期。"
+    );
+  }
+
+  if (isSchoolLevelAward(rawText) && awardTimes.some((item) => item.month !== 5 && item.month !== 11)) {
+    addBusinessIssue(
+      context,
+      "曾获何种奖励",
+      "校级奖项获奖月份必须为 5 月或 11 月",
+      "请核对校级奖项获奖月份，校级奖项通常应为 5 月或 11 月。"
+    );
+  }
+};
+
+const addStructuredAwardIssue = (
+  context: AwardBusinessContext,
+  columnIndex: number | undefined,
+  reason: string,
+  suggestion: string
+) => {
+  if (columnIndex === undefined) return;
+  addBusinessIssueByColumn(context, columnIndex, getBusinessField(context, columnIndex), reason, suggestion);
+};
+
 const validateAwardGroups = (context: AwardBusinessContext, checkShanghaiIssuer = false) => {
+  const applyDate = getApplicationYearMonth(context);
+
   getAwardGroupColumns(context).forEach((group, groupIndex) => {
     const columns = [group.year, group.month, group.name, group.issuer];
     const groupValues = columns.map((columnIndex) => toText(getBusinessValueByColumn(context, columnIndex)));
@@ -691,6 +805,36 @@ const validateAwardGroups = (context: AwardBusinessContext, checkShanghaiIssuer 
       (!/^\d{1,2}$/.test(groupValues[1]) || Number(groupValues[1]) < 1 || Number(groupValues[1]) > 12)
     ) {
       addBusinessIssueByColumn(context, group.month, getBusinessField(context, group.month), "获奖月份必须为 1~12", "请填写 1~12 之间的获奖月份");
+    }
+
+    const awardTime = parseYearMonthFromColumns(groupValues[0], groupValues[1]);
+    if (awardTime && applyDate && !isAwardBeforeApplyDate(awardTime.year, awardTime.month, applyDate)) {
+      addStructuredAwardIssue(
+        context,
+        group.year,
+        "曾获奖励时间必须早于申请日期",
+        "请核对奖励获得时间，奖励时间应早于申请日期。"
+      );
+      addStructuredAwardIssue(
+        context,
+        group.month,
+        "曾获奖励时间必须早于申请日期",
+        "请核对奖励获得时间，奖励时间应早于申请日期。"
+      );
+    }
+
+    if (
+      awardTime &&
+      isSchoolLevelAward(groupValues[2], groupValues[3], groupValues.join(" ")) &&
+      awardTime.month !== 5 &&
+      awardTime.month !== 11
+    ) {
+      addStructuredAwardIssue(
+        context,
+        group.month,
+        "校级奖项获奖月份必须为 5 月或 11 月",
+        "请核对校级奖项获奖月份，校级奖项通常应为 5 月或 11 月。"
+      );
     }
 
     [group.name, group.issuer].forEach((columnIndex, offset) => {
@@ -760,6 +904,7 @@ const validateCommonAwardRules = (context: AwardBusinessContext, forceComprehens
   validateApplicationReason(context);
   validateDepartmentOpinion(context);
   validateOptionalDates(context);
+  validateFreeTextAwardTime(context);
   validateAwardGroups(context, checkShanghaiIssuer);
 };
 

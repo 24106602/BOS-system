@@ -1,3 +1,9 @@
+export type AwardStructuredField =
+  | `获奖年份${1 | 2 | 3 | 4}`
+  | `获奖月份${1 | 2 | 3 | 4}`
+  | `获奖名称${1 | 2 | 3 | 4}`
+  | `颁奖单位${1 | 2 | 3 | 4}`;
+
 export type AwardStandardField =
   | "学生姓名"
   | "身份证号"
@@ -18,7 +24,8 @@ export type AwardStandardField =
   | "辅导员推荐理由"
   | "辅导员推荐日期"
   | "院系意见"
-  | "院系日期";
+  | "院系日期"
+  | AwardStructuredField;
 
 export type AwardFieldResolver = {
   getColumn: (field: AwardStandardField) => number | null;
@@ -58,13 +65,29 @@ export const awardFieldAliases: Record<AwardStandardField, string[]> = {
   实行综合排名: ["实行综合排名", "是否实行综合排名"],
   排名总人数: ["排名总人数", "综合排名总人数"],
   排名名次: ["排名名次", "综合排名名次"],
-  曾获何种奖励: ["曾获何种奖励", "获奖情况", "奖励情况"],
+  曾获何种奖励: ["曾获何种奖励", "获奖情况", "奖励情况", "获得奖励", "所获奖励"],
   申请理由: ["申请理由"],
-  申请日期: ["申请日期"],
+  申请日期: ["申请日期", "学生申请日期"],
   辅导员推荐理由: ["辅导员推荐理由", "辅导员意见", "推荐理由"],
   辅导员推荐日期: ["辅导员推荐日期"],
   院系意见: ["院系意见", "院(系)意见", "院（系）意见", "院意见"],
   院系日期: ["院系日期", "院(系)日期", "院（系）日期", "院日期"],
+  获奖年份1: ["获奖年份1", "获奖年份一"],
+  获奖月份1: ["获奖月份1", "获奖月份一"],
+  获奖名称1: ["获奖名称1", "获奖名称一"],
+  颁奖单位1: ["颁奖单位1", "颁奖单位一"],
+  获奖年份2: ["获奖年份2", "获奖年份二"],
+  获奖月份2: ["获奖月份2", "获奖月份二"],
+  获奖名称2: ["获奖名称2", "获奖名称二"],
+  颁奖单位2: ["颁奖单位2", "颁奖单位二"],
+  获奖年份3: ["获奖年份3", "获奖年份三"],
+  获奖月份3: ["获奖月份3", "获奖月份三"],
+  获奖名称3: ["获奖名称3", "获奖名称三"],
+  颁奖单位3: ["颁奖单位3", "颁奖单位三"],
+  获奖年份4: ["获奖年份4", "获奖年份四"],
+  获奖月份4: ["获奖月份4", "获奖月份四"],
+  获奖名称4: ["获奖名称4", "获奖名称四"],
+  颁奖单位4: ["颁奖单位4", "颁奖单位四"],
 };
 
 const orderedStandardFields = Object.keys(awardFieldAliases) as AwardStandardField[];
@@ -78,21 +101,26 @@ export const createAwardFieldResolver = (fields: string[]): AwardFieldResolver =
   const fieldToColumn = new Map<AwardStandardField, number>();
   const columnToField = new Map<number, AwardStandardField>();
 
+  const assignFieldColumn = (standardField: AwardStandardField, columnIndex: number) => {
+    if (fieldToColumn.has(standardField) || columnToField.has(columnIndex)) return;
+    fieldToColumn.set(standardField, columnIndex);
+    columnToField.set(columnIndex, standardField);
+  };
+
   orderedStandardFields.forEach((standardField) => {
     const normalizedAliases = awardFieldAliases[standardField].map(normalizeHeaderName);
-    let match = normalizedFields.find((item) => !columnToField.has(item.index) && normalizedAliases.includes(item.normalized));
+    const match = normalizedFields.find((item) => !columnToField.has(item.index) && normalizedAliases.includes(item.normalized));
+    if (match) assignFieldColumn(standardField, match.index);
+  });
 
-    if (!match) {
-      match = normalizedFields.find((item) =>
+  orderedStandardFields.forEach((standardField) => {
+    if (fieldToColumn.has(standardField)) return;
+    const normalizedAliases = awardFieldAliases[standardField].map(normalizeHeaderName);
+    const match = normalizedFields.find((item) =>
         !columnToField.has(item.index) &&
         normalizedAliases.some((alias) => alias && (item.normalized.includes(alias) || alias.includes(item.normalized)))
-      );
-    }
-
-    if (match && !fieldToColumn.has(standardField)) {
-      fieldToColumn.set(standardField, match.index);
-      if (!columnToField.has(match.index)) columnToField.set(match.index, standardField);
-    }
+    );
+    if (match) assignFieldColumn(standardField, match.index);
   });
 
   return {
