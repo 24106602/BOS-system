@@ -1,4 +1,5 @@
 import type { AwardTemplate, AwardType } from "../types/award";
+import { createAwardFieldResolver, normalizeHeaderName } from "./awardFieldResolver";
 
 export const awardTypeLabels: Record<AwardType, string> = {
   national: "国家奖学金",
@@ -14,22 +15,11 @@ export const awardStorageKeys: Record<AwardType, string> = {
 
 export const awardTypes: AwardType[] = ["national", "inspirational", "shanghai"];
 
-const normalizeField = (value: unknown) =>
-  String(value ?? "").replace(/\s+/g, "").replace(/[（(]?\*[）)]?/g, "");
-
 const isShanghaiFieldStructure = (template: AwardTemplate) => {
-  if (template.fields.length !== 36) return false;
-  const expectedFields: Array<[number, string]> = [
-    [0, "学生姓名"],
-    [1, "身份证号"],
-    [2, "联系电话"],
-    [3, "院系名称"],
-    [4, "政治面貌"],
-    [14, "申请理由"],
-    [19, "院系日期"],
-    [35, "颁奖单位4"],
-  ];
-  return expectedFields.every(([index, field]) => normalizeField(template.fields[index]).startsWith(field));
+  const resolver = createAwardFieldResolver(template.fields);
+  const requiredFields = ["学生姓名", "身份证号", "联系电话", "院系名称", "政治面貌", "申请理由", "院系意见"] as const;
+  const hasShanghaiAwardGroup = template.fields.some((field) => normalizeHeaderName(field).includes("颁奖单位"));
+  return requiredFields.every((field) => resolver.hasField(field)) && hasShanghaiAwardGroup;
 };
 
 export const detectAwardTemplateType = (fileName: string, template: AwardTemplate): AwardType | undefined => {

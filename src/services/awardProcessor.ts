@@ -1,8 +1,15 @@
-import * as XLSX from "xlsx-js-style";
+﻿import * as XLSX from "xlsx-js-style";
 import { applyHighlightStyle, cloneWorksheet } from "./excelExport";
 import type { WorkbookData } from "./types";
 import { parseTemplateRules } from "./templateRuleParser";
 import { awardStorageKeys, awardTypeLabels } from "./awardConfig";
+import {
+  createAwardFieldResolver,
+  getMissingAwardFields,
+  normalizeHeaderName,
+  type AwardFieldResolver,
+  type AwardStandardField,
+} from "./awardFieldResolver";
 import { normalizeSubmissionCollegeName } from "../utils/collegeDetector";
 import type {
   AwardDateFormat,
@@ -220,20 +227,30 @@ type AwardBusinessContext = {
   values: Record<string, unknown>;
   issues: AwardIssue[];
   logs: AwardRepairLog[];
+  resolver: AwardFieldResolver;
+  courseConsistencyMap: Map<string, { courseCount: number; passedCourseCount: number; rowNumber: number }>;
+  majorSkipLogged: { value: boolean };
 };
 
 const getBusinessField = (context: AwardBusinessContext, columnIndex: number) =>
   context.fields[columnIndex] || `第${columnIndex + 1}列`;
 
-const getBusinessValue = (context: AwardBusinessContext, columnIndex: number) =>
-  context.values[getBusinessField(context, columnIndex)];
-
 const hasBusinessIssue = (context: AwardBusinessContext, columnIndex: number) =>
   context.issues.some((issue) => issue.columnIndex === columnIndex);
 
-const addBusinessIssue = (
+const getFieldColumn = (context: AwardBusinessContext, field: AwardStandardField) =>
+  context.resolver.getFieldColumn(field);
+
+const getBusinessValue = (context: AwardBusinessContext, field: AwardStandardField) => {
+  const columnIndex = getFieldColumn(context, field);
+  if (columnIndex === null) return "";
+  return context.values[getBusinessField(context, columnIndex)];
+};
+
+const addBusinessIssueByColumn = (
   context: AwardBusinessContext,
   columnIndex: number,
+  field: string,
   reason: string,
   suggestion: string
 ) => {
@@ -245,7 +262,6 @@ const addBusinessIssue = (
     return;
   }
 
-  const field = getBusinessField(context, columnIndex);
   context.issues.push({
     rowIndex: context.sourceRowIndex,
     rowNumber: context.excelRowNumber,
@@ -259,22 +275,35 @@ const addBusinessIssue = (
   });
 };
 
+const addBusinessIssue = (
+  context: AwardBusinessContext,
+  field: AwardStandardField,
+  reason: string,
+  suggestion: string
+) => {
+  const columnIndex = getFieldColumn(context, field);
+  if (columnIndex === null) return;
+  addBusinessIssueByColumn(context, columnIndex, field, reason, suggestion);
+};
+
 const setBusinessValue = (
   context: AwardBusinessContext,
-  columnIndex: number,
+  field: AwardStandardField,
   value: unknown,
   reason: string
 ) => {
-  const field = getBusinessField(context, columnIndex);
-  const currentValue = context.values[field];
-  context.values[field] = value;
+  const columnIndex = getFieldColumn(context, field);
+  if (columnIndex === null) return;
+  const actualField = getBusinessField(context, columnIndex);
+  const currentValue = context.values[actualField];
+  context.values[actualField] = value;
   if (valuesEqual(currentValue, value)) return;
 
   context.logs.push({
     rowIndex: context.sourceRowIndex,
     rowNumber: context.excelRowNumber,
     columnIndex,
-    field,
+    field: actualField,
     originalValue: context.sourceRow[columnIndex],
     fixedValue: value,
     reason,
@@ -291,14 +320,16 @@ const parseInteger = (value: unknown) => {
 
 const ensureInteger = (
   context: AwardBusinessContext,
-  columnIndex: number,
+  field: AwardStandardField,
   label: string,
   required = true
 ) => {
-  const value = getBusinessValue(context, columnIndex);
+  const columnIndex = getFieldColumn(context, field);
+  if (columnIndex === null) return null;
+  const value = getBusinessValue(context, field);
   if (isBlank(value)) {
     if (required && !hasBusinessIssue(context, columnIndex)) {
-      addBusinessIssue(context, columnIndex, `${label}必须填写整数`, `请填写${label}整数值`);
+      addBusinessIssue(context, field, `${label}必须填写整数`, `请填写${label}整数值`);
     }
     return null;
   }
@@ -306,17 +337,19 @@ const ensureInteger = (
   const parsed = parseInteger(value);
   if (parsed === null) {
     if (!hasBusinessIssue(context, columnIndex)) {
-      addBusinessIssue(context, columnIndex, `${label}必须为整数`, `请将${label}修改为整数`);
+      addBusinessIssue(context, field, `${label}必须为整数`, `请将${label}修改为整数`);
     }
     return null;
   }
 
-  setBusinessValue(context, columnIndex, parsed, `${label}已规范为整数`);
+  setBusinessValue(context, field, parsed, `${label}已规范为整数`);
   return parsed;
 };
 
-const ensureYesNo = (context: AwardBusinessContext, columnIndex: number, label: string) => {
-  const value = getBusinessValue(context, columnIndex);
+const ensureYesNo = (context: AwardBusinessContext, field: AwardStandardField, label: string) => {
+  const columnIndex = getFieldColumn(context, field);
+  if (columnIndex === null) return "";
+  const value = getBusinessValue(context, field);
   const text = toText(value);
   let normalized = "";
 
@@ -325,42 +358,46 @@ const ensureYesNo = (context: AwardBusinessContext, columnIndex: number, label: 
 
   if (!normalized) {
     if (!hasBusinessIssue(context, columnIndex)) {
-      addBusinessIssue(context, columnIndex, `${label}只能填写“是”或“否”`, `请将${label}修改为“是”或“否”`);
+      addBusinessIssue(context, field, `${label}只能填写“是”或“否”`, `请将${label}修改为“是”或“否”`);
     }
     return "";
   }
 
-  setBusinessValue(context, columnIndex, normalized, `${label}已规范为“${normalized}”`);
+  setBusinessValue(context, field, normalized, `${label}已规范为“${normalized}”`);
   return normalized;
 };
 
-const ensureDate = (context: AwardBusinessContext, columnIndex: number, label: string) => {
-  const value = getBusinessValue(context, columnIndex);
+const ensureDate = (context: AwardBusinessContext, field: AwardStandardField, label: string) => {
+  const columnIndex = getFieldColumn(context, field);
+  if (columnIndex === null) return null;
+  const value = getBusinessValue(context, field);
   const parts = parseDateParts(value);
 
   if (!parts) {
     if (!hasBusinessIssue(context, columnIndex)) {
-      addBusinessIssue(context, columnIndex, `${label}无法解析为有效日期`, `请填写有效的${label}`);
+      addBusinessIssue(context, field, `${label}无法解析为有效日期`, `请填写有效的${label}`);
     }
     return null;
   }
 
   const formatted = formatDate(parts, "YYYYMMDD");
-  setBusinessValue(context, columnIndex, formatted, `${label}已统一为 YYYYMMDD 格式`);
+  setBusinessValue(context, field, formatted, `${label}已统一为 YYYYMMDD 格式`);
   return Number(formatted);
 };
 
 const ensureTextLength = (
   context: AwardBusinessContext,
-  columnIndex: number,
+  field: AwardStandardField,
   label: string,
   minLength: number,
   maxLength: number
 ) => {
-  const text = toText(getBusinessValue(context, columnIndex));
+  const columnIndex = getFieldColumn(context, field);
+  if (columnIndex === null) return;
+  const text = toText(getBusinessValue(context, field));
   if (!text) {
     if (!hasBusinessIssue(context, columnIndex)) {
-      addBusinessIssue(context, columnIndex, `${label}必填`, `请填写${label}`);
+      addBusinessIssue(context, field, `${label}必填`, `请填写${label}`);
     }
     return;
   }
@@ -368,145 +405,153 @@ const ensureTextLength = (
   if (text.length < minLength || text.length > maxLength) {
     addBusinessIssue(
       context,
-      columnIndex,
+      field,
       `${label}字数必须为 ${minLength}~${maxLength} 字`,
       `请将${label}调整为 ${minLength}~${maxLength} 字`
     );
   }
 };
 
-const appendEnding = (
-  context: AwardBusinessContext,
-  columnIndex: number,
-  ending: string,
-  label: string
-) => {
-  const text = toText(getBusinessValue(context, columnIndex));
-  if (!text || text.endsWith(ending)) return;
-  setBusinessValue(context, columnIndex, `${text}${ending}`, `${label}已自动追加固定结尾`);
-};
-
-const validateRankingRules = (
-  context: AwardBusinessContext,
-  forceComprehensiveRanking: boolean
-) => {
-  const courseCount = ensureInteger(context, 6, "必修课程数量");
-  const passedCourseCount = ensureInteger(context, 7, "及格课程数量");
-  const gradeTotal = ensureInteger(context, 8, "成绩排名总人数");
-  const gradeRank = ensureInteger(context, 9, "成绩排名名次");
-
-  const comprehensiveRanking = forceComprehensiveRanking
-    ? (setBusinessValue(context, 10, "是", "实行综合排名已自动修复为“是”"), "是")
-    : ensureYesNo(context, 10, "实行综合排名");
-
-  const comprehensiveTotal = ensureInteger(context, 11, "排名总人数", comprehensiveRanking === "是");
-  const comprehensiveRank = ensureInteger(context, 12, "排名名次", comprehensiveRanking === "是");
-
-  if (courseCount !== null && passedCourseCount !== null && courseCount !== passedCourseCount) {
-    const reason = "必修课程数量必须等于及格课程数量";
-    addBusinessIssue(context, 6, reason, "请核对必修课程数量");
-    addBusinessIssue(context, 7, reason, "请核对及格课程数量");
-  }
-  if (gradeTotal !== null && gradeRank !== null && gradeRank > gradeTotal) {
-    addBusinessIssue(context, 9, "成绩排名名次不能大于成绩排名总人数", "请核对成绩排名名次");
-  }
-  if (gradeTotal !== null && comprehensiveTotal !== null && comprehensiveTotal !== gradeTotal) {
-    addBusinessIssue(context, 11, "排名总人数必须等于成绩排名总人数", "请将排名总人数与成绩排名总人数保持一致");
-  }
-  if (
-    comprehensiveTotal !== null &&
-    comprehensiveRank !== null &&
-    comprehensiveRank > comprehensiveTotal
-  ) {
-    addBusinessIssue(context, 12, "排名名次不能大于排名总人数", "请核对排名名次");
-  }
-};
-
-const validateNationalAwardGroups = (context: AwardBusinessContext) => {
-  [19, 23, 27, 31].forEach((startIndex, groupIndex) => {
-    const groupValues = [0, 1, 2, 3].map((offset) => toText(getBusinessValue(context, startIndex + offset)));
-    if (groupValues.every((value) => value === "")) return;
-
-    const labels = ["获奖年份", "获奖月份", "获奖名称", "颁奖单位"];
-    groupValues.forEach((value, offset) => {
-      if (!value) {
-        addBusinessIssue(
-          context,
-          startIndex + offset,
-          `第 ${groupIndex + 1} 组获奖信息不完整`,
-          `请补充第 ${groupIndex + 1} 组${labels[offset]}`
-        );
-      }
-    });
-
-    if (groupValues[0] && !/^\d{4}$/.test(groupValues[0])) {
-      addBusinessIssue(context, startIndex, "获奖年份必须为 4 位年份", "请填写 4 位获奖年份");
-    }
-    if (
-      groupValues[1] &&
-      (!/^\d{1,2}$/.test(groupValues[1]) ||
-        Number(groupValues[1]) < 1 ||
-        Number(groupValues[1]) > 12)
-    ) {
-      addBusinessIssue(context, startIndex + 1, "获奖月份必须为 1~12", "请填写 1~12 之间的获奖月份");
-    }
-    [2, 3].forEach((offset) => {
-      if (groupValues[offset] && ZERO_LIKE_VALUES.has(groupValues[offset])) {
-        addBusinessIssue(
-          context,
-          startIndex + offset,
-          `${labels[offset]}不得只填写“无”“否”“没有”`,
-          `请填写有效的${labels[offset]}`
-        );
-      }
-    });
+const logTemplateNotice = (context: AwardBusinessContext, reason: string) => {
+  if (context.logs.some((item) => item.reason === reason)) return;
+  context.logs.push({
+    rowIndex: -1,
+    rowNumber: 0,
+    columnIndex: -1,
+    field: "模板字段",
+    originalValue: "",
+    fixedValue: "",
+    reason,
   });
 };
 
-const validateNationalRules = (context: AwardBusinessContext) => {
-  validateRankingRules(context, true);
-  ensureTextLength(context, 13, "申请理由", 100, 180);
-  ensureTextLength(context, 15, "辅导员推荐理由", 80, 100);
-  ensureTextLength(context, 17, "院系意见", 50, 100);
+const validateTopTenPercent = (
+  context: AwardBusinessContext,
+  rankField: AwardStandardField,
+  totalField: AwardStandardField,
+  rankLabel: string,
+  totalLabel: string
+) => {
+  const total = ensureInteger(context, totalField, totalLabel);
+  const rank = ensureInteger(context, rankField, rankLabel);
+  if (total === null || rank === null) return;
 
-  const applicationDate = ensureDate(context, 14, "申请日期");
-  const counselorDate = ensureDate(context, 16, "辅导员推荐日期");
-  const departmentDate = ensureDate(context, 18, "院系日期");
-  if (applicationDate !== null && counselorDate !== null && applicationDate > counselorDate) {
-    addBusinessIssue(context, 16, "辅导员推荐日期不能早于申请日期", "请核对辅导员推荐日期");
-  }
-  if (counselorDate !== null && departmentDate !== null && counselorDate > departmentDate) {
-    addBusinessIssue(context, 18, "院系日期不能早于辅导员推荐日期", "请核对院系日期");
+  if (rank > total) {
+    addBusinessIssue(context, rankField, `${rankLabel}不能大于${totalLabel}`, `请核对${rankLabel}`);
+    return;
   }
 
-  validateNationalAwardGroups(context);
+  const limit = Math.max(1, Math.ceil(total * 0.1));
+  if (rank > limit) {
+    addBusinessIssue(context, rankField, `${rankLabel}必须进入${totalLabel}前 10%`, `请确认${rankLabel}不大于 ${limit}`);
+  }
 };
 
-const estimateRewardCount = (value: unknown) => {
-  const text = toText(value);
-  if (!text) return 0;
-  const splitCount = text.split(/[\r\n；;、]+/).map((item) => item.trim()).filter(Boolean).length;
-  const sequenceCount = text.match(/(?:^|[\s；;、])\d+[.、）)]/g)?.length || 0;
-  return Math.max(splitCount, sequenceCount, 1);
+const REQUIRED_AWARD_FIELDS: Record<AwardType, AwardStandardField[]> = {
+  national: [
+    "学生姓名",
+    "必修课程数量",
+    "及格课程数量",
+    "成绩排名总人数",
+    "成绩排名名次",
+    "实行综合排名",
+    "排名总人数",
+    "排名名次",
+    "申请理由",
+    "院系意见",
+  ],
+  inspirational: [
+    "学生姓名",
+    "必修课程数量",
+    "及格课程数量",
+    "成绩排名总人数",
+    "成绩排名名次",
+    "实行综合排名",
+    "排名总人数",
+    "排名名次",
+    "申请理由",
+    "院系意见",
+  ],
+  shanghai: [
+    "学生姓名",
+    "身份证号",
+    "联系电话",
+    "院系名称",
+    "政治面貌",
+    "必修课程数量",
+    "及格课程数量",
+    "成绩排名总人数",
+    "成绩排名名次",
+    "实行综合排名",
+    "排名总人数",
+    "排名名次",
+    "申请理由",
+    "院系意见",
+  ],
 };
 
-const validateInspirationalRules = (context: AwardBusinessContext) => {
-  validateRankingRules(context, false);
+const ensureRequiredAwardFields = (awardType: AwardType, resolver: AwardFieldResolver) => {
+  const missingFields = getMissingAwardFields(resolver, REQUIRED_AWARD_FIELDS[awardType]);
+  if (missingFields.length > 0) {
+    throw new Error(`当前模板缺少必要字段：${missingFields.join("、")}，请检查是否使用正确模板。`);
+  }
+};
 
-  if (estimateRewardCount(getBusinessValue(context, 13)) > 2) {
-    addBusinessIssue(context, 13, "曾获何种奖励不得超过 2 条", "请将奖励信息精简为不超过 2 条");
+const validateSameMajorCourseConsistency = (
+  context: AwardBusinessContext,
+  courseCount: number | null,
+  passedCourseCount: number | null
+) => {
+  if (courseCount === null || passedCourseCount === null) return;
+  if (!context.resolver.hasField("专业")) {
+    if (!context.majorSkipLogged.value) {
+      logTemplateNotice(context, "当前模板未找到专业字段，已跳过同专业课程数量一致性校验。");
+      context.majorSkipLogged.value = true;
+    }
+    return;
   }
 
-  appendEnding(context, 14, "特此申请国家励志奖学金。", "申请理由");
-  ensureTextLength(context, 14, "申请理由", 100, 180);
-  appendEnding(context, 16, "同意推荐其申请国家励志奖学金。", "院系意见");
-  ensureTextLength(context, 16, "院系意见", 10, 50);
-
-  const applicationDate = ensureDate(context, 15, "申请日期");
-  const departmentDate = ensureDate(context, 17, "院系日期");
-  if (applicationDate !== null && departmentDate !== null && applicationDate > departmentDate) {
-    addBusinessIssue(context, 17, "院系日期不能早于申请日期", "请核对院系日期");
+  const major = toText(getBusinessValue(context, "专业"));
+  if (!major) return;
+  const existing = context.courseConsistencyMap.get(major);
+  if (!existing) {
+    context.courseConsistencyMap.set(major, { courseCount, passedCourseCount, rowNumber: context.excelRowNumber });
+    return;
   }
+
+  if (existing.courseCount !== courseCount || existing.passedCourseCount !== passedCourseCount) {
+    const reason = `同专业内必修课程数量、及格课程数量需保持一致；第 ${existing.rowNumber} 行已出现不同课程数量`;
+    addBusinessIssue(context, "必修课程数量", reason, "请核对同专业必修课程数量");
+    addBusinessIssue(context, "及格课程数量", reason, "请核对同专业及格课程数量");
+  }
+};
+
+const validateRankingRules = (context: AwardBusinessContext, forceComprehensiveRanking: boolean) => {
+  const courseCount = ensureInteger(context, "必修课程数量", "必修课程数量");
+  const passedCourseCount = ensureInteger(context, "及格课程数量", "及格课程数量");
+
+  if (courseCount !== null && passedCourseCount !== null && courseCount !== passedCourseCount) {
+    const reason = "必修课程数量必须等于及格课程数量";
+    addBusinessIssue(context, "必修课程数量", reason, "请核对必修课程数量");
+    addBusinessIssue(context, "及格课程数量", reason, "请核对及格课程数量");
+  }
+  validateSameMajorCourseConsistency(context, courseCount, passedCourseCount);
+
+  validateTopTenPercent(context, "成绩排名名次", "成绩排名总人数", "成绩排名名次", "成绩排名总人数");
+
+  if (forceComprehensiveRanking) {
+    setBusinessValue(context, "实行综合排名", "是", "实行综合排名已自动修复为“是”");
+  } else {
+    ensureYesNo(context, "实行综合排名", "实行综合排名");
+  }
+
+  const gradeTotal = ensureInteger(context, "成绩排名总人数", "成绩排名总人数");
+  const rankingTotal = ensureInteger(context, "排名总人数", "排名总人数");
+  if (gradeTotal !== null && rankingTotal !== null && gradeTotal !== rankingTotal) {
+    addBusinessIssue(context, "排名总人数", "成绩排名总人数必须等于排名总人数", "请将两个总人数保持一致");
+  }
+
+  validateTopTenPercent(context, "排名名次", "排名总人数", "排名名次", "排名总人数");
 };
 
 const SHANGHAI_POLITICAL_STATUS = [
@@ -525,162 +570,158 @@ const SHANGHAI_POLITICAL_STATUS = [
   "群众",
 ];
 
+const POLITICAL_WORDS = [
+  ...SHANGHAI_POLITICAL_STATUS,
+  "党员",
+  "预备党员",
+  "团员",
+  "共青团员",
+  "群众",
+];
+
+const APPLICATION_FIXED_ENDINGS = [
+  "特此申请国家奖学金。",
+  "特此申请国家励志奖学金。",
+  "特此申请上海市奖学金。",
+];
+
+const OPINION_FIXED_ENDINGS = [
+  "同意推荐其申请国家奖学金。",
+  "同意推荐其申请国家励志奖学金。",
+  "同意推荐其申请上海市奖学金。",
+];
+
+const validateApplicationReason = (context: AwardBusinessContext) => {
+  ensureTextLength(context, "申请理由", "申请理由", 100, 180);
+  const reason = toText(getBusinessValue(context, "申请理由"));
+  if (!reason) return;
+
+  if (!/(我|本人)/.test(reason)) {
+    addBusinessIssue(context, "申请理由", "申请理由必须使用第一视角", "请使用“我”或“本人”等第一视角表述");
+  }
+  if (POLITICAL_WORDS.some((item) => reason.includes(item))) {
+    addBusinessIssue(context, "申请理由", "申请理由不得出现政治面貌词汇", "请删除政治面貌相关表述");
+  }
+  if (/(绩点|GPA|排名|名次|第\s*\d+|前\s*\d+|\d+\s*名|\d+\s*\/\s*\d+)/i.test(reason)) {
+    addBusinessIssue(context, "申请理由", "申请理由不得出现绩点、GPA、具体排名或名次", "请改为综合表现描述");
+  }
+  if (APPLICATION_FIXED_ENDINGS.some((ending) => reason.includes(ending))) {
+    addBusinessIssue(context, "申请理由", "申请理由不得出现固定申请结尾", "请删除固定结尾语句");
+  }
+};
+
+const validateDepartmentOpinion = (context: AwardBusinessContext) => {
+  ensureTextLength(context, "院系意见", "院系意见", 10, 50);
+  const opinion = toText(getBusinessValue(context, "院系意见"));
+  if (!opinion) return;
+
+  const studentName = toText(getBusinessValue(context, "学生姓名"));
+  if (studentName && opinion.includes(studentName)) {
+    addBusinessIssue(context, "院系意见", "院系意见不得出现学生姓名", "请删除学生姓名，改为客观推荐意见");
+  }
+  if (opinion === "同意" || opinion === "同意推荐") {
+    addBusinessIssue(context, "院系意见", "院系意见不能只写“同意”或“同意推荐”", "请补充完整的院系意见");
+  }
+  if (OPINION_FIXED_ENDINGS.some((ending) => opinion.includes(ending))) {
+    addBusinessIssue(context, "院系意见", "院系意见不得出现固定推荐结尾", "请删除固定推荐结尾");
+  }
+};
+
+type AwardGroupColumns = Partial<Record<"year" | "month" | "name" | "issuer", number>>;
+
+const getAwardGroupColumns = (context: AwardBusinessContext) => {
+  const groups = new Map<string, AwardGroupColumns>();
+  const kindRules: Array<[keyof AwardGroupColumns, string]> = [
+    ["year", "获奖年份"],
+    ["month", "获奖月份"],
+    ["name", "获奖名称"],
+    ["issuer", "颁奖单位"],
+  ];
+
+  context.fields.forEach((field, index) => {
+    const normalized = normalizeHeaderName(field);
+    const kind = kindRules.find(([, label]) => normalized.includes(label))?.[0];
+    if (!kind) return;
+    const suffix = normalized.match(/([一二三四五六七八九十123456789])$/)?.[1] || normalized.replace(/获奖年份|获奖月份|获奖名称|颁奖单位/g, "");
+    const groupKey = suffix || String(index);
+    const group = groups.get(groupKey) || {};
+    group[kind] = index;
+    groups.set(groupKey, group);
+  });
+
+  return Array.from(groups.values());
+};
+
+const getBusinessValueByColumn = (context: AwardBusinessContext, columnIndex?: number) =>
+  columnIndex === undefined ? "" : context.values[getBusinessField(context, columnIndex)];
+
 const SHANGHAI_AWARD_ISSUERS: Record<string, string> = {
   国家奖学金: "教育部",
   国家励志奖学金: "教育部",
   上海市奖学金: "上海市教育委员会",
 };
 
-const ensureShanghaiDate = (context: AwardBusinessContext, columnIndex: number, label: string) => {
-  const value = getBusinessValue(context, columnIndex);
-  const parts = parseDateParts(value);
-
-  if (!parts) {
-    if (!hasBusinessIssue(context, columnIndex)) {
-      addBusinessIssue(context, columnIndex, `${label}无法解析为有效日期`, `请填写有效的${label}`);
-    }
-    return null;
-  }
-
-  const [year, month, day] = parts;
-  const formatted = `${year}/${month}/${day}`;
-  setBusinessValue(context, columnIndex, formatted, `${label}已统一为 YYYY/M/D 格式`);
-  return Number(`${year}${String(month).padStart(2, "0")}${String(day).padStart(2, "0")}`);
-};
-
-const validateShanghaiBasicFields = (context: AwardBusinessContext) => {
-  const studentName = toText(getBusinessValue(context, 0));
-  if (!studentName) {
-    addBusinessIssue(context, 0, "学生姓名必填", "请填写学生姓名");
-  } else if (!/^[\u4e00-\u9fa5·A-Za-z]{1,20}$/.test(studentName)) {
-    addBusinessIssue(
-      context,
-      0,
-      "学生姓名必须为 1~20 个汉字，可包含 · 和大小写字母",
-      "请核对学生姓名格式"
-    );
-  }
-
-  const idCard = toText(getBusinessValue(context, 1)).toUpperCase();
-  setBusinessValue(context, 1, idCard, "身份证号中的字母已规范为大写");
-  if (!/^\d{17}[\dX]$/.test(idCard) || !isValidIdCard(idCard)) {
-    addBusinessIssue(context, 1, "身份证号必须为合法的 18 位号码", "请核对身份证号位数和校验位");
-  }
-
-  const phone = normalizeFullWidthSymbols(toText(getBusinessValue(context, 2))).replace(/[\s\-－]/g, "");
-  setBusinessValue(context, 2, phone, "联系电话中的空格和横杠已自动移除");
-  if (!/^1[3-9]\d{9}$/.test(phone)) {
-    addBusinessIssue(context, 2, "联系电话必须为 11 位手机号", "请填写有效的 11 位手机号");
-  }
-
-  const department = toText(getBusinessValue(context, 3));
-  if (!department) {
-    addBusinessIssue(context, 3, "院系名称必填", "请填写院系名称");
-  } else if (department.length > 100) {
-    addBusinessIssue(context, 3, "院系名称不得超过 100 字符", "请精简院系名称");
-  }
-
-  const politicalStatus = toText(getBusinessValue(context, 4));
-  if (!politicalStatus) {
-    addBusinessIssue(context, 4, "政治面貌必填", "请填写政治面貌");
-  } else if (!SHANGHAI_POLITICAL_STATUS.includes(politicalStatus)) {
-    addBusinessIssue(
-      context,
-      4,
-      `政治面貌不在允许范围内：${SHANGHAI_POLITICAL_STATUS.join("、")}`,
-      "请从允许的政治面貌中选择"
-    );
-  }
-};
-
-const validateShanghaiRankingRules = (context: AwardBusinessContext) => {
-  const courseCount = ensureInteger(context, 7, "必修课程数量");
-  const passedCourseCount = ensureInteger(context, 8, "及格课程数量");
-  const gradeTotal = ensureInteger(context, 9, "成绩排名总人数");
-  const gradeRank = ensureInteger(context, 10, "成绩排名名次");
-  const comprehensiveRanking = ensureYesNo(context, 11, "实行综合排名");
-  const comprehensiveTotal = ensureInteger(context, 12, "排名总人数", comprehensiveRanking === "是");
-  const comprehensiveRank = ensureInteger(context, 13, "排名名次", comprehensiveRanking === "是");
-
-  if (courseCount !== null && passedCourseCount !== null && courseCount !== passedCourseCount) {
-    const reason = "必修课程数量必须等于及格课程数量";
-    addBusinessIssue(context, 7, reason, "请核对必修课程数量");
-    addBusinessIssue(context, 8, reason, "请核对及格课程数量");
-  }
-  if (gradeTotal !== null && gradeRank !== null && gradeRank > gradeTotal) {
-    addBusinessIssue(context, 10, "成绩排名名次不能大于成绩排名总人数", "请核对成绩排名名次");
-  }
-  if (
-    comprehensiveRanking === "是" &&
-    gradeTotal !== null &&
-    comprehensiveTotal !== null &&
-    comprehensiveTotal !== gradeTotal
-  ) {
-    addBusinessIssue(context, 12, "排名总人数必须等于成绩排名总人数", "请将排名总人数与成绩排名总人数保持一致");
-  }
-  if (
-    comprehensiveTotal !== null &&
-    comprehensiveRank !== null &&
-    comprehensiveRank > comprehensiveTotal
-  ) {
-    addBusinessIssue(context, 13, "排名名次不能大于排名总人数", "请核对排名名次");
-  }
-};
-
-const validateShanghaiAwardGroups = (context: AwardBusinessContext) => {
-  [20, 24, 28, 32].forEach((startIndex, groupIndex) => {
-    const groupValues = [0, 1, 2, 3].map((offset) => toText(getBusinessValue(context, startIndex + offset)));
+const validateAwardGroups = (context: AwardBusinessContext, checkShanghaiIssuer = false) => {
+  getAwardGroupColumns(context).forEach((group, groupIndex) => {
+    const columns = [group.year, group.month, group.name, group.issuer];
+    const groupValues = columns.map((columnIndex) => toText(getBusinessValueByColumn(context, columnIndex)));
     if (groupValues.every((value) => value === "")) return;
 
     const labels = ["获奖年份", "获奖月份", "获奖名称", "颁奖单位"];
-    groupValues.forEach((value, offset) => {
+    columns.forEach((columnIndex, offset) => {
+      if (columnIndex === undefined) return;
+      const value = groupValues[offset];
       if (!value) {
-        addBusinessIssue(
+        addBusinessIssueByColumn(
           context,
-          startIndex + offset,
+          columnIndex,
+          getBusinessField(context, columnIndex),
           `第 ${groupIndex + 1} 组获奖信息不完整`,
           `请补充第 ${groupIndex + 1} 组${labels[offset]}`
         );
       }
     });
 
-    if (groupValues[0] && !/^\d{4}$/.test(groupValues[0])) {
-      addBusinessIssue(context, startIndex, "获奖年份必须为 4 位年份", "请填写 4 位获奖年份");
+    if (group.year !== undefined && groupValues[0] && !/^\d{4}$/.test(groupValues[0])) {
+      addBusinessIssueByColumn(context, group.year, getBusinessField(context, group.year), "获奖年份必须为 4 位年份", "请填写 4 位获奖年份");
     }
     if (
+      group.month !== undefined &&
       groupValues[1] &&
-      (!/^\d{1,2}$/.test(groupValues[1]) ||
-        Number(groupValues[1]) < 1 ||
-        Number(groupValues[1]) > 12)
+      (!/^\d{1,2}$/.test(groupValues[1]) || Number(groupValues[1]) < 1 || Number(groupValues[1]) > 12)
     ) {
-      addBusinessIssue(context, startIndex + 1, "获奖月份必须为 1~12", "请填写 1~12 之间的获奖月份");
+      addBusinessIssueByColumn(context, group.month, getBusinessField(context, group.month), "获奖月份必须为 1~12", "请填写 1~12 之间的获奖月份");
     }
 
-    [2, 3].forEach((offset) => {
-      const value = groupValues[offset];
+    [group.name, group.issuer].forEach((columnIndex, offset) => {
+      if (columnIndex === undefined) return;
+      const value = toText(getBusinessValueByColumn(context, columnIndex));
       if (!value) return;
       if (ZERO_LIKE_VALUES.has(value)) {
-        addBusinessIssue(
+        addBusinessIssueByColumn(
           context,
-          startIndex + offset,
-          `${labels[offset]}不得只填写“无”“否”“没有”`,
-          `请填写有效的${labels[offset]}`
+          columnIndex,
+          getBusinessField(context, columnIndex),
+          `${offset === 0 ? "获奖名称" : "颁奖单位"}不得只填写“无”“否”“没有”`,
+          `请填写有效的${offset === 0 ? "获奖名称" : "颁奖单位"}`
         );
       } else if (value.length <= 1 || value.length > 88) {
-        addBusinessIssue(
+        addBusinessIssueByColumn(
           context,
-          startIndex + offset,
-          `${labels[offset]}长度必须大于 1 且不超过 88 字符`,
-          `请核对${labels[offset]}长度`
+          columnIndex,
+          getBusinessField(context, columnIndex),
+          `${offset === 0 ? "获奖名称" : "颁奖单位"}长度必须大于 1 且不超过 88 字符`,
+          `请核对${offset === 0 ? "获奖名称" : "颁奖单位"}长度`
         );
       }
     });
 
-    const expectedIssuer = SHANGHAI_AWARD_ISSUERS[groupValues[2]];
-    if (expectedIssuer && groupValues[3] && groupValues[3] !== expectedIssuer) {
-      addBusinessIssue(
+    const expectedIssuer = checkShanghaiIssuer ? SHANGHAI_AWARD_ISSUERS[groupValues[2]] : "";
+    if (group.issuer !== undefined && expectedIssuer && groupValues[3] && groupValues[3] !== expectedIssuer) {
+      addBusinessIssueByColumn(
         context,
-        startIndex + 3,
+        group.issuer,
+        getBusinessField(context, group.issuer),
         `${groupValues[2]}的颁奖单位应为“${expectedIssuer}”`,
         `请将颁奖单位修改为“${expectedIssuer}”`
       );
@@ -688,38 +729,99 @@ const validateShanghaiAwardGroups = (context: AwardBusinessContext) => {
   });
 };
 
-const validateShanghaiRules = (context: AwardBusinessContext) => {
-  validateShanghaiBasicFields(context);
-  validateShanghaiRankingRules(context);
+const estimateRewardCount = (value: unknown) => {
+  const text = toText(value);
+  if (!text) return 0;
+  const splitCount = text.split(/[\r\n；、]+/).map((item) => item.trim()).filter(Boolean).length;
+  const sequenceCount = text.match(/(?:^|[\s；、])\d+[.、）)]/g)?.length || 0;
+  return Math.max(splitCount, sequenceCount, 1);
+};
 
-  appendEnding(context, 14, "特此申请上海市奖学金。", "申请理由");
-  const applicationReason = toText(getBusinessValue(context, 14));
-  if (applicationReason && !/(我|本人)/.test(applicationReason)) {
-    addBusinessIssue(context, 14, "申请理由必须使用第一视角", "请使用“我”或“本人”等第一视角表述");
-  }
-  ensureTextLength(context, 14, "申请理由", 180, 200);
+const validateOptionalDates = (context: AwardBusinessContext) => {
+  const applicationDate = context.resolver.hasField("申请日期") ? ensureDate(context, "申请日期", "申请日期") : null;
+  const counselorDate = context.resolver.hasField("辅导员推荐日期")
+    ? ensureDate(context, "辅导员推荐日期", "辅导员推荐日期")
+    : null;
+  const departmentDate = context.resolver.hasField("院系日期") ? ensureDate(context, "院系日期", "院系日期") : null;
 
-  appendEnding(context, 16, "推荐其申请上海市奖学金。", "辅导员推荐理由");
-  ensureTextLength(context, 16, "辅导员推荐理由", 80, 100);
-
-  const departmentOpinion = toText(getBusinessValue(context, 18));
-  if (departmentOpinion === "同意" || departmentOpinion === "同意推荐") {
-    addBusinessIssue(context, 18, "院系意见不能只写“同意”或“同意推荐”", "请补充完整的院系意见");
-  }
-  appendEnding(context, 18, "同意推荐其申请上海市奖学金。", "院系意见");
-  ensureTextLength(context, 18, "院系意见", 50, 100);
-
-  const applicationDate = ensureShanghaiDate(context, 15, "申请日期");
-  const counselorDate = ensureShanghaiDate(context, 17, "辅导员推荐日期");
-  const departmentDate = ensureShanghaiDate(context, 19, "院系日期");
   if (applicationDate !== null && counselorDate !== null && applicationDate > counselorDate) {
-    addBusinessIssue(context, 17, "辅导员推荐日期不能早于申请日期", "请核对辅导员推荐日期");
+    addBusinessIssue(context, "辅导员推荐日期", "辅导员推荐日期不能早于申请日期", "请核对辅导员推荐日期");
   }
   if (counselorDate !== null && departmentDate !== null && counselorDate > departmentDate) {
-    addBusinessIssue(context, 19, "院系日期不能早于辅导员推荐日期", "请核对院系日期");
+    addBusinessIssue(context, "院系日期", "院系日期不能早于辅导员推荐日期", "请核对院系日期");
+  }
+  if (counselorDate === null && applicationDate !== null && departmentDate !== null && applicationDate > departmentDate) {
+    addBusinessIssue(context, "院系日期", "院系日期不能早于申请日期", "请核对院系日期");
+  }
+};
+
+const validateCommonAwardRules = (context: AwardBusinessContext, forceComprehensiveRanking: boolean, checkShanghaiIssuer = false) => {
+  validateRankingRules(context, forceComprehensiveRanking);
+  validateApplicationReason(context);
+  validateDepartmentOpinion(context);
+  validateOptionalDates(context);
+  validateAwardGroups(context, checkShanghaiIssuer);
+};
+
+const validateNationalRules = (context: AwardBusinessContext) => {
+  validateCommonAwardRules(context, true);
+};
+
+const validateInspirationalRules = (context: AwardBusinessContext) => {
+  validateCommonAwardRules(context, false);
+  if (context.resolver.hasField("曾获何种奖励") && estimateRewardCount(getBusinessValue(context, "曾获何种奖励")) > 2) {
+    addBusinessIssue(context, "曾获何种奖励", "曾获何种奖励不得超过 2 条", "请将奖励信息精简为不超过 2 条");
+  }
+};
+
+const validateShanghaiBasicFields = (context: AwardBusinessContext) => {
+  const studentName = toText(getBusinessValue(context, "学生姓名"));
+  if (!studentName) {
+    addBusinessIssue(context, "学生姓名", "学生姓名必填", "请填写学生姓名");
+  } else if (!/^[\u4e00-\u9fa5·A-Za-z]{1,20}$/.test(studentName)) {
+    addBusinessIssue(
+      context,
+      "学生姓名",
+      "学生姓名必须为 1~20 个汉字，可包含 · 和大小写字母",
+      "请核对学生姓名格式"
+    );
   }
 
-  validateShanghaiAwardGroups(context);
+  const idCard = toText(getBusinessValue(context, "身份证号")).toUpperCase();
+  setBusinessValue(context, "身份证号", idCard, "身份证号中的字母已规范为大写");
+  if (!/^\d{17}[\dX]$/.test(idCard) || !isValidIdCard(idCard)) {
+    addBusinessIssue(context, "身份证号", "身份证号必须为合法的 18 位号码", "请核对身份证号位数和校验位");
+  }
+
+  const phone = normalizeFullWidthSymbols(toText(getBusinessValue(context, "联系电话"))).replace(/[\s\-；]/g, "");
+  setBusinessValue(context, "联系电话", phone, "联系电话中的空格和横杠已自动移除");
+  if (!/^1[3-9]\d{9}$/.test(phone)) {
+    addBusinessIssue(context, "联系电话", "联系电话必须为 11 位手机号", "请填写有效的 11 位手机号");
+  }
+
+  const department = toText(getBusinessValue(context, "院系名称"));
+  if (!department) {
+    addBusinessIssue(context, "院系名称", "院系名称必填", "请填写院系名称");
+  } else if (department.length > 100) {
+    addBusinessIssue(context, "院系名称", "院系名称不得超过 100 字符", "请精简院系名称");
+  }
+
+  const politicalStatus = toText(getBusinessValue(context, "政治面貌"));
+  if (!politicalStatus) {
+    addBusinessIssue(context, "政治面貌", "政治面貌必填", "请填写政治面貌");
+  } else if (!SHANGHAI_POLITICAL_STATUS.includes(politicalStatus)) {
+    addBusinessIssue(
+      context,
+      "政治面貌",
+      `政治面貌不在允许范围内：${SHANGHAI_POLITICAL_STATUS.join("、")}`,
+      "请从允许的政治面貌中选择"
+    );
+  }
+};
+
+const validateShanghaiRules = (context: AwardBusinessContext) => {
+  validateShanghaiBasicFields(context);
+  validateCommonAwardRules(context, false, true);
 };
 
 const applyAwardBusinessRules = (
@@ -730,7 +832,6 @@ const applyAwardBusinessRules = (
   else if (awardType === "inspirational") validateInspirationalRules(context);
   else validateShanghaiRules(context);
 };
-
 const getEffectiveColumnCount = (requirements: unknown[], fields: unknown[]) => {
   let count = Math.max(requirements.length, fields.length);
   while (
@@ -788,6 +889,11 @@ export const processAwardRows = ({
   const failedRows: AwardProcessedRow[] = [];
   const issues: AwardIssue[] = [];
   const logs: AwardRepairLog[] = [];
+  const resolver = createAwardFieldResolver(fields);
+  const courseConsistencyMap = new Map<string, { courseCount: number; passedCourseCount: number; rowNumber: number }>();
+  const majorSkipLogged = { value: false };
+
+  if (awardType) ensureRequiredAwardFields(awardType, resolver);
 
   sourceRows.forEach((sourceRow, sourceRowIndex) => {
     if (sourceRow.every((cell) => isBlank(cell))) return;
@@ -798,8 +904,10 @@ export const processAwardRows = ({
 
     rules.forEach((rule) => {
       const originalValue = sourceRow[rule.columnIndex];
-      const valueToCheck = awardType === "national" && rule.columnIndex === 10 ? "是" : originalValue;
-      if (awardType === "national" && rule.columnIndex === 10 && !valuesEqual(originalValue, "是")) {
+      const standardField = resolver.getStandardFieldByColumn(rule.columnIndex);
+      const forceNationalComprehensive = awardType === "national" && standardField === "实行综合排名";
+      const valueToCheck = forceNationalComprehensive ? "是" : originalValue;
+      if (forceNationalComprehensive && !valuesEqual(originalValue, "是")) {
         logs.push({
           rowIndex: sourceRowIndex,
           rowNumber: excelRowNumber,
@@ -849,6 +957,9 @@ export const processAwardRows = ({
         values,
         issues: rowIssues,
         logs,
+        resolver,
+        courseConsistencyMap,
+        majorSkipLogged,
       });
     }
 
@@ -1049,3 +1160,4 @@ export const exportAwardSummary = (submissions: AwardSubmission[], awardName = "
   XLSX.utils.book_append_sheet(workbook, worksheet, `${awardName}汇总`.slice(0, 31));
   XLSX.writeFile(workbook, `${awardName}全校汇总_${Date.now()}.xlsx`);
 };
+
