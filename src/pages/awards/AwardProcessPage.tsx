@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEv
 import { readWorkbook } from "../../services/templateParser";
 import {
   exportAwardExcel,
+  getAwardImportDiagnostics,
   makeAwardSubmission,
   parseAwardWorkbook,
   processAwardWorkbook,
@@ -81,8 +82,12 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
     setFileName(file.name);
     setStatus("正在读取 Excel...");
 
+    let workbookData: Awaited<ReturnType<typeof readWorkbook>> | null = null;
+    let nextTemplate: AwardTemplate | null = null;
+
     try {
-      const nextTemplate = parseAwardWorkbook(await readWorkbook(file));
+      workbookData = await readWorkbook(file);
+      nextTemplate = parseAwardWorkbook(workbookData);
       const templateError = getAwardTemplateValidationError(awardType, file.name, nextTemplate);
       if (templateError) throw new Error(templateError);
       const detection = resolveCollegeUpload(file.name);
@@ -96,6 +101,9 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
       setLogs([
         addTime("success", `已读取 Excel：${file.name}`),
         addTime("info", "已自动读取第 1 行填写要求、第 2 行字段名称，第 3 行起作为待处理数据"),
+        ...getAwardImportDiagnostics({ fileName: file.name, workbookData, template: nextTemplate, awardType }).map((message) =>
+          addTime("info", message)
+        ),
         addTime(
           detection.error ? "error" : "success",
           detection.error || `已识别所属学院：${detection.collegeName}`
@@ -108,7 +116,12 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
       setResult(null);
       setStatus("Excel 读取失败");
       setErrorMessage(message);
-      setLogs([addTime("error", message)]);
+      setLogs([
+        addTime("error", message),
+        ...getAwardImportDiagnostics({ fileName: file.name, workbookData, template: nextTemplate, awardType }).map((item) =>
+          addTime("info", item)
+        ),
+      ]);
     } finally {
       setIsProcessing(false);
       setIsLoading(false);
@@ -132,6 +145,7 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
 
     try {
       const nextResult = processAwardWorkbook(template, awardType);
+      const totalRows = nextResult.passedRows.length + nextResult.failedRows.length;
       setResult(nextResult);
       setLogs((current) => [
         ...current,
@@ -146,11 +160,15 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
         ),
         addTime(
           nextResult.failedRows.length > 0 ? "error" : "success",
-          `处理完成：通过 ${nextResult.passedRows.length} 行，不通过 ${nextResult.failedRows.length} 行，自动修复 ${nextResult.logs.length} 项`
+          totalRows === 0
+            ? "处理完成：未发现正式学生数据，可能当前文件只有模板说明或空行"
+            : `处理完成：通过 ${nextResult.passedRows.length} 行，不通过 ${nextResult.failedRows.length} 行，自动修复 ${nextResult.logs.length} 项`
         ),
       ]);
       setStatus(
-        nextResult.failedRows.length > 0
+        totalRows === 0
+          ? "处理完成：未发现正式学生数据"
+          : nextResult.failedRows.length > 0
           ? "处理完成：存在不通过项，请导出不通过名单修改"
           : "处理完成：全部通过，可以上载到学校端"
       );

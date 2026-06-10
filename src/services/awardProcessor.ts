@@ -450,6 +450,10 @@ const validateTopTenPercent = (
 const REQUIRED_AWARD_FIELDS: Record<AwardType, AwardStandardField[]> = {
   national: [
     "学生姓名",
+    "身份证号",
+    "联系电话",
+    "院系名称",
+    "政治面貌",
     "必修课程数量",
     "及格课程数量",
     "成绩排名总人数",
@@ -458,7 +462,9 @@ const REQUIRED_AWARD_FIELDS: Record<AwardType, AwardStandardField[]> = {
     "排名总人数",
     "排名名次",
     "申请理由",
+    "申请日期",
     "院系意见",
+    "院系日期",
   ],
   inspirational: [
     "学生姓名",
@@ -989,11 +995,19 @@ const getEffectiveColumnCount = (requirements: unknown[], fields: unknown[]) => 
   return count;
 };
 
+const AWARD_OFFICIAL_SHEET_NAMES = [
+  "国家奖学金申请档案",
+  "国家励志奖学金申请档案",
+  "上海市奖学金申请档案",
+];
+
+const getAwardOutputSheetName = (workbookData: WorkbookData) =>
+  AWARD_OFFICIAL_SHEET_NAMES.find((name) => workbookData.sheetNames.includes(name)) ||
+  workbookData.sheetNames.find((name) => (workbookData.sheets[name] || []).length >= 2) ||
+  workbookData.sheetNames[0];
+
 export const parseAwardWorkbook = (workbookData: WorkbookData): AwardTemplate => {
-  const outputSheet =
-    workbookData.sheetNames.find((name) => name === "上海市奖学金申请档案") ||
-    workbookData.sheetNames.find((name) => (workbookData.sheets[name] || []).length >= 2) ||
-    workbookData.sheetNames[0];
+  const outputSheet = getAwardOutputSheetName(workbookData);
   if (!outputSheet) throw new Error("Excel 中未找到可处理的工作表");
 
   const rows = workbookData.sheets[outputSheet] || [];
@@ -1016,6 +1030,58 @@ export const parseAwardWorkbook = (workbookData: WorkbookData): AwardTemplate =>
     sourceRows: rows.slice(2),
     rules: parseTemplateRules(normalizedRequirements, fields),
   };
+};
+
+export const getAwardImportDiagnostics = ({
+  fileName,
+  workbookData,
+  template,
+  awardType,
+}: {
+  fileName: string;
+  workbookData?: WorkbookData | null;
+  template?: AwardTemplate | null;
+  awardType?: AwardType;
+}) => {
+  const outputSheet = template?.outputSheet || (workbookData ? getAwardOutputSheetName(workbookData) : "");
+  const fields = template?.fields || [];
+  const resolver = fields.length > 0 ? createAwardFieldResolver(fields) : null;
+  const missingFields = awardType && resolver ? getMissingAwardFields(resolver, REQUIRED_AWARD_FIELDS[awardType]) : [];
+
+  return [
+    `当前文件名：${fileName}`,
+    `读取到的 Sheet 名：${workbookData?.sheetNames.join("、") || "未读取到"}`,
+    `实际使用的 Sheet：${outputSheet || "未识别"}`,
+    "识别到的表头行号：2",
+    `识别到的字段名列表：${fields.length > 0 ? fields.join("、") : "未识别到字段"}`,
+    `缺失的必要字段列表：${missingFields.length > 0 ? missingFields.join("、") : "无"}`,
+  ];
+};
+
+const isTemplateRemarkRow = (sourceRow: unknown[], fields: string[], resolver: AwardFieldResolver) => {
+  if (sourceRow.every((cell) => isBlank(cell))) return true;
+
+  const text = sourceRow.map((cell) => toText(cell)).filter(Boolean).join(" ");
+  if (!text) return true;
+
+  const meaningfulCells = sourceRow.filter((cell) => !isBlank(cell)).length;
+  const fieldText = fields.join(" ");
+  const looksLikeRemark =
+    meaningfulCells <= 4 &&
+    /备注|说明|提示|注意|若|如果|请|报错|一致|填写|模板|示例|及格课程数量|必修课程数量|同院系|同专业|同班级/.test(text) &&
+    !fieldText.includes(text);
+  if (looksLikeRemark) return true;
+
+  const getResolvedValue = (field: AwardStandardField) => {
+    const columnIndex = resolver.getColumn(field);
+    return columnIndex === null ? "" : toText(sourceRow[columnIndex]);
+  };
+  const studentName = getResolvedValue("学生姓名");
+  const idCard = getResolvedValue("身份证号");
+  const phone = getResolvedValue("联系电话");
+
+  if (studentName || idCard || phone) return false;
+  return false;
 };
 
 export const processAwardRows = ({
@@ -1041,7 +1107,7 @@ export const processAwardRows = ({
   if (awardType) ensureRequiredAwardFields(awardType, resolver);
 
   sourceRows.forEach((sourceRow, sourceRowIndex) => {
-    if (sourceRow.every((cell) => isBlank(cell))) return;
+    if (isTemplateRemarkRow(sourceRow, fields, resolver)) return;
 
     const excelRowNumber = sourceRowIndex + 3;
     const values: Record<string, unknown> = {};

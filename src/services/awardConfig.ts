@@ -16,6 +16,8 @@ export const awardStorageKeys: Record<AwardType, string> = {
 export const awardTypes: AwardType[] = ["national", "inspirational", "shanghai"];
 
 const isShanghaiFieldStructure = (template: AwardTemplate) => {
+  const searchableText = [template.outputSheet, ...template.fields, ...template.requirements.map((item) => String(item ?? ""))].join(" ");
+  if (!searchableText.includes(awardTypeLabels.shanghai)) return false;
   const resolver = createAwardFieldResolver(template.fields);
   const requiredFields = ["学生姓名", "身份证号", "联系电话", "院系名称", "政治面貌", "申请理由", "院系意见"] as const;
   const hasShanghaiAwardGroup = template.fields.some((field) => normalizeHeaderName(field).includes("颁奖单位"));
@@ -23,8 +25,9 @@ const isShanghaiFieldStructure = (template: AwardTemplate) => {
 };
 
 export const detectAwardTemplateType = (fileName: string, template: AwardTemplate): AwardType | undefined => {
+  if (template.outputSheet === "国家奖学金申请档案") return "national";
+  if (template.outputSheet === "国家励志奖学金申请档案") return "inspirational";
   if (template.outputSheet === "上海市奖学金申请档案") return "shanghai";
-  if (isShanghaiFieldStructure(template)) return "shanghai";
 
   const searchableText = [
     fileName,
@@ -37,6 +40,7 @@ export const detectAwardTemplateType = (fileName: string, template: AwardTemplat
   if (searchableText.includes(awardTypeLabels.inspirational)) return "inspirational";
   if (searchableText.includes(awardTypeLabels.shanghai)) return "shanghai";
   if (searchableText.includes(awardTypeLabels.national)) return "national";
+  if (isShanghaiFieldStructure(template)) return "shanghai";
   return undefined;
 };
 
