@@ -5,6 +5,8 @@ import LoginPage from "./pages/LoginPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AdminHomePage from "./pages/admin/AdminHomePage";
 import AdminDifficultyOverviewPage from "./pages/admin/AdminDifficultyOverviewPage";
+import AdminAccountManagePage from "./pages/admin/AdminAccountManagePage";
+import AdminBaseInfoPage from "./pages/admin/AdminBaseInfoPage";
 import AdminCollegesPage from "./pages/admin/AdminCollegesPage";
 import AdminStudentsPage from "./pages/admin/AdminStudentsPage";
 import AdminSummaryPage from "./pages/admin/AdminSummaryPage";
@@ -36,6 +38,8 @@ const normalizePath = (path: string) => {
     "/reset-password",
     "/admin",
     "/admin/difficulty",
+    "/admin/base-info",
+    "/admin/accounts",
     "/admin/colleges",
     "/admin/students",
     "/admin/summary",
@@ -159,7 +163,11 @@ export default function PlatformApp() {
 
     if (path.startsWith("/admin")) {
       const page =
-        path === "/admin/colleges" ? (
+        path === "/admin/base-info" ? (
+          <AdminBaseInfoPage />
+        ) : path === "/admin/accounts" ? (
+          <AdminAccountManagePage />
+        ) : path === "/admin/colleges" ? (
           <AdminCollegesPage />
         ) : path === "/admin/difficulty" ? (
           <AdminDifficultyOverviewPage onNavigate={navigate} />

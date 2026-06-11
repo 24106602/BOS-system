@@ -1,4 +1,11 @@
+export type AcademicYear = string;
+
+export type YearScopedRecord = {
+  academic_year: AcademicYear;
+};
+
 export type StudentRecord = {
+  academic_year?: AcademicYear;
   college_name: string;
   student_id: string;
   name: string;
@@ -9,6 +16,7 @@ export type StudentRecord = {
 };
 
 export type FamilyMemberRecord = {
+  academic_year?: AcademicYear;
   college_name: string;
   student_name: string;
   student_id_card: string;

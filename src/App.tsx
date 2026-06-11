@@ -2,6 +2,12 @@
 // 主页面组件：负责功能区切换、上传按钮、状态管理、结果预览和日志展示。
 
 import { getMergeBatches, saveMergeBatch } from "./db/localMergeDb";
+import {
+  ACADEMIC_YEAR_OPTIONS,
+  getBatchAcademicYear,
+  getCurrentAcademicYear,
+  withAcademicYear,
+} from "./utils/academicYear";
 import DatabasePage from "./pages/DatabasePage";
 import MergePage from "./pages/MergePage";
 import StudentProcessPage from "./pages/StudentProcessPage";
@@ -157,6 +163,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   const [familyAutoProcessRequested, setFamilyAutoProcessRequested] = useState(false);
   const [familyAnalysis, setFamilyAnalysis] = useState<Record<string, number>>({});
   const [familyStats, setFamilyStats] = useState<FamilyProcessingStats>(initialFamilyStats);
+  const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear());
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -230,6 +237,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     const possibleDuplicate = existingBatches.some(
       (item) =>
         item.collegeName === collegeName &&
+        getBatchAcademicYear(item) === academicYear &&
         item.dataType === "student" &&
         item.rowCount === processedData.length
     );
@@ -241,16 +249,18 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       return;
     }
 
+    pushLog("info", `本次数据归属学年：${academicYear}；防重范围为当前学部（院）+ 当前学年。`);
     await saveMergeBatch({
-      id: crypto.randomUUID(),
+      id: `student_${academicYear}_${encodeURIComponent(collegeName)}`,
+      academic_year: academicYear,
       collegeName,
       dataType: "student",
       rowCount: processedData.length,
       createdAt: new Date().toISOString(),
-      rows: processedData,
+      rows: withAcademicYear(processedData, academicYear),
     });
 
-    pushLog("success", `${collegeName} 本专科信息已上载到学校端，共 ${processedData.length} 条`);
+    pushLog("success", `${collegeName} ${academicYear} 本专科信息已上载到学校端，共 ${processedData.length} 条`);
     alert("已上载到学校端");
   };
 
@@ -272,6 +282,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     const possibleDuplicate = existingBatches.some(
       (item) =>
         item.collegeName === collegeName &&
+        getBatchAcademicYear(item) === academicYear &&
         item.dataType === "family" &&
         item.rowCount === familyProcessedData.length
     );
@@ -283,16 +294,18 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       return;
     }
 
+    pushFamilyLog("info", `本次数据归属学年：${academicYear}；防重范围为当前学部（院）+ 当前学年。`);
     await saveMergeBatch({
-      id: crypto.randomUUID(),
+      id: `family_${academicYear}_${encodeURIComponent(collegeName)}`,
+      academic_year: academicYear,
       collegeName,
       dataType: "family",
       rowCount: familyProcessedData.length,
       createdAt: new Date().toISOString(),
-      rows: familyProcessedData,
+      rows: withAcademicYear(familyProcessedData, academicYear),
     });
 
-    pushFamilyLog("success", `${collegeName} 家庭成员信息已上载到学校端，共 ${familyProcessedData.length} 条`);
+    pushFamilyLog("success", `${collegeName} ${academicYear} 家庭成员信息已上载到学校端，共 ${familyProcessedData.length} 条`);
     alert("家庭成员信息已上载到学校端");
   };
 
@@ -850,6 +863,28 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
 
       {activeModule === "processing" && (
         <div style={styles.processingWorkspace}>
+          {collegeMode && (
+            <div style={styles.academicYearBar}>
+              <div>
+                <div style={styles.academicYearLabel}>当前学年：{academicYear}</div>
+                <div style={styles.academicYearTip}>本次治理和上载数据将归档到所选学年，学校端按学年独立查看。</div>
+              </div>
+              <label style={styles.academicYearSelectLabel}>
+                学年
+                <select
+                  style={styles.academicYearSelect}
+                  value={academicYear}
+                  onChange={(event) => setAcademicYear(event.target.value)}
+                >
+                  {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
           {!fixedProcessingPanel && (
             <div style={styles.subModuleBar}>
               <button
@@ -988,6 +1023,44 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     minHeight: 0,
     padding: "0 0 4px",
+  },
+  academicYearBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 10,
+    padding: "12px 14px",
+    border: "1px solid #d7e1ed",
+    borderRadius: 8,
+    background: "#fff",
+    boxShadow: "0 4px 14px rgba(15,35,64,0.05)",
+  },
+  academicYearLabel: {
+    color: "#172033",
+    fontSize: 15,
+    fontWeight: 800,
+  },
+  academicYearTip: {
+    marginTop: 4,
+    color: "#64748b",
+    fontSize: 12,
+  },
+  academicYearSelectLabel: {
+    display: "grid",
+    gap: 5,
+    color: "#40526a",
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  academicYearSelect: {
+    minWidth: 132,
+    border: "1px solid #cfdbe7",
+    borderRadius: 6,
+    padding: "8px 10px",
+    color: "#15304f",
+    background: "#fff",
+    fontSize: 13,
   },
   subModuleBar: {
     display: "flex",

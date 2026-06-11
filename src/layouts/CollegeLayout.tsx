@@ -11,24 +11,19 @@ type CollegeLayoutProps = {
 };
 
 const difficultyMenus = [
-  { path: "/college/difficulty", label: "业务首页", mark: "◎" },
-  { path: "/college/difficulty/student", label: "本专科信息处理", mark: "▦" },
+  { path: "/college/difficulty", label: "业务首页", mark: "首" },
+  { path: "/college/difficulty/student", label: "本专科信息处理", mark: "本" },
   { path: "/college/difficulty/family", label: "家庭成员信息处理", mark: "家" },
-];
-
-const awardMenus = [
-  { path: "/college/awards/national", label: "国家奖学金", mark: "奖" },
-  { path: "/college/awards/inspirational", label: "国家励志奖学金", mark: "励" },
-  { path: "/college/awards/shanghai", label: "上海市奖学金", mark: "沪" },
+  { path: "/college/records", label: "提交记录", mark: "记" },
 ];
 
 export default function CollegeLayout({ path, profile, onNavigate, onLogout, children }: CollegeLayoutProps) {
-  const breadcrumbBusiness = path.startsWith("/college/awards") ? "三奖业务" : "困难生业务";
+  const breadcrumbBusiness = path.startsWith("/college/awards") ? "三大奖业务" : "困难生业务";
 
   return (
     <div style={styles.page}>
       <aside style={styles.sidebar}>
-          <div style={styles.brand}>
+        <div style={styles.brand}>
           <div style={styles.brandIcon}>校</div>
           <div>
             <div style={styles.brandTitle}>学部（院）业务工作台</div>
@@ -43,7 +38,7 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
 
         <nav style={styles.nav}>
           <button onClick={() => onNavigate("/college")} style={path === "/college" ? styles.activeMenu : styles.menu}>
-            <span style={styles.menuMark}>⌂</span>
+            <span style={styles.menuMark}>首</span>
             平台首页
           </button>
 
@@ -55,13 +50,11 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
             </button>
           ))}
 
-          <div style={styles.groupLabel}>三奖业务</div>
-          {awardMenus.map((item) => (
-            <button key={item.path} onClick={() => onNavigate(item.path)} style={path === item.path ? styles.activeMenu : styles.menu}>
-              <span style={styles.menuMark}>{item.mark}</span>
-              {item.label}
-            </button>
-          ))}
+          <div style={styles.groupLabel}>三大奖业务</div>
+          <button type="button" style={styles.disabledMenu} disabled>
+            <span style={styles.menuMark}>奖</span>
+            暂未开放
+          </button>
         </nav>
 
         <div style={styles.syncCard}>
@@ -106,8 +99,7 @@ const styles: Record<string, CSSProperties> = {
   menu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "none", borderRadius: 6, padding: "10px 11px", background: "transparent", color: "#c6d2e6", cursor: "pointer", textAlign: "left", fontSize: 14 },
   activeMenu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "none", borderRadius: 6, padding: "10px 11px", background: "#078ed8", color: "#fff", cursor: "pointer", textAlign: "left", fontSize: 14, fontWeight: 700 },
   disabledMenu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "1px solid #223451", borderRadius: 6, padding: "10px 11px", background: "#101d33", color: "#7f91ad", cursor: "not-allowed", textAlign: "left", fontSize: 14 },
-  menuMark: { width: 18, textAlign: "center", fontSize: 16 },
-  newBadge: { marginLeft: "auto", padding: "2px 6px", borderRadius: 999, background: "#253754", color: "#9fb2ce", fontSize: 11 },
+  menuMark: { width: 18, textAlign: "center", fontSize: 13, fontWeight: 800 },
   syncCard: { margin: "auto 12px 12px", padding: 12, border: "1px solid #203352", borderRadius: 8, background: "#0d172b" },
   syncTitle: { color: "#fff", fontSize: 13, fontWeight: 700 },
   pulse: { color: "#21d59c", marginRight: 6 },

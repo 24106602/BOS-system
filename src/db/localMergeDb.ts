@@ -1,14 +1,25 @@
 import type { CollegeProcessedBatch } from "../types/merge";
+import { getBatchAcademicYear, withAcademicYear } from "../utils/academicYear";
 import { normalizeSubmissionCollegeName } from "../utils/collegeDetector";
 
 const DB_NAME = "bos_merge_db";
 const STORE_NAME = "batches";
 const LOCAL_KEY = "bos_merge_batches";
 
-const normalizeBatch = (batch: CollegeProcessedBatch): CollegeProcessedBatch => ({
-  ...batch,
-  collegeName: normalizeSubmissionCollegeName(batch.collegeName),
-});
+const normalizeBatch = (batch: CollegeProcessedBatch): CollegeProcessedBatch => {
+  const academicYear = getBatchAcademicYear(batch);
+  return {
+    ...batch,
+    academic_year: academicYear,
+    collegeName: normalizeSubmissionCollegeName(batch.collegeName),
+    rows: withAcademicYear(batch.rows || [], academicYear),
+  };
+};
+
+const isSameYearScope = (left: CollegeProcessedBatch, right: CollegeProcessedBatch) =>
+  normalizeSubmissionCollegeName(left.collegeName) === normalizeSubmissionCollegeName(right.collegeName) &&
+  left.dataType === right.dataType &&
+  getBatchAcademicYear(left) === getBatchAcademicYear(right);
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -44,13 +55,24 @@ export async function saveMergeBatch(batch: CollegeProcessedBatch) {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).put(normalizedBatch);
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => {
+        (request.result || [])
+          .map(normalizeBatch)
+          .filter((item) => item.id !== normalizedBatch.id && isSameYearScope(item, normalizedBatch))
+          .forEach((item) => store.delete(item.id));
+        store.put(normalizedBatch);
+      };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } catch {
     const batches = await getFromLocalStorage();
-    const next = [...batches.filter((item) => item.id !== normalizedBatch.id), normalizedBatch];
+    const next = [
+      ...batches.filter((item) => item.id !== normalizedBatch.id && !isSameYearScope(item, normalizedBatch)),
+      normalizedBatch,
+    ];
     await saveToLocalStorage(next);
   }
 }

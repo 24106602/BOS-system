@@ -1,11 +1,13 @@
 import { checkMergeDuplicates } from "./mergeDuplicateChecker";
 import * as XLSX from "xlsx-js-style";
 import type { CollegeProcessedBatch, MergeResult } from "../types/merge";
+import { getBatchAcademicYear } from "../utils/academicYear";
 import { normalizeSubmissionCollegeName } from "../utils/collegeDetector";
 
 export function mergeBatches(batches: CollegeProcessedBatch[]): MergeResult {
   const rows = batches.flatMap((batch) =>
     batch.rows.map((row) => ({
+      学年: getBatchAcademicYear(batch),
       来源学院: normalizeSubmissionCollegeName(batch.collegeName),
       数据类型: batch.dataType === "student" ? "本专科信息" : "家庭成员信息",
       批次时间: batch.createdAt,

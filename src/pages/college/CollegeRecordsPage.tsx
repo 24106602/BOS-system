@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import type { CollegeProcessedBatch } from "../../types/merge";
 import { getMergeBatches } from "../../db/localMergeDb";
+import { getBatchAcademicYear } from "../../utils/academicYear";
 import { getCurrentCollegeAccount, isSameSubmissionCollege } from "../../utils/collegeDetector";
 
 export default function CollegeRecordsPage() {
@@ -20,11 +21,13 @@ export default function CollegeRecordsPage() {
   return (
     <section style={styles.card}>
       <h1 style={styles.title}>学部（院）提交记录</h1>
+      <p style={styles.description}>提交记录按学年归档展示，当前数据来源仍为学院端上载到学校端的通过批次。</p>
       <div style={styles.tableWrap}>
         <table style={styles.table}>
           <thead>
             <tr>
               <th style={styles.th}>提交单位</th>
+              <th style={styles.th}>学年</th>
               <th style={styles.th}>数据类型</th>
               <th style={styles.th}>通过人数</th>
               <th style={styles.th}>不通过人数</th>
@@ -35,12 +38,13 @@ export default function CollegeRecordsPage() {
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td style={styles.td} colSpan={6}>暂无记录</td>
+                <td style={styles.td} colSpan={7}>暂无记录</td>
               </tr>
             ) : (
               rows.map((item) => (
                 <tr key={item.id}>
                   <td style={styles.td}>{item.collegeName}</td>
+                  <td style={styles.td}>{getBatchAcademicYear(item)}</td>
                   <td style={styles.td}>{item.dataType === "student" ? "本专科信息" : "家庭成员信息"}</td>
                   <td style={styles.td}>{item.rowCount}</td>
                   <td style={styles.td}>0</td>
@@ -58,7 +62,8 @@ export default function CollegeRecordsPage() {
 
 const styles: Record<string, CSSProperties> = {
   card: { background: "#fff", borderRadius: 8, padding: 18, border: "1px solid #d7e1ed", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
-  title: { margin: "0 0 12px 0", color: "#172033", fontSize: 22 },
+  title: { margin: "0 0 8px 0", color: "#172033", fontSize: 22 },
+  description: { color: "#63738a", fontSize: 13, margin: "0 0 12px", lineHeight: 1.7 },
   tableWrap: { overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
   th: { border: "1px solid #d7e1ed", background: "#edf4fa", padding: 8, whiteSpace: "nowrap" },

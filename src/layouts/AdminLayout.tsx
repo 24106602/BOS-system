@@ -11,22 +11,26 @@ type AdminLayoutProps = {
 };
 
 const difficultyMenus = [
-  { path: "/admin/difficulty", label: "业务总览", mark: "◎" },
-  { path: "/admin/summary", label: "全校数据汇总", mark: "◫" },
-  { path: "/admin/student-summary", label: "本专科信息汇总", mark: "▤" },
-  { path: "/admin/family-summary", label: "家庭成员信息汇总", mark: "♧" },
-  { path: "/admin/students", label: "困难生数据库", mark: "◉" },
+  { path: "/admin/difficulty", label: "业务总览", mark: "总" },
+  { path: "/admin/summary", label: "全校数据汇总", mark: "汇" },
+  { path: "/admin/student-summary", label: "本专科信息汇总", mark: "本" },
+  { path: "/admin/family-summary", label: "家庭成员信息汇总", mark: "家" },
+  { path: "/admin/students", label: "困难生数据库", mark: "库" },
 ];
 
-const awardMenus = [
-  { path: "/admin/awards", label: "三奖提交总览", mark: "奖" },
-  { path: "/admin/awards/national", label: "国家奖学金汇总", mark: "国" },
-  { path: "/admin/awards/inspirational", label: "国家励志奖学金汇总", mark: "励" },
-  { path: "/admin/awards/shanghai", label: "上海市奖学金汇总", mark: "沪" },
+const baseInfoMenus = [
+  { path: "/admin/base-info", label: "学院/部门信息", mark: "基" },
+  { path: "/admin/accounts", label: "账号管理", mark: "账" },
 ];
+
+const getBreadcrumbBusiness = (path: string) => {
+  if (path.startsWith("/admin/awards")) return "三大奖业务";
+  if (path === "/admin/base-info" || path === "/admin/accounts" || path === "/admin/colleges") return "基础信息";
+  return "困难生业务";
+};
 
 export default function AdminLayout({ path, profile, onNavigate, onLogout, children }: AdminLayoutProps) {
-  const breadcrumbBusiness = path.startsWith("/admin/awards") ? "三奖业务" : "困难生业务";
+  const breadcrumbBusiness = getBreadcrumbBusiness(path);
 
   return (
     <div style={styles.page}>
@@ -46,7 +50,7 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
 
         <nav style={styles.nav}>
           <button onClick={() => onNavigate("/admin")} style={path === "/admin" ? styles.activeMenu : styles.menu}>
-            <span style={styles.menuMark}>⌂</span>
+            <span style={styles.menuMark}>首</span>
             管理员首页
           </button>
 
@@ -58,18 +62,24 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
             </button>
           ))}
 
-          <div style={styles.groupLabel}>三奖业务</div>
-          {awardMenus.map((item) => (
+          <div style={styles.groupLabel}>基础信息</div>
+          {baseInfoMenus.map((item) => (
             <button key={item.path} onClick={() => onNavigate(item.path)} style={path === item.path ? styles.activeMenu : styles.menu}>
               <span style={styles.menuMark}>{item.mark}</span>
               {item.label}
             </button>
           ))}
+
+          <div style={styles.groupLabel}>三大奖业务</div>
+          <button type="button" style={styles.disabledMenu} disabled>
+            <span style={styles.menuMark}>奖</span>
+            暂未开放
+          </button>
         </nav>
 
         <div style={styles.syncCard}>
           <div style={styles.syncTitle}><span style={styles.pulse}>●</span> 模块同步状态</div>
-          <div style={styles.syncText}>困难生业务已接入学院上载、全校汇总和总库关联框架；后续业务可复用同一套模块入口。</div>
+          <div style={styles.syncText}>困难生业务已接入学院上载、全校汇总和按学年归档；账号与学院配置归入基础信息。</div>
         </div>
 
         <button onClick={onLogout} style={styles.logout}>退出当前角色</button>
@@ -109,8 +119,7 @@ const styles: Record<string, CSSProperties> = {
   menu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "none", borderRadius: 6, padding: "10px 11px", background: "transparent", color: "#c6d2e6", cursor: "pointer", textAlign: "left", fontSize: 14 },
   activeMenu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "none", borderRadius: 6, padding: "10px 11px", background: "#078ed8", color: "#fff", cursor: "pointer", textAlign: "left", fontSize: 14, fontWeight: 700 },
   disabledMenu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "1px solid #223451", borderRadius: 6, padding: "10px 11px", background: "#101d33", color: "#7f91ad", cursor: "not-allowed", textAlign: "left", fontSize: 14 },
-  menuMark: { width: 18, textAlign: "center", fontSize: 16 },
-  newBadge: { marginLeft: "auto", padding: "2px 6px", borderRadius: 999, background: "#253754", color: "#9fb2ce", fontSize: 11 },
+  menuMark: { width: 18, textAlign: "center", fontSize: 13, fontWeight: 800 },
   syncCard: { margin: "auto 12px 12px", padding: 12, border: "1px solid #203352", borderRadius: 8, background: "#0d172b" },
   syncTitle: { color: "#fff", fontSize: 13, fontWeight: 700 },
   pulse: { color: "#21d59c", marginRight: 6 },
