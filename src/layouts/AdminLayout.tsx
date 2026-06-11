@@ -23,6 +23,13 @@ const baseInfoMenus = [
   { path: "/admin/accounts", label: "账号管理", mark: "账" },
 ];
 
+const awardMenus = [
+  { path: "/admin/awards", label: "三奖提交总览", mark: "览" },
+  { path: "/admin/awards/national", label: "国家奖学金汇总", mark: "国" },
+  { path: "/admin/awards/inspirational", label: "国家励志奖学金汇总", mark: "励" },
+  { path: "/admin/awards/shanghai", label: "上海市奖学金汇总", mark: "沪" },
+];
+
 const getBreadcrumbBusiness = (path: string) => {
   if (path.startsWith("/admin/awards")) return "三大奖业务";
   if (path === "/admin/base-info" || path === "/admin/accounts" || path === "/admin/colleges") return "基础信息";
@@ -71,10 +78,12 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
           ))}
 
           <div style={styles.groupLabel}>三大奖业务</div>
-          <button type="button" style={styles.disabledMenu} disabled>
-            <span style={styles.menuMark}>奖</span>
-            暂未开放
-          </button>
+          {awardMenus.map((item) => (
+            <button key={item.path} onClick={() => onNavigate(item.path)} style={path === item.path ? styles.activeMenu : styles.menu}>
+              <span style={styles.menuMark}>{item.mark}</span>
+              {item.label}
+            </button>
+          ))}
         </nav>
 
         <div style={styles.syncCard}>

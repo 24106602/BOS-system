@@ -17,6 +17,12 @@ const difficultyMenus = [
   { path: "/college/records", label: "提交记录", mark: "记" },
 ];
 
+const awardMenus = [
+  { path: "/college/awards/national", label: "国家奖学金数据处理", mark: "国" },
+  { path: "/college/awards/inspirational", label: "国家励志奖学金数据处理", mark: "励" },
+  { path: "/college/awards/shanghai", label: "上海市奖学金数据处理", mark: "沪" },
+];
+
 export default function CollegeLayout({ path, profile, onNavigate, onLogout, children }: CollegeLayoutProps) {
   const breadcrumbBusiness = path.startsWith("/college/awards") ? "三大奖业务" : "困难生业务";
 
@@ -51,10 +57,12 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
           ))}
 
           <div style={styles.groupLabel}>三大奖业务</div>
-          <button type="button" style={styles.disabledMenu} disabled>
-            <span style={styles.menuMark}>奖</span>
-            暂未开放
-          </button>
+          {awardMenus.map((item) => (
+            <button key={item.path} onClick={() => onNavigate(item.path)} style={path === item.path ? styles.activeMenu : styles.menu}>
+              <span style={styles.menuMark}>{item.mark}</span>
+              {item.label}
+            </button>
+          ))}
         </nav>
 
         <div style={styles.syncCard}>
