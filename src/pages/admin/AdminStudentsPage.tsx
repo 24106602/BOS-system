@@ -228,12 +228,25 @@ const normalizeHeader = (value: unknown) =>
     .replace(/\s|\*|（.*?）|\(.*?\)/g, "")
     .trim();
 
+const isNoisyCell = (value: unknown) => {
+  const text = String(value ?? "").trim().toUpperCase();
+  return !text || text === "#N/A" || text === "N/A" || text === "NULL" || text === "UNDEFINED";
+};
+
+const hasHeaderAlias = (headers: string[], aliases: string[]) => {
+  const normalizedAliases = aliases.map(normalizeHeader).filter(Boolean);
+  return headers.some((header) =>
+    header && normalizedAliases.some((alias) => header.includes(alias) || alias.includes(header))
+  );
+};
+
 const findHistoricalHeaderIndex = (rows: unknown[][]) => {
   let bestIndex = -1;
   let bestScore = -1;
   rows.slice(0, 12).forEach((row, index) => {
     const headers = row.map(normalizeHeader);
     const score = [
+      ["学年", "academic_year"],
       ["姓名", "学生姓名", "name"],
       ["学号", "学生学号", "student_id"],
       ["身份证号", "身份证件号", "id_card"],
@@ -249,13 +262,46 @@ const findHistoricalHeaderIndex = (rows: unknown[][]) => {
       bestIndex = index;
     }
   });
-  return bestScore >= 2 ? bestIndex : -1;
+  return bestScore >= 3 ? bestIndex : -1;
+};
+
+const scoreHistoricalSheet = (rows: unknown[][]) => {
+  const headerIndex = findHistoricalHeaderIndex(rows);
+  if (headerIndex < 0) return { headerIndex: -1, score: -1 };
+  const headers = (rows[headerIndex] || []).map(normalizeHeader);
+  const score = [
+    ["学年", "academic_year"],
+    ["学院", "学院名称", "学部", "学部院", "院系", "college_name"],
+    ["姓名", "学生姓名", "name"],
+    ["身份证号", "身份证", "身份证件号", "id_card"],
+    ["学号", "学生学号", "student_id"],
+    ["困难等级", "推荐档次", "院系推荐档次", "学校推荐档次", "认定等级", "difficulty_level"],
+  ].reduce((sum, aliases) => hasHeaderAlias(headers, aliases) ? sum + 1 : sum, 0);
+  return { headerIndex, score };
+};
+
+const pickHistoricalSheetName = (workbook: Awaited<ReturnType<typeof readWorkbook>>) => {
+  const preferredName = workbook.sheetNames.find((name) => name.trim() === "困难生明细-管理（首页）");
+  if (preferredName) return preferredName;
+
+  let bestName = "";
+  let bestScore = -1;
+  workbook.sheetNames.forEach((name) => {
+    const rows = workbook.sheets[name] || [];
+    if (rows.length === 0) return;
+    const { score } = scoreHistoricalSheet(rows);
+    if (score > bestScore) {
+      bestScore = score;
+      bestName = name;
+    }
+  });
+  return bestScore >= 4 ? bestName : "";
 };
 
 const getRowValueByHeader = (row: unknown[], headers: string[], aliases: string[]) => {
   const normalizedAliases = aliases.map(normalizeHeader);
   const index = headers.findIndex((header) =>
-    normalizedAliases.some((alias) => header.includes(alias) || alias.includes(header))
+    header && normalizedAliases.some((alias) => header.includes(alias) || alias.includes(header))
   );
   return index >= 0 ? String(row[index] ?? "").trim() : "";
 };
@@ -270,8 +316,7 @@ const parseHistoricalRows = (rows: unknown[][], academicYear: string) => {
   let total = 0;
 
   rows.slice(headerIndex + 1).forEach((row, index) => {
-    if (row.every((cell) => !String(cell ?? "").trim())) return;
-    total += 1;
+    if (row.every(isNoisyCell)) return;
     const excelRowNumber = headerIndex + index + 2;
     const rawData = headers.reduce<Record<string, unknown>>((record, header, columnIndex) => {
       if (header) record[header] = row[columnIndex] ?? "";
@@ -285,11 +330,21 @@ const parseHistoricalRows = (rows: unknown[][], academicYear: string) => {
       id_card: normalizeIdCard(getRowValueByHeader(row, headers, ["id_card", "身份证", "身份证号", "身份证件号", "证件号", "学生身份证号"])),
       grade: getRowValueByHeader(row, headers, ["grade", "年级", "所在年级"]),
       gender: getRowValueByHeader(row, headers, ["gender", "性别"]),
-      difficulty_level: getRowValueByHeader(row, headers, ["difficulty_level", "困难等级", "困难档次", "困难认定等级", "认定等级", "特殊困难类型"]),
+      difficulty_level: getRowValueByHeader(row, headers, ["difficulty_level", "推荐档次", "院系推荐档次", "学校推荐档次", "困难等级", "困难档次", "困难认定等级", "认定等级", "特殊困难类型"]),
       status: getRowValueByHeader(row, headers, ["status", "状态", "审核状态"]) || "archived",
       raw_data: rawData,
     };
 
+    const hasMeaningfulData = [
+      item.college_name,
+      item.student_id,
+      item.name,
+      item.id_card,
+      item.difficulty_level,
+    ].some((value) => !isNoisyCell(value));
+    if (!hasMeaningfulData) return;
+
+    total += 1;
     if (!item.id_card && !item.student_id) {
       failures.push(`第 ${excelRowNumber} 行失败：身份证号和学号至少需要填写一个`);
       return;
@@ -473,10 +528,18 @@ export default function AdminStudentsPage() {
     setImportStats({ total: 0, inserted: 0, updated: 0, skipped: 0, failed: 0 });
     try {
       const workbook = await readWorkbook(historicalFile);
-      const sheetName = workbook.sheetNames.find((name) => (workbook.sheets[name] || []).length > 0) || workbook.sheetNames[0];
-      if (!sheetName) throw new Error("Excel 中未找到可读取的工作表");
+      const sheetName = pickHistoricalSheetName(workbook);
+      if (!sheetName) {
+        throw new Error(`Excel 中未找到可读取的困难生历史总表。已读取 Sheet：${workbook.sheetNames.join("、") || "无"}`);
+      }
 
       const parsed = parseHistoricalRows(workbook.sheets[sheetName] || [], historicalYear);
+      const headers = ((workbook.sheets[sheetName] || [])[parsed.headerIndex] || [])
+        .map(normalizeHeader)
+        .filter(Boolean);
+      pushImportLog(`读取文件：${historicalFile.name}`);
+      pushImportLog(`读取到的 Sheet：${workbook.sheetNames.join("、")}`);
+      pushImportLog(`实际使用 Sheet：${sheetName}；表头第 ${parsed.headerIndex + 1} 行；识别字段：${headers.join("、") || "无"}`);
       const seenKeys = new Set<string>();
       const dedupedRows: HistoricalImportRow[] = [];
       let skipped = 0;
