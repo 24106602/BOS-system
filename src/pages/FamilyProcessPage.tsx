@@ -212,7 +212,7 @@ const button = (background: string): CSSProperties => ({
 });
 
 const pageStyles: Record<string, CSSProperties> = {
-  page: { display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12, alignItems: "start" },
+  page: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(300px, 34%)", gap: 12, alignItems: "start" },
   mainColumn: { display: "grid", gap: 12, minWidth: 0 },
   card: { background: "#fff", borderRadius: 8, border: "1px solid #d7e1ed", padding: 16, boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0 },
   header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 },
@@ -241,8 +241,8 @@ const pageStyles: Record<string, CSSProperties> = {
   activeTab: { border: "1px solid #0077d4", borderRadius: 6, padding: "8px 12px", background: "#0077d4", color: "#fff", fontWeight: 800, cursor: "pointer" },
   empty: { color: "#8190a4", padding: 12 },
   problemItem: { background: "#fff1f2", color: "#b42336", padding: 10, borderRadius: 6, marginBottom: 8 },
-  logPanel: { padding: 16, borderRadius: 8, background: "#0b1428", overflow: "hidden" },
+  logPanel: { position: "sticky", top: 18, padding: 16, borderRadius: 8, background: "#0b1428", overflow: "hidden", maxHeight: "calc(100vh - 36px)" },
   logTitle: { color: "#e5efff", fontSize: 18, margin: "0 0 12px" },
-  logBox: { maxHeight: 320, overflowY: "auto", fontFamily: "Consolas, monospace", fontSize: 13, lineHeight: 1.6 },
+  logBox: { maxHeight: "calc(100vh - 110px)", overflowY: "auto", fontFamily: "Consolas, monospace", fontSize: 13, lineHeight: 1.6 },
   logItem: { color: "#fff", whiteSpace: "pre-line", marginBottom: 10 },
 };
