@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import * as XLSX from "xlsx-js-style";
 import { getMergeBatches } from "../../db/localMergeDb";
 import { isSupabaseConfigured, supabase } from "../../lib/supabaseClient";
@@ -16,6 +16,8 @@ type MergedDifficultyRow = {
   name: string;
   studentId: string;
   idCard: string;
+  grade: string;
+  gender: string;
   difficultyLevel: string;
   familyMembers: string[];
   relationStatus: string;
@@ -28,13 +30,17 @@ type CloudStudentRow = {
   student_id?: string | null;
   name?: string | null;
   id_card?: string | null;
+  grade?: string | null;
+  gender?: string | null;
   difficulty_level?: string | null;
   status?: string | null;
+  raw_data?: Record<string, unknown> | null;
 };
 
 type HistoricalImportStats = {
   total: number;
-  success: number;
+  inserted: number;
+  updated: number;
   skipped: number;
   failed: number;
 };
@@ -45,8 +51,20 @@ type HistoricalImportRow = {
   student_id: string;
   name: string;
   id_card: string;
+  grade: string;
+  gender: string;
   difficulty_level: string;
   status: string;
+  raw_data: Record<string, unknown>;
+};
+
+type SearchFilters = {
+  name: string;
+  studentId: string;
+  collegeName: string;
+  idCard: string;
+  grade: string;
+  gender: string;
 };
 
 const columns = [
@@ -54,6 +72,8 @@ const columns = [
   "姓名",
   "学号",
   "身份证号",
+  "年级",
+  "性别",
   "困难等级",
   "家庭成员数量",
   "家庭成员1",
@@ -80,6 +100,59 @@ const normalizeIdCard = (value: string) => value.replace(/\s|-/g, "").toUpperCas
 
 const makeStudentKey = (row: Pick<HistoricalImportRow, "id_card" | "student_id">) =>
   normalizeIdCard(row.id_card) || row.student_id.trim();
+
+const emptyFilters: SearchFilters = {
+  name: "",
+  studentId: "",
+  collegeName: "",
+  idCard: "",
+  grade: "",
+  gender: "",
+};
+
+const logSupabaseError = (title: string, error: unknown) => {
+  const detail = error as { message?: string; details?: string; hint?: string; code?: string };
+  console.error(title, {
+    message: detail?.message,
+    details: detail?.details,
+    hint: detail?.hint,
+    code: detail?.code,
+    error,
+  });
+};
+
+const formatSupabaseError = (error: unknown) => {
+  const detail = error as { message?: string; details?: string; hint?: string; code?: string };
+  return [
+    detail?.message,
+    detail?.details ? `details: ${detail.details}` : "",
+    detail?.hint ? `hint: ${detail.hint}` : "",
+    detail?.code ? `code: ${detail.code}` : "",
+  ].filter(Boolean).join("；") || "未知 Supabase 错误";
+};
+
+const makeFullStudentPayload = (row: HistoricalImportRow) => ({
+  academic_year: row.academic_year,
+  college_name: row.college_name,
+  student_id: row.student_id,
+  name: row.name,
+  id_card: row.id_card,
+  grade: row.grade,
+  gender: row.gender,
+  difficulty_level: row.difficulty_level,
+  status: row.status,
+  raw_data: row.raw_data,
+});
+
+const makeCompatibleStudentPayload = (row: HistoricalImportRow) => ({
+  academic_year: row.academic_year,
+  college_name: row.college_name,
+  student_id: row.student_id,
+  name: row.name,
+  id_card: row.id_card,
+  difficulty_level: row.difficulty_level,
+  status: row.status,
+});
 
 const makeMergedRows = (batches: CollegeProcessedBatch[]): MergedDifficultyRow[] => {
   const studentRows = batches.filter((item) => item.dataType === "student");
@@ -113,6 +186,8 @@ const makeMergedRows = (batches: CollegeProcessedBatch[]): MergedDifficultyRow[]
         name: getText(row, ["name", "姓名", "学生姓名"]),
         studentId: getText(row, ["student_id", "学号", "学生学号", "学生编号"]),
         idCard,
+        grade: getText(row, ["grade", "年级", "所在年级"]),
+        gender: getText(row, ["gender", "性别"]),
         difficultyLevel: getText(row, ["difficulty_level", "困难等级", "困难认定等级", "特殊困难类型", "认定等级"]),
         familyMembers,
         relationStatus,
@@ -127,6 +202,8 @@ const makeCloudMergedRows = (rows: CloudStudentRow[]): MergedDifficultyRow[] =>
     name: String(row.name || ""),
     studentId: String(row.student_id || ""),
     idCard: normalizeIdCard(String(row.id_card || "")),
+    grade: String(row.grade || ""),
+    gender: String(row.gender || ""),
     difficultyLevel: String(row.difficulty_level || ""),
     familyMembers: [],
     relationStatus: row.status === "archived" ? "管理员归档" : "云端学生主信息",
@@ -160,7 +237,9 @@ const findHistoricalHeaderIndex = (rows: unknown[][]) => {
       ["姓名", "学生姓名", "name"],
       ["学号", "学生学号", "student_id"],
       ["身份证号", "身份证件号", "id_card"],
-      ["学院", "院系", "学部", "college_name"],
+      ["学院", "学院名称", "学部", "学部院", "院系", "college_name"],
+      ["年级", "grade"],
+      ["性别", "gender"],
       ["困难等级", "困难档次", "困难认定等级", "difficulty_level"],
     ].reduce((sum, aliases) => (
       headers.some((header) => aliases.some((alias) => header.includes(normalizeHeader(alias)))) ? sum + 1 : sum
@@ -194,20 +273,23 @@ const parseHistoricalRows = (rows: unknown[][], academicYear: string) => {
     if (row.every((cell) => !String(cell ?? "").trim())) return;
     total += 1;
     const excelRowNumber = headerIndex + index + 2;
+    const rawData = headers.reduce<Record<string, unknown>>((record, header, columnIndex) => {
+      if (header) record[header] = row[columnIndex] ?? "";
+      return record;
+    }, {});
     const item: HistoricalImportRow = {
       academic_year: academicYear,
-      college_name: getRowValueByHeader(row, headers, ["college_name", "学院", "院系", "学部", "院系名称"]) || "未填学院",
+      college_name: getRowValueByHeader(row, headers, ["college_name", "学部（院）", "学部院", "学院", "学院名称", "院系", "学部", "院系名称"]) || "未填学院",
       student_id: getRowValueByHeader(row, headers, ["student_id", "学号", "学生学号", "学生编号"]),
       name: getRowValueByHeader(row, headers, ["name", "姓名", "学生姓名"]),
-      id_card: normalizeIdCard(getRowValueByHeader(row, headers, ["id_card", "身份证号", "身份证件号", "证件号", "学生身份证号"])),
+      id_card: normalizeIdCard(getRowValueByHeader(row, headers, ["id_card", "身份证", "身份证号", "身份证件号", "证件号", "学生身份证号"])),
+      grade: getRowValueByHeader(row, headers, ["grade", "年级", "所在年级"]),
+      gender: getRowValueByHeader(row, headers, ["gender", "性别"]),
       difficulty_level: getRowValueByHeader(row, headers, ["difficulty_level", "困难等级", "困难档次", "困难认定等级", "认定等级", "特殊困难类型"]),
-      status: "archived",
+      status: getRowValueByHeader(row, headers, ["status", "状态", "审核状态"]) || "archived",
+      raw_data: rawData,
     };
 
-    if (!item.name) {
-      failures.push(`第 ${excelRowNumber} 行失败：缺少姓名`);
-      return;
-    }
     if (!item.id_card && !item.student_id) {
       failures.push(`第 ${excelRowNumber} 行失败：身份证号和学号至少需要填写一个`);
       return;
@@ -224,29 +306,62 @@ export default function AdminStudentsPage() {
   const [historicalYear, setHistoricalYear] = useState(getCurrentAcademicYear());
   const [historicalFile, setHistoricalFile] = useState<File | null>(null);
   const [cloudStudents, setCloudStudents] = useState<CloudStudentRow[]>([]);
-  const [importStats, setImportStats] = useState<HistoricalImportStats>({ total: 0, success: 0, skipped: 0, failed: 0 });
+  const [importStats, setImportStats] = useState<HistoricalImportStats>({ total: 0, inserted: 0, updated: 0, skipped: 0, failed: 0 });
   const [importLogs, setImportLogs] = useState<string[]>([]);
   const [isImporting, setIsImporting] = useState(false);
+  const [isLoadingDatabase, setIsLoadingDatabase] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>(emptyFilters);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     getMergeBatches().then(setBatches);
   }, []);
 
-  useEffect(() => {
-    if (!isSupabaseConfigured) return;
-    supabase
+  const loadCloudStudents = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setCloudStudents([]);
+      setLoadError("读取困难生数据库失败：请先配置 Supabase 环境变量。");
+      return;
+    }
+
+    setIsLoadingDatabase(true);
+    setLoadError("");
+    const fullSelect = "id,academic_year,college_name,student_id,name,id_card,grade,gender,difficulty_level,status,raw_data";
+    const { data, error } = await supabase
+      .from("students")
+      .select(fullSelect)
+      .eq("academic_year", academicYear);
+
+    if (!error) {
+      setCloudStudents((data || []) as CloudStudentRow[]);
+      setIsLoadingDatabase(false);
+      return;
+    }
+
+    logSupabaseError("读取困难生数据库失败", error);
+    const { data: fallbackData, error: fallbackError } = await supabase
       .from("students")
       .select("id,academic_year,college_name,student_id,name,id_card,difficulty_level,status")
-      .eq("academic_year", academicYear)
-      .then(({ data, error }) => {
-        if (error) {
-          console.error("Failed to load archived hardship students:", error);
-          return;
-        }
-        setCloudStudents((data || []) as CloudStudentRow[]);
-      });
+      .eq("academic_year", academicYear);
+
+    if (fallbackError) {
+      logSupabaseError("读取困难生数据库兼容字段失败", fallbackError);
+      setCloudStudents([]);
+      setLoadError(`读取困难生数据库失败：${formatSupabaseError(fallbackError)}`);
+    } else {
+      setCloudStudents((fallbackData || []) as CloudStudentRow[]);
+      setLoadError(`读取困难生数据库部分字段失败：${formatSupabaseError(error)}。已用兼容字段显示数据，请检查 students 表是否包含 grade、gender、raw_data。`);
+    }
+    setIsLoadingDatabase(false);
   }, [academicYear]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadCloudStudents();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadCloudStudents]);
 
   const yearBatches = useMemo(
     () => batches.filter((item) => isBatchInAcademicYear(item, academicYear)),
@@ -256,6 +371,32 @@ export default function AdminStudentsPage() {
     () => mergeDatabaseRows(makeMergedRows(yearBatches), makeCloudMergedRows(cloudStudents)),
     [yearBatches, cloudStudents]
   );
+  const availableColleges = useMemo(
+    () => Array.from(new Set(mergedRows.map((row) => row.collegeName).filter(Boolean))).sort(),
+    [mergedRows]
+  );
+  const availableGrades = useMemo(
+    () => Array.from(new Set(mergedRows.map((row) => row.grade).filter(Boolean))).sort(),
+    [mergedRows]
+  );
+  const filteredRows = useMemo(() => {
+    const name = searchFilters.name.trim();
+    const studentId = searchFilters.studentId.trim();
+    const collegeName = searchFilters.collegeName.trim();
+    const idCard = normalizeIdCard(searchFilters.idCard.trim());
+    const grade = searchFilters.grade.trim();
+    const gender = searchFilters.gender.trim();
+
+    return mergedRows.filter((row) => {
+      if (name && !row.name.includes(name)) return false;
+      if (studentId && !row.studentId.includes(studentId)) return false;
+      if (collegeName && row.collegeName !== collegeName && !row.collegeName.includes(collegeName)) return false;
+      if (idCard && !normalizeIdCard(row.idCard).includes(idCard)) return false;
+      if (grade && row.grade !== grade && !row.grade.includes(grade)) return false;
+      if (gender && row.gender !== gender) return false;
+      return true;
+    });
+  }, [mergedRows, searchFilters]);
   const studentCount = yearBatches.filter((item) => item.dataType === "student").reduce((sum, item) => sum + item.rowCount, 0);
   const familyCount = yearBatches.filter((item) => item.dataType === "family").reduce((sum, item) => sum + item.rowCount, 0);
   const linkedCount = mergedRows.filter((item) => item.relationStatus === "已关联").length;
@@ -273,6 +414,8 @@ export default function AdminStudentsPage() {
       姓名: row.name,
       学号: row.studentId,
       身份证号: row.idCard,
+      年级: row.grade,
+      性别: row.gender,
       困难等级: row.difficultyLevel,
       家庭成员数量: row.familyMembers.length,
       家庭成员1: row.familyMembers[0] || "",
@@ -291,6 +434,30 @@ export default function AdminStudentsPage() {
     setImportLogs((current) => [`[${new Date().toLocaleTimeString()}] ${message}`, ...current].slice(0, 80));
   };
 
+  const writeHistoricalStudent = async (row: HistoricalImportRow, existing?: CloudStudentRow) => {
+    const fullPayload = makeFullStudentPayload(row);
+    const compatiblePayload = makeCompatibleStudentPayload(row);
+    const action = existing?.id !== undefined
+      ? supabase.from("students").update(fullPayload).eq("id", existing.id)
+      : supabase.from("students").insert(fullPayload);
+    const { error } = await action;
+
+    if (!error) return { ok: true, fallback: false };
+
+    logSupabaseError(existing?.id !== undefined ? "Historical student update failed" : "Historical student insert failed", error);
+    pushImportLog(`${existing?.id !== undefined ? "更新" : "新增"}兼容重试：${row.name || row.student_id || row.id_card}，${formatSupabaseError(error)}`);
+
+    const fallbackAction = existing?.id !== undefined
+      ? supabase.from("students").update(compatiblePayload).eq("id", existing.id)
+      : supabase.from("students").insert(compatiblePayload);
+    const { error: fallbackError } = await fallbackAction;
+
+    if (!fallbackError) return { ok: true, fallback: true };
+
+    logSupabaseError(existing?.id !== undefined ? "Historical student fallback update failed" : "Historical student fallback insert failed", fallbackError);
+    return { ok: false, fallback: false, error: fallbackError };
+  };
+
   const importHistoricalData = async () => {
     if (!historicalFile) {
       alert("请先选择往年困难生数据库文件");
@@ -303,7 +470,7 @@ export default function AdminStudentsPage() {
     }
 
     setIsImporting(true);
-    setImportStats({ total: 0, success: 0, skipped: 0, failed: 0 });
+    setImportStats({ total: 0, inserted: 0, updated: 0, skipped: 0, failed: 0 });
     try {
       const workbook = await readWorkbook(historicalFile);
       const sheetName = workbook.sheetNames.find((name) => (workbook.sheets[name] || []).length > 0) || workbook.sheetNames[0];
@@ -328,7 +495,10 @@ export default function AdminStudentsPage() {
         .from("students")
         .select("id,student_id,id_card,academic_year")
         .eq("academic_year", historicalYear);
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        logSupabaseError("查询同学年已有困难生失败", fetchError);
+        throw new Error(`查询同学年已有困难生失败：${formatSupabaseError(fetchError)}`);
+      }
 
       const existingMap = new Map<string, CloudStudentRow>();
       ((existingRows || []) as CloudStudentRow[]).forEach((row) => {
@@ -336,47 +506,35 @@ export default function AdminStudentsPage() {
         if (key) existingMap.set(key, row);
       });
 
-      let success = 0;
+      let inserted = 0;
+      let updated = 0;
       let failed = parsed.failures.length;
       for (const row of dedupedRows) {
         const key = makeStudentKey(row);
         const existing = existingMap.get(key);
-        if (existing?.id !== undefined) {
-          const { error } = await supabase.from("students").update(row).eq("id", existing.id);
-          if (error) {
-            failed += 1;
-            console.error("Historical student update failed:", error, row);
-            pushImportLog(`更新失败：${row.name}，${error.message}`);
-          } else {
-            success += 1;
-            pushImportLog(`已更新：${row.name}（${historicalYear}）`);
-          }
+        const result = await writeHistoricalStudent(row, existing);
+        const label = row.name || row.student_id || row.id_card || "未命名";
+        if (!result.ok) {
+          failed += 1;
+          pushImportLog(`${existing?.id !== undefined ? "更新" : "导入"}失败：${label}，${formatSupabaseError(result.error)}`);
+        } else if (existing?.id !== undefined) {
+          updated += 1;
+          pushImportLog(`已更新：${label}（${historicalYear}）${result.fallback ? "，已用兼容字段写入" : ""}`);
         } else {
-          const { error } = await supabase.from("students").insert(row);
-          if (error) {
-            failed += 1;
-            console.error("Historical student insert failed:", error, row);
-            pushImportLog(`导入失败：${row.name}，${error.message}`);
-          } else {
-            success += 1;
-            pushImportLog(`已导入：${row.name}（${historicalYear}）`);
-          }
+          inserted += 1;
+          pushImportLog(`已新增：${label}（${historicalYear}）${result.fallback ? "，已用兼容字段写入" : ""}`);
         }
       }
 
       parsed.failures.forEach(pushImportLog);
-      setImportStats({ total: parsed.total, success, skipped, failed });
-      pushImportLog(`导入完成：工作表 ${sheetName}，表头第 ${parsed.headerIndex + 1} 行，成功 ${success} 条，跳过 ${skipped} 条，失败 ${failed} 条`);
+      setImportStats({ total: parsed.total, inserted, updated, skipped, failed });
+      pushImportLog(`导入完成：工作表 ${sheetName}，表头第 ${parsed.headerIndex + 1} 行，新增 ${inserted} 条，更新 ${updated} 条，跳过 ${skipped} 条，失败 ${failed} 条`);
       if (historicalYear === academicYear) {
-        const { data } = await supabase
-          .from("students")
-          .select("id,academic_year,college_name,student_id,name,id_card,difficulty_level,status")
-          .eq("academic_year", academicYear);
-        setCloudStudents((data || []) as CloudStudentRow[]);
+        await loadCloudStudents();
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "往年数据导入失败";
-      console.error("Historical hardship import failed:", error);
+      logSupabaseError("Historical hardship import failed", error);
       setImportStats((current) => ({ ...current, failed: current.failed + 1 }));
       pushImportLog(`导入失败：${message}`);
       alert(message);
@@ -393,7 +551,7 @@ export default function AdminStudentsPage() {
           <div style={styles.eyebrow}>困难生业务 / 系统自动关联</div>
           <h1 style={styles.title}>困难生数据库</h1>
           <p style={styles.description}>
-            困难生数据库按学年归档，由系统自动合并本专科信息汇总和家庭成员信息汇总生成，学院不直接上传困难生数据库。
+            困难生数据库由系统按学年归档管理。管理员可导入往年困难生数据库，数据保存到后端信息库 Supabase，刷新页面后仍然保留。
           </p>
         </div>
         <div style={styles.headerActions}>
@@ -421,7 +579,7 @@ export default function AdminStudentsPage() {
         <div style={styles.sectionHead}>
           <div>
             <h2 style={styles.subTitle}>上载往年数据</h2>
-            <p style={styles.description}>管理员可直接归档往年困难生数据库 Excel，数据会按所选 academic_year 写入 students 表，不走学院端上载流程。</p>
+            <p style={styles.description}>用于导入已有历史名单，例如 2024-2025 学年困难生名单。数据会按所选 academic_year 写入 students 表，不走学部（院）端上载流程。</p>
           </div>
           <span style={styles.badge}>学校管理员归档</span>
         </div>
@@ -451,10 +609,12 @@ export default function AdminStudentsPage() {
         </div>
         <div style={styles.importStats}>
           <Stat label="总行数" value={importStats.total} />
-          <Stat label="成功导入数" value={importStats.success} tone="#087b5b" />
+          <Stat label="成功新增" value={importStats.inserted} tone="#087b5b" />
+          <Stat label="成功更新" value={importStats.updated} tone="#0077d4" />
           <Stat label="跳过重复数" value={importStats.skipped} tone="#a16207" />
           <Stat label="失败数" value={importStats.failed} tone="#c2414d" />
         </div>
+        <div style={styles.yearHint}>当前归档学年：{historicalYear}</div>
         <div style={styles.importLogBox}>
           {importLogs.length === 0 ? (
             <div style={styles.importLogItem}>暂无导入日志</div>
@@ -468,23 +628,93 @@ export default function AdminStudentsPage() {
         <div style={styles.sectionHead}>
           <div>
             <h2 style={styles.subTitle}>当前学年困难生数据库明细表</h2>
-            <p style={styles.description}>当前展示 {academicYear} 学年数据，切换学年后统计和明细会同步变化。</p>
+            <p style={styles.description}>
+              可按姓名、学号、学部（院）、身份证号、年级、性别查找学生。当前显示 {filteredRows.length} 条 / 当前学年共 {mergedRows.length} 条。
+            </p>
           </div>
           <span style={styles.badge}>按 id_card = student_id_card 自动生成</span>
+        </div>
+        {isLoadingDatabase && <div style={styles.infoMessage}>正在加载困难生数据库……</div>}
+        {loadError && <div style={styles.errorMessage}>{loadError}</div>}
+        <div style={styles.searchGrid}>
+          <label style={styles.fieldLabel}>
+            姓名
+            <input
+              style={styles.searchInput}
+              value={searchFilters.name}
+              onChange={(event) => setSearchFilters((current) => ({ ...current, name: event.target.value }))}
+              placeholder="支持模糊查询"
+            />
+          </label>
+          <label style={styles.fieldLabel}>
+            学号
+            <input
+              style={styles.searchInput}
+              value={searchFilters.studentId}
+              onChange={(event) => setSearchFilters((current) => ({ ...current, studentId: event.target.value }))}
+              placeholder="输入学号"
+            />
+          </label>
+          <label style={styles.fieldLabel}>
+            学部（院）
+            <select
+              style={styles.searchInput}
+              value={searchFilters.collegeName}
+              onChange={(event) => setSearchFilters((current) => ({ ...current, collegeName: event.target.value }))}
+            >
+              <option value="">全部</option>
+              {availableColleges.map((college) => <option key={college} value={college}>{college}</option>)}
+            </select>
+          </label>
+          <label style={styles.fieldLabel}>
+            身份证号
+            <input
+              style={styles.searchInput}
+              value={searchFilters.idCard}
+              onChange={(event) => setSearchFilters((current) => ({ ...current, idCard: event.target.value }))}
+              placeholder="输入身份证号"
+            />
+          </label>
+          <label style={styles.fieldLabel}>
+            年级
+            <select
+              style={styles.searchInput}
+              value={searchFilters.grade}
+              onChange={(event) => setSearchFilters((current) => ({ ...current, grade: event.target.value }))}
+            >
+              <option value="">全部</option>
+              {availableGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+            </select>
+          </label>
+          <label style={styles.fieldLabel}>
+            性别
+            <select
+              style={styles.searchInput}
+              value={searchFilters.gender}
+              onChange={(event) => setSearchFilters((current) => ({ ...current, gender: event.target.value }))}
+            >
+              <option value="">全部</option>
+              <option value="男">男</option>
+              <option value="女">女</option>
+            </select>
+          </label>
+          <button style={styles.secondaryButton} onClick={() => setSearchFilters(emptyFilters)}>重置筛选</button>
         </div>
         <div style={styles.tableWrap}>
           <table style={styles.table}>
             <thead><tr>{columns.map((column) => <th key={column} style={styles.th}>{column}</th>)}</tr></thead>
             <tbody>
-              {mergedRows.length === 0 ? (
-                <tr><td style={styles.empty} colSpan={columns.length}>暂无当前学年已合并数据</td></tr>
+              {filteredRows.length === 0 ? (
+                <tr><td style={styles.empty} colSpan={columns.length}>{mergedRows.length === 0 ? "暂无当前学年已合并数据" : "没有符合筛选条件的数据"}</td></tr>
               ) : (
-                mergedRows.map((row) => (
+                filteredRows.map((row) => (
                   <tr key={`${row.collegeName}_${row.idCard}_${row.studentId}`}>
                     <td style={styles.td}>{row.collegeName}</td>
                     <td style={styles.td}>{row.name || "-"}</td>
                     <td style={styles.td}>{row.studentId || "-"}</td>
                     <td style={styles.td}>{row.idCard || "-"}</td>
+                    <td style={styles.td}>{row.grade || "-"}</td>
+                    <td style={styles.td}>{row.gender || "-"}</td>
                     <td style={styles.td}>{row.difficultyLevel || "-"}</td>
                     <td style={styles.td}>{row.familyMembers.length}</td>
                     <td style={styles.td}>{row.familyMembers[0] || "-"}</td>
@@ -512,34 +742,40 @@ function Stat({ label, value, tone = "#0077d4" }: { label: string; value: number
 }
 
 const styles: Record<string, CSSProperties> = {
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 14, padding: 18, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, marginBottom: 10, padding: 14, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
   headerActions: { display: "flex", alignItems: "end", gap: 10, flexWrap: "wrap" },
   eyebrow: { color: "#0077d4", fontSize: 12, fontWeight: 800, marginBottom: 5 },
-  title: { margin: 0, color: "#172033", fontSize: 24 },
-  description: { color: "#63738a", fontSize: 13, lineHeight: 1.7, margin: "8px 0 0" },
+  title: { margin: 0, color: "#172033", fontSize: 22 },
+  description: { color: "#63738a", fontSize: 12, lineHeight: 1.55, margin: "6px 0 0" },
   yearSelectLabel: { display: "grid", gap: 5, color: "#40526a", fontSize: 12, fontWeight: 700 },
-  yearSelect: { minWidth: 132, border: "1px solid #cfdbe7", borderRadius: 6, padding: "9px 10px", color: "#15304f", background: "#fff", fontSize: 13 },
-  exportButton: { border: "none", borderRadius: 6, padding: "10px 14px", background: "#0077d4", color: "#fff", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
-  secondaryButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "10px 12px", background: "#fff", color: "#26364e", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
-  importButton: { border: "none", borderRadius: 6, padding: "10px 14px", background: "#0b9b6f", color: "#fff", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
-  disabledButton: { border: "none", borderRadius: 6, padding: "10px 14px", background: "#a6b4c5", color: "#fff", cursor: "not-allowed", fontWeight: 700, whiteSpace: "nowrap" },
-  stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 14 },
-  stat: { background: "#fff", border: "1px solid #d7e1ed", borderRadius: 8, padding: 14 },
-  statLabel: { color: "#63738a", marginBottom: 7, fontSize: 13 },
-  statValue: { fontSize: 24 },
-  card: { background: "#fff", border: "1px solid #d7e1ed", borderRadius: 8, padding: 16, marginBottom: 14 },
-  sectionHead: { display: "flex", justifyContent: "space-between", gap: 14, alignItems: "center", marginBottom: 12 },
-  subTitle: { margin: 0, color: "#172033", fontSize: 17 },
+  yearSelect: { minWidth: 132, border: "1px solid #cfdbe7", borderRadius: 6, padding: "8px 10px", color: "#15304f", background: "#fff", fontSize: 13 },
+  exportButton: { border: "none", borderRadius: 6, padding: "9px 12px", background: "#0077d4", color: "#fff", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
+  secondaryButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "9px 11px", background: "#fff", color: "#26364e", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
+  importButton: { border: "none", borderRadius: 6, padding: "9px 12px", background: "#0b9b6f", color: "#fff", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
+  disabledButton: { border: "none", borderRadius: 6, padding: "9px 12px", background: "#a6b4c5", color: "#fff", cursor: "not-allowed", fontWeight: 700, whiteSpace: "nowrap" },
+  stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 8, marginBottom: 10 },
+  stat: { background: "#fff", border: "1px solid #d7e1ed", borderRadius: 8, padding: 10 },
+  statLabel: { color: "#63738a", marginBottom: 5, fontSize: 12 },
+  statValue: { fontSize: 20 },
+  card: { background: "#fff", border: "1px solid #d7e1ed", borderRadius: 8, padding: 12, marginBottom: 10 },
+  sectionHead: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 8 },
+  subTitle: { margin: 0, color: "#172033", fontSize: 16 },
   badge: { padding: "5px 8px", borderRadius: 999, background: "#e8f4ff", color: "#0077d4", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" },
-  importGrid: { display: "grid", gridTemplateColumns: "minmax(150px, 180px) minmax(260px, 1fr) auto", gap: 10, alignItems: "end", marginTop: 12 },
+  importGrid: { display: "grid", gridTemplateColumns: "minmax(150px, 180px) minmax(260px, 1fr) auto", gap: 8, alignItems: "end", marginTop: 8 },
   filePicker: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
   fileName: { color: "#63738a", fontSize: 13 },
-  importStats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginTop: 12 },
-  importLogBox: { marginTop: 12, maxHeight: 180, overflowY: "auto", border: "1px solid #d7e1ed", borderRadius: 6, background: "#f8fbfe", padding: 10 },
-  importLogItem: { color: "#52647b", fontSize: 13, lineHeight: 1.6, marginBottom: 6 },
-  tableWrap: { overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  th: { background: "#edf4fa", color: "#40526a", padding: 9, textAlign: "center", whiteSpace: "nowrap" },
-  td: { borderTop: "1px solid #e3ebf3", padding: 9, color: "#52647b", textAlign: "center", whiteSpace: "nowrap" },
-  empty: { borderTop: "1px solid #e3ebf3", padding: 18, color: "#8190a4", textAlign: "center" },
+  importStats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(105px, 1fr))", gap: 8, marginTop: 10 },
+  yearHint: { marginTop: 8, color: "#40526a", fontSize: 12, fontWeight: 700 },
+  importLogBox: { marginTop: 8, maxHeight: 220, overflowY: "auto", border: "1px solid #d7e1ed", borderRadius: 6, background: "#f8fbfe", padding: 8 },
+  importLogItem: { color: "#52647b", fontSize: 12, lineHeight: 1.5, marginBottom: 5 },
+  searchGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, alignItems: "end", marginBottom: 10 },
+  fieldLabel: { display: "grid", gap: 4, color: "#40526a", fontSize: 12, fontWeight: 700 },
+  searchInput: { border: "1px solid #cfdbe7", borderRadius: 6, padding: "8px 9px", color: "#15304f", background: "#fff", fontSize: 13, minWidth: 0 },
+  infoMessage: { marginBottom: 8, border: "1px solid #c6e2ff", background: "#f1f8ff", color: "#075f9e", borderRadius: 6, padding: "8px 10px", fontSize: 12, fontWeight: 700 },
+  errorMessage: { marginBottom: 8, border: "1px solid #f4c7c7", background: "#fff4f4", color: "#b4232d", borderRadius: 6, padding: "8px 10px", fontSize: 12, fontWeight: 700 },
+  tableWrap: { overflow: "auto", maxHeight: "46vh", minHeight: 220, border: "1px solid #d7e1ed", borderRadius: 6 },
+  table: { width: "100%", borderCollapse: "collapse", fontSize: 12 },
+  th: { position: "sticky", top: 0, zIndex: 1, background: "#edf4fa", color: "#40526a", padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" },
+  td: { borderTop: "1px solid #e3ebf3", padding: "7px 8px", color: "#52647b", textAlign: "center", whiteSpace: "nowrap" },
+  empty: { borderTop: "1px solid #e3ebf3", padding: 16, color: "#8190a4", textAlign: "center" },
 };
