@@ -608,7 +608,7 @@ export default function AdminStudentsPage() {
   };
 
   return (
-    <section>
+    <section style={styles.page}>
       <div style={styles.header}>
         <div>
           <div style={styles.eyebrow}>困难生业务 / 系统自动关联</div>
@@ -638,7 +638,7 @@ export default function AdminStudentsPage() {
         <Stat label="当前学年家庭成员匹配异常数" value={familyIssueCount} tone="#c2414d" />
       </div>
 
-      <section style={styles.card}>
+      <section style={{ ...styles.card, ...styles.importCard }}>
         <div style={styles.sectionHead}>
           <div>
             <h2 style={styles.subTitle}>上载往年数据</h2>
@@ -687,7 +687,7 @@ export default function AdminStudentsPage() {
         </div>
       </section>
 
-      <section style={styles.card}>
+      <section style={{ ...styles.card, ...styles.detailCard }}>
         <div style={styles.sectionHead}>
           <div>
             <h2 style={styles.subTitle}>当前学年困难生数据库明细表</h2>
@@ -805,6 +805,7 @@ function Stat({ label, value, tone = "#0077d4" }: { label: string; value: number
 }
 
 const styles: Record<string, CSSProperties> = {
+  page: { height: "calc(100vh - 104px)", minHeight: 720, display: "grid", gridTemplateRows: "auto auto minmax(190px, 0.7fr) minmax(0, 1.3fr)", gap: 10, overflow: "hidden" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, marginBottom: 10, padding: 14, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
   headerActions: { display: "flex", alignItems: "end", gap: 10, flexWrap: "wrap" },
   eyebrow: { color: "#0077d4", fontSize: 12, fontWeight: 800, marginBottom: 5 },
@@ -816,27 +817,29 @@ const styles: Record<string, CSSProperties> = {
   secondaryButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "9px 11px", background: "#fff", color: "#26364e", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
   importButton: { border: "none", borderRadius: 6, padding: "9px 12px", background: "#0b9b6f", color: "#fff", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
   disabledButton: { border: "none", borderRadius: 6, padding: "9px 12px", background: "#a6b4c5", color: "#fff", cursor: "not-allowed", fontWeight: 700, whiteSpace: "nowrap" },
-  stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 8, marginBottom: 10 },
-  stat: { background: "#fff", border: "1px solid #d7e1ed", borderRadius: 8, padding: 10 },
+  stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 8 },
+  stat: { height: 64, boxSizing: "border-box", background: "#fff", border: "1px solid #d7e1ed", borderRadius: 8, padding: 10 },
   statLabel: { color: "#63738a", marginBottom: 5, fontSize: 12 },
   statValue: { fontSize: 20 },
-  card: { background: "#fff", border: "1px solid #d7e1ed", borderRadius: 8, padding: 12, marginBottom: 10 },
+  card: { minHeight: 0, background: "#fff", border: "1px solid #d7e1ed", borderRadius: 8, padding: 12, overflow: "hidden" },
+  importCard: { display: "grid", gridTemplateRows: "auto auto auto auto minmax(0, 1fr)", gap: 6 },
+  detailCard: { display: "flex", flexDirection: "column" },
   sectionHead: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 8 },
   subTitle: { margin: 0, color: "#172033", fontSize: 16 },
   badge: { padding: "5px 8px", borderRadius: 999, background: "#e8f4ff", color: "#0077d4", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" },
   importGrid: { display: "grid", gridTemplateColumns: "minmax(150px, 180px) minmax(260px, 1fr) auto", gap: 8, alignItems: "end", marginTop: 8 },
   filePicker: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
   fileName: { color: "#63738a", fontSize: 13 },
-  importStats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(105px, 1fr))", gap: 8, marginTop: 10 },
-  yearHint: { marginTop: 8, color: "#40526a", fontSize: 12, fontWeight: 700 },
-  importLogBox: { marginTop: 8, maxHeight: 220, overflowY: "auto", border: "1px solid #d7e1ed", borderRadius: 6, background: "#f8fbfe", padding: 8 },
+  importStats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(105px, 1fr))", gap: 8 },
+  yearHint: { color: "#40526a", fontSize: 12, fontWeight: 700 },
+  importLogBox: { minHeight: 0, maxHeight: 220, overflowY: "auto", border: "1px solid #d7e1ed", borderRadius: 6, background: "#f8fbfe", padding: 8 },
   importLogItem: { color: "#52647b", fontSize: 12, lineHeight: 1.5, marginBottom: 5 },
   searchGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, alignItems: "end", marginBottom: 10 },
   fieldLabel: { display: "grid", gap: 4, color: "#40526a", fontSize: 12, fontWeight: 700 },
   searchInput: { border: "1px solid #cfdbe7", borderRadius: 6, padding: "8px 9px", color: "#15304f", background: "#fff", fontSize: 13, minWidth: 0 },
   infoMessage: { marginBottom: 8, border: "1px solid #c6e2ff", background: "#f1f8ff", color: "#075f9e", borderRadius: 6, padding: "8px 10px", fontSize: 12, fontWeight: 700 },
   errorMessage: { marginBottom: 8, border: "1px solid #f4c7c7", background: "#fff4f4", color: "#b4232d", borderRadius: 6, padding: "8px 10px", fontSize: 12, fontWeight: 700 },
-  tableWrap: { overflow: "auto", maxHeight: "46vh", minHeight: 220, border: "1px solid #d7e1ed", borderRadius: 6 },
+  tableWrap: { flex: 1, minHeight: 0, overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 12 },
   th: { position: "sticky", top: 0, zIndex: 1, background: "#edf4fa", color: "#40526a", padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" },
   td: { borderTop: "1px solid #e3ebf3", padding: "7px 8px", color: "#52647b", textAlign: "center", whiteSpace: "nowrap" },

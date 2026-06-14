@@ -42,7 +42,7 @@ export default function AdminDifficultyOverviewPage({ onNavigate }: AdminDifficu
   });
 
   return (
-    <section>
+    <section style={styles.page}>
       <div style={styles.hero}>
         <div>
           <div style={styles.eyebrow}>困难生业务 / 业务总览</div>
@@ -101,17 +101,19 @@ export default function AdminDifficultyOverviewPage({ onNavigate }: AdminDifficu
 
         <section style={styles.card}>
           <h2 style={styles.subTitle}>最近上载日志</h2>
-          {recentLogs.length === 0 ? (
-            <div style={styles.empty}>暂无上载日志</div>
-          ) : (
-            recentLogs.map((item) => (
-              <div key={item.id} style={styles.logItem}>
-                <strong>{item.collegeName}</strong>
-                <span>{item.dataType === "student" ? "本专科信息" : "家庭成员信息"} / {item.rowCount} 条</span>
-                <small>{new Date(item.createdAt).toLocaleString()}</small>
-              </div>
-            ))
-          )}
+          <div style={styles.logList}>
+            {recentLogs.length === 0 ? (
+              <div style={styles.empty}>暂无上载日志</div>
+            ) : (
+              recentLogs.map((item) => (
+                <div key={item.id} style={styles.logItem}>
+                  <strong>{item.collegeName}</strong>
+                  <span>{item.dataType === "student" ? "本专科信息" : "家庭成员信息"} / {item.rowCount} 条</span>
+                  <small>{new Date(item.createdAt).toLocaleString()}</small>
+                </div>
+              ))
+            )}
+          </div>
         </section>
       </div>
     </section>
@@ -137,27 +139,29 @@ function QuickCard({ title, text, onClick }: { title: string; text: string; onCl
 }
 
 const styles: Record<string, CSSProperties> = {
-  hero: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: 20, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
+  page: { height: "calc(100vh - 104px)", minHeight: 650, display: "grid", gridTemplateRows: "auto auto auto minmax(0, 1fr)", gap: 12, overflow: "hidden" },
+  hero: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: 16, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
   eyebrow: { color: "#0077d4", fontSize: 13, fontWeight: 800 },
   title: { margin: "5px 0 7px", color: "#172033", fontSize: 26 },
   description: { margin: 0, color: "#63738a", fontSize: 14, lineHeight: 1.7 },
   enabledBadge: { padding: "6px 10px", borderRadius: 999, background: "#e9f8f2", color: "#087b5b", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" },
-  stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))", gap: 12, margin: "14px 0" },
-  stat: { padding: 14, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff" },
+  stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))", gap: 10 },
+  stat: { height: 76, boxSizing: "border-box", padding: 12, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff" },
   statLabel: { color: "#63738a", marginBottom: 7, fontSize: 13 },
   statValue: { fontSize: 24 },
-  quickGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 14 },
-  quickCard: { display: "grid", gap: 8, textAlign: "left", padding: 15, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", color: "#172033", cursor: "pointer" },
-  twoColumn: { display: "grid", gridTemplateColumns: "minmax(0, 1.35fr) minmax(280px, 0.65fr)", gap: 14 },
-  card: { padding: 16, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff" },
+  quickGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 },
+  quickCard: { display: "grid", gap: 6, textAlign: "left", padding: 13, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", color: "#172033", cursor: "pointer" },
+  twoColumn: { minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1.35fr) minmax(280px, 0.65fr)", gap: 12, overflow: "hidden" },
+  card: { minHeight: 0, display: "flex", flexDirection: "column", padding: 14, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", overflow: "hidden" },
   subTitle: { margin: "0 0 12px", color: "#172033", fontSize: 17 },
-  tableWrap: { overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
+  tableWrap: { flex: 1, minHeight: 0, overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  th: { background: "#edf4fa", color: "#40526a", padding: 9, textAlign: "center", whiteSpace: "nowrap" },
+  th: { position: "sticky", top: 0, zIndex: 1, background: "#edf4fa", color: "#40526a", padding: 9, textAlign: "center", whiteSpace: "nowrap" },
   td: { borderTop: "1px solid #e3ebf3", padding: 9, textAlign: "center", whiteSpace: "nowrap", color: "#52647b" },
   nameCell: { borderTop: "1px solid #e3ebf3", padding: 9, color: "#26364e", whiteSpace: "nowrap" },
   submitted: { display: "inline-flex", padding: "3px 7px", borderRadius: 999, background: "#e8f7f1", color: "#087b5b", fontWeight: 700, fontSize: 12 },
   pending: { display: "inline-flex", padding: "3px 7px", borderRadius: 999, background: "#f2f5f8", color: "#728197", fontWeight: 700, fontSize: 12 },
+  logList: { flex: 1, minHeight: 0, overflow: "auto", paddingRight: 4 },
   logItem: { display: "grid", gap: 4, padding: "10px 0", borderBottom: "1px solid #edf1f6", color: "#52647b", fontSize: 13 },
   empty: { color: "#8190a4", padding: 12 },
 };

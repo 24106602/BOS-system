@@ -73,7 +73,7 @@ export default function CollegeDifficultyPage({ profile, onNavigate }: CollegeDi
         />
       </div>
 
-      <section style={styles.card}>
+      <section style={{ ...styles.card, ...styles.overviewCard }}>
         <h2 style={styles.subTitle}>数据提交概览</h2>
         <div style={styles.stats}>
           <Stat label="本专科信息最近提交状态" value={studentCount > 0 ? "已上载" : "暂无提交"} />
@@ -86,7 +86,7 @@ export default function CollegeDifficultyPage({ profile, onNavigate }: CollegeDi
         </div>
       </section>
 
-      <section style={styles.card}>
+      <section style={{ ...styles.card, ...styles.recordsCard }}>
         <h2 style={styles.subTitle}>最近提交记录</h2>
         <div style={styles.tableWrap}>
           <table style={styles.table}>
@@ -190,32 +190,34 @@ function MiniStat({ label, value, tone = "#0077d4" }: { label: string; value: nu
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: { display: "grid", gap: 14 },
-  hero: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: 20, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
+  page: { height: "calc(100vh - 104px)", minHeight: 650, display: "grid", gridTemplateRows: "auto auto auto minmax(0, 1fr) auto", gap: 12, overflow: "hidden" },
+  hero: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: 16, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
   eyebrow: { color: "#0077d4", fontSize: 13, fontWeight: 800 },
   title: { margin: "5px 0 7px", color: "#172033", fontSize: 26 },
   description: { margin: 0, color: "#63738a", fontSize: 14, lineHeight: 1.7 },
   enabledBadge: { padding: "6px 10px", borderRadius: 999, background: "#e9f8f2", color: "#087b5b", fontSize: 12, fontWeight: 800, whiteSpace: "nowrap" },
-  entryGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14 },
-  entryCard: { padding: 16, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0 },
-  card: { padding: 16, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0 },
+  entryGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 },
+  entryCard: { padding: 14, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0 },
+  card: { padding: 14, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0, minHeight: 0, overflow: "hidden" },
+  overviewCard: { flexShrink: 0 },
+  recordsCard: { display: "flex", flexDirection: "column" },
   cardHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 8 },
   cardTitle: { margin: 0, color: "#172033", fontSize: 18 },
   subTitle: { margin: "0 0 12px", color: "#172033", fontSize: 18 },
-  cardText: { margin: "0 0 12px", color: "#63738a", fontSize: 13, lineHeight: 1.7 },
+  cardText: { margin: "0 0 10px", color: "#63738a", fontSize: 13, lineHeight: 1.6 },
   okBadge: { padding: "4px 8px", borderRadius: 999, background: "#e9f8f2", color: "#087b5b", fontSize: 12, fontWeight: 800 },
   waitBadge: { padding: "4px 8px", borderRadius: 999, background: "#f3f8fd", color: "#52647b", fontSize: 12, fontWeight: 800 },
-  miniStats: { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, marginBottom: 12 },
+  miniStats: { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 8, marginBottom: 10 },
   miniStat: { display: "grid", gap: 4, padding: 8, borderRadius: 6, border: "1px solid #d7e1ed", background: "#f8fbfe", color: "#63738a", fontSize: 12 },
   primaryButton: { border: "none", borderRadius: 6, padding: "10px 14px", background: "#0077d4", color: "#fff", fontWeight: 800, cursor: "pointer" },
   stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 },
   stat: { padding: 13, border: "1px solid #d7e1ed", borderRadius: 8, background: "#f8fbfe" },
   statLabel: { color: "#63738a", marginBottom: 7, fontSize: 13 },
   statValue: { fontSize: 18 },
-  hint: { marginTop: 12, padding: 10, borderRadius: 6, background: "#f3f9ff", color: "#0875bd", border: "1px solid #cce3f8", fontSize: 13 },
-  tableWrap: { overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
+  hint: { marginTop: 10, padding: 9, borderRadius: 6, background: "#f3f9ff", color: "#0875bd", border: "1px solid #cce3f8", fontSize: 13 },
+  tableWrap: { flex: 1, minHeight: 0, overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  th: { border: "1px solid #d7e1ed", background: "#edf4fa", padding: 9, whiteSpace: "nowrap", textAlign: "center" },
+  th: { position: "sticky", top: 0, zIndex: 1, border: "1px solid #d7e1ed", background: "#edf4fa", padding: 9, whiteSpace: "nowrap", textAlign: "center" },
   td: { border: "1px solid #cbd5e1", padding: 9, textAlign: "center", whiteSpace: "nowrap" },
   hiddenMeta: { display: "none" },
 };

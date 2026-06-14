@@ -46,13 +46,13 @@ export default function AdminFamilySummaryPage() {
 }
 
 const styles: Record<string, CSSProperties> = {
-  card: { background: "#fff", border: "1px solid #d8e3ee", borderRadius: 8, padding: 22, boxShadow: "0 8px 22px rgba(15, 35, 64, 0.06)" },
+  card: { height: "calc(100vh - 104px)", minHeight: 560, display: "grid", gridTemplateRows: "auto auto auto minmax(0, 1fr)", gap: 12, overflow: "hidden", background: "#fff", border: "1px solid #d8e3ee", borderRadius: 8, padding: 16, boxShadow: "0 8px 22px rgba(15, 35, 64, 0.06)" },
   header: { display: "flex", justifyContent: "space-between", gap: 14, alignItems: "center", marginBottom: 12 },
   eyebrow: { color: "#0077d4", fontSize: 13, fontWeight: 800 },
   title: { margin: "8px 0", color: "#101d34", fontSize: 24 },
-  description: { color: "#5b6b80", lineHeight: 1.7, margin: "0 0 16px" },
+  description: { color: "#5b6b80", lineHeight: 1.7, margin: 0 },
   yearSelectLabel: { display: "grid", gap: 5, color: "#40526a", fontSize: 12, fontWeight: 700 },
   yearSelect: { minWidth: 132, border: "1px solid #cfdbe7", borderRadius: 6, padding: "9px 10px", color: "#15304f", background: "#fff", fontSize: 13 },
-  statCard: { display: "grid", gap: 6, marginBottom: 14, border: "1px solid #dbe5ef", borderRadius: 8, padding: 14, background: "#f8fbfe", color: "#63738a" },
-  placeholder: { color: "#718096", border: "1px dashed #b9cada", borderRadius: 8, padding: 18, background: "#f8fbfe" },
+  statCard: { display: "grid", gap: 6, border: "1px solid #dbe5ef", borderRadius: 8, padding: 14, background: "#f8fbfe", color: "#63738a" },
+  placeholder: { minHeight: 0, overflow: "auto", color: "#718096", border: "1px dashed #b9cada", borderRadius: 8, padding: 18, background: "#f8fbfe" },
 };

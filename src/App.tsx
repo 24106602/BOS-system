@@ -1303,7 +1303,8 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 12,
   },
   tableWrap: {
-    maxHeight: 260,
+    height: "100%",
+    minHeight: 260,
     overflow: "auto",
     border: "1px solid #d7e1ed",
     borderRadius: 6,
