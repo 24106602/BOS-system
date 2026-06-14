@@ -22,6 +22,7 @@ type StudentProcessPageProps = {
   disqualifiedRows: DisqualifiedRow[];
   analysis: Record<string, number>;
   logs: LogItem[];
+  aiReport: string;
   logEndRef: RefObject<HTMLDivElement | null>;
   onBackToDifficulty?: () => void;
 };
@@ -46,6 +47,7 @@ export default function StudentProcessPage({
   processedData,
   disqualifiedRows,
   analysis,
+  aiReport,
   logs,
   logEndRef,
   onBackToDifficulty,
@@ -209,6 +211,24 @@ export default function StudentProcessPage({
             )}
           </div>
         </section>
+
+         <section style={{ ...pageStyles.card, ...pageStyles.aiCard }}>
+           <h2 style={pageStyles.subTitle}>
+            DeepSeek 智能分析
+           </h2>
+
+           <div
+                style={{
+                        maxHeight: 220,
+                        overflowY: "auto",
+                       whiteSpace: "pre-wrap",
+                       lineHeight: 1.8,
+                        color: "#1f2937"
+                       }}
+          >
+         {aiReport || "等待 AI 分析..."}
+         </div>
+         </section>
       </div>
 
       <aside style={pageStyles.logPanel}>
@@ -254,12 +274,13 @@ const button = (background: string): CSSProperties => ({
 });
 
 const pageStyles: Record<string, CSSProperties> = {
-  page: { height: "calc(100vh - 108px)", minHeight: 640, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(320px, 34%)", gap: 12, alignItems: "stretch", overflow: "hidden" },
-  mainColumn: { height: "100%", display: "grid", gridTemplateRows: "auto minmax(260px, 1fr) minmax(110px, 150px)", gap: 12, minWidth: 0, minHeight: 0, overflow: "hidden" },
-  card: { background: "#fff", borderRadius: 8, border: "1px solid #d7e1ed", padding: 14, boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0, minHeight: 0 },
-  actionCard: { overflow: "hidden" },
-  previewCard: { display: "flex", flexDirection: "column", overflow: "hidden" },
-  analysisCard: { display: "flex", flexDirection: "column", overflow: "hidden" },
+  page: { flex: 1, height: "100%", minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(340px, 420px)", gap: 12, alignItems: "stretch", overflow: "hidden" },
+  mainColumn: { height: "100%", display: "grid", gridTemplateRows: "auto minmax(280px, 42vh) minmax(120px, 18vh) minmax(120px, 18vh)", gap: 12, minWidth: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", paddingRight: 4, alignContent: "start" },
+  card: { background: "#fff", borderRadius: 8, border: "1px solid #d7e1ed", padding: 14, boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0, minHeight: 0, boxSizing: "border-box" },
+  actionCard: { overflow: "visible" },
+  previewCard: { display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 260 },
+  analysisCard: { display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 120 },
+  aiCard: { display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 120 },
   header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 10 },
   eyebrow: { color: "#0077d4", fontSize: 12, fontWeight: 800, marginBottom: 5 },
   title: { margin: 0, color: "#172033", fontSize: 23 },
@@ -291,7 +312,7 @@ const pageStyles: Record<string, CSSProperties> = {
   empty: { color: "#8190a4", padding: 12 },
   analysisScroll: { minHeight: 0, overflow: "auto", paddingRight: 4 },
   problemItem: { background: "#fff1f2", color: "#b42336", padding: 10, borderRadius: 6, marginBottom: 8 },
-  logPanel: { height: "100%", minHeight: 0, padding: 16, borderRadius: 8, background: "#0b1428", overflow: "hidden", display: "flex", flexDirection: "column" },
+  logPanel: { height: "100%", maxHeight: "100%", minHeight: 0, padding: 16, borderRadius: 8, background: "#0b1428", overflow: "hidden", display: "flex", flexDirection: "column", boxSizing: "border-box" },
   logTitle: { color: "#e5efff", fontSize: 18, margin: "0 0 12px" },
   logBox: { flex: 1, minHeight: 0, overflowY: "auto", fontFamily: "Consolas, monospace", fontSize: 13, lineHeight: 1.6, paddingRight: 4 },
   logItem: { color: "#fff", whiteSpace: "pre-line", marginBottom: 10 },

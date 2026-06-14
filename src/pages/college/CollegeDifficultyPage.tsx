@@ -190,7 +190,7 @@ function MiniStat({ label, value, tone = "#0077d4" }: { label: string; value: nu
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: { height: "calc(100vh - 104px)", minHeight: 650, display: "grid", gridTemplateRows: "auto auto auto minmax(0, 1fr) auto", gap: 12, overflow: "hidden" },
+  page: { height: "100%", minHeight: 0, display: "grid", gridTemplateRows: "auto auto auto minmax(0, 1fr) auto", gap: 12, overflow: "auto", paddingRight: 4, boxSizing: "border-box" },
   hero: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: 16, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
   eyebrow: { color: "#0077d4", fontSize: 13, fontWeight: 800 },
   title: { margin: "5px 0 7px", color: "#172033", fontSize: 26 },

@@ -229,7 +229,7 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: { height: "calc(100vh - 104px)", minHeight: 640, display: "grid", gridTemplateRows: "auto auto minmax(0, 1fr) auto", gap: 10, overflow: "hidden" },
+  page: { height: "100%", minHeight: 0, display: "grid", gridTemplateRows: "auto auto minmax(0, 1fr) auto", gap: 10, overflow: "hidden", boxSizing: "border-box" },
   hero: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: 14, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
   eyebrow: { color: "#0077d4", fontSize: 13, fontWeight: 800 },
   title: { margin: "5px 0 7px", color: "#172033", fontSize: 25 },
@@ -244,7 +244,7 @@ const styles: Record<string, CSSProperties> = {
   metaRow: { display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, color: "#64748b", fontSize: 12 },
   info: { marginTop: 7, padding: 8, borderRadius: 6, background: "#f3f9ff", color: "#0875bd", border: "1px solid #cce3f8", fontSize: 12 },
   warning: { marginTop: 7, padding: 8, borderRadius: 6, background: "#fff8e6", color: "#9a6700", border: "1px solid #fde6a7", fontSize: 12 },
-  tableWrap: { height: "100%", minHeight: 320, overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
+  tableWrap: { height: "100%", minHeight: 0, overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
   th: { position: "sticky", top: 0, zIndex: 1, border: "1px solid #d7e1ed", background: "#edf4fa", padding: "9px 10px", whiteSpace: "nowrap", textAlign: "center" },
   td: { border: "1px solid #cbd5e1", padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" },
