@@ -21,7 +21,7 @@ import {
   parseStudentTemplate,
   readWorkbook,
 } from "./services/templateParser";
-import { resolveCollegeUpload } from "./utils/collegeDetector";
+import { isSameSubmissionCollege, normalizeSubmissionCollegeName, resolveCollegeUpload } from "./utils/collegeDetector";
 import type {
   DisqualifiedRow,
   ErrorReportItem,
@@ -106,6 +106,18 @@ const looksLikeFamilyFile = (fileName: string, workbookData: WorkbookData) => {
 const looksLikeStudentFile = (fileName: string, workbookData: WorkbookData) => {
   const text = `${fileName} ${getWorkbookText(workbookData)}`;
   return /本专科|困难生信息|特殊困难类型|家庭年均收入|陈述理由|收入来源|身份证号/i.test(text);
+};
+
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error || "未知错误");
+
+const getWorkbookReadSummary = (workbookData: WorkbookData, sheetName: string) => {
+  const rows = workbookData.sheets[sheetName] || [];
+  return {
+    sheetName,
+    rowCount: rows.length,
+    rows,
+  };
 };
 
 type AppProps = {
@@ -222,7 +234,6 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   };
 
   const hasBlockingStudentUpload = () =>
-    Boolean(studentCollegeValidationError) ||
     stats.errors > 0 ||
     disqualifiedRows.length > 0 ||
     studentErrorReports.some(
@@ -233,7 +244,6 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     );
 
   const hasBlockingFamilyUpload = () =>
-    Boolean(familyCollegeValidationError) ||
     familyStats.errors > 0 ||
     familyReviewRows.length > 0;
 
@@ -410,9 +420,11 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
 
   const loadStudentDataFile = async (file: File) => {
     if (!isExcelFile(file)) {
-      throw new Error("当前页面仅支持困难生本专科信息 Excel 文件");
+      throw new Error("文件类型不支持：仅支持 .xls / .xlsx");
     }
 
+    pushLog("info", `已选择文件：${file.name}`);
+    pushLog("info", "开始读取 Excel");
     setStudentAutoProcessRequested(false);
     setIsProcessing(true);
     setProcessedData([]);
@@ -424,37 +436,48 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     setStatus("正在读取本专科信息 Excel...");
     resetStudentReviewState("重新处理数据后确认状态已重置");
 
-    const workbookData = await readWorkbook(file);
-    if (looksLikeFamilyFile(file.name, workbookData)) {
-      throw new Error("当前页面仅支持困难生本专科信息文件");
+    let workbookData: WorkbookData;
+    try {
+      workbookData = await readWorkbook(file);
+    } catch (error) {
+      console.error("Student Excel parse exception:", error);
+      throw new Error(`Excel 解析异常：${getErrorMessage(error)}`, { cause: error });
     }
-    if (!looksLikeStudentFile(file.name, workbookData)) {
+
+    if (workbookData.sheetNames.length === 0) {
+      throw new Error("没有找到有效 Sheet");
+    }
+
+    if (looksLikeFamilyFile(file.name, workbookData)) {
       throw new Error("当前页面仅支持困难生本专科信息文件");
     }
 
     const parsed = parseStudentTemplate(workbookData);
     if (!parsed.fields.some((field) => /姓名|身份证|困难|收入|陈述理由/.test(field))) {
-      throw new Error("当前页面仅支持困难生本专科信息文件");
+      throw new Error(looksLikeStudentFile(file.name, workbookData) ? "没有找到表头" : "当前页面仅支持困难生本专科信息文件");
     }
 
     applyStudentTemplate(parsed);
 
     const collegeDetection = resolveCollegeUpload(file.name);
     setStudentCollegeName(collegeDetection.collegeName);
-    setStudentCollegeValidationError(collegeDetection.error);
-    if (collegeDetection.error) pushLog("error", collegeDetection.error);
+    setStudentCollegeValidationError("");
+    if (collegeDetection.error) pushLog("error", `${collegeDetection.error} 系统将继续读取表格，学院不匹配的数据将在治理结果中进入不通过名单。`);
     else pushLog("success", `所属学部（院）已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
 
-    const firstSheet = workbookData.sheetNames[0];
-    const rows = workbookData.sheets[firstSheet] || [];
+    const { sheetName, rowCount, rows } = getWorkbookReadSummary(workbookData, parsed.outputSheet);
+    if (rowCount === 0) throw new Error("没有读取到数据行");
     setSourceRows(rows);
     setStatus("已读取 Excel，正在自动治理...");
+    pushLog("success", `读取到 Sheet：${sheetName}`);
+    pushLog("success", `读取行数：${rowCount}`);
+    pushLog("info", "开始治理数据");
 
     pushLog(
       "success",
       `本专科信息 Excel 已读取：${file.name}
-数据表：${firstSheet}
-原始行数：${rows.length}
+数据表：${sheetName}
+原始行数：${rowCount}
 系统将自动执行既有治理规则。`
     );
     setStudentAutoProcessRequested(true);
@@ -475,7 +498,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       await loadStudentDataFile(file);
     } catch (error) {
       console.error("Student Excel load failed:", error);
-      const message = error instanceof Error ? error.message : "本专科信息读取失败";
+      const message = getErrorMessage(error) || "本专科信息读取失败";
       setStatus("Excel 读取失败");
       pushLog("error", message);
       alert(message);
@@ -498,12 +521,6 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       alert("请先上传待处理数据");
       return;
     }
-    if (studentCollegeValidationError) {
-      pushLog("error", studentCollegeValidationError);
-      alert(studentCollegeValidationError);
-      return;
-    }
-
     try {
       setIsProcessing(true);
       setProcessedData([]);
@@ -526,23 +543,74 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
         },
       });
 
+      const collegeFieldIndex = templateFields.findIndex((field) => /学院|学部|院系/.test(field));
+      const collegeField = collegeFieldIndex >= 0 ? templateFields[collegeFieldIndex] : templateFields[1];
+      const currentCollege = normalizeSubmissionCollegeName(studentCollegeName);
+      const nextHighlightCellMap = { ...result.highlightCellMap };
+      const nextDisqualifiedRows = [...result.disqualifiedRows];
+      const nextErrorReports = [...result.errorReports];
+      const failedRowNumbers = new Set(nextDisqualifiedRows.map((row) => row.rowNumber));
+      let collegeMismatchCount = 0;
+
+      if (collegeField && currentCollege && currentCollege !== "未知学院") {
+        result.processedData.forEach((row, index) => {
+          const rowCollege = String(row[collegeField] ?? "").trim();
+          if (!rowCollege || isSameSubmissionCollege(rowCollege, currentCollege)) return;
+
+          collegeMismatchCount += 1;
+          nextHighlightCellMap[`${index}_${collegeFieldIndex >= 0 ? collegeFieldIndex : 1}`] = {
+            color: "yellow",
+            reason: `当前登录学院为 ${currentCollege}，该行学院为 ${rowCollege}`,
+          };
+          nextErrorReports.push({
+            rowIndex: index + 1,
+            fieldName: collegeField,
+            originalValue: rowCollege,
+            fixedValue: rowCollege,
+            issueType: "学院不匹配",
+            action: "整行进入不通过名单",
+          });
+          if (!failedRowNumbers.has(index + 1)) {
+            failedRowNumbers.add(index + 1);
+            nextDisqualifiedRows.push({
+              rowNumber: index + 1,
+              name: String(row[templateFields[0]] ?? ""),
+              idCard: String(row[templateFields[2]] ?? ""),
+              income: String(row[templateFields[11]] ?? ""),
+              reason: `当前登录学院为 ${currentCollege}，该行学院为 ${rowCollege}`,
+            });
+          }
+        });
+      }
+
+      const nextStats = {
+        ...result.stats,
+        errors: result.stats.errors + collegeMismatchCount,
+        highlighted: Object.keys(nextHighlightCellMap).length,
+        disqualified: nextDisqualifiedRows.length,
+      };
+
+      if (collegeMismatchCount > 0) {
+        pushLog("error", `检测到 ${collegeMismatchCount} 行学院与当前账号不一致，已进入不通过名单。`);
+      }
+
       setProcessedData(result.processedData);
-      setHighlightCellMap(result.highlightCellMap);
-      setDisqualifiedRows(result.disqualifiedRows);
+      setHighlightCellMap(nextHighlightCellMap);
+      setDisqualifiedRows(nextDisqualifiedRows);
       setAnalysis(result.analysis);
-      setStudentErrorReports(result.errorReports);
-      setStats(result.stats);
+      setStudentErrorReports(nextErrorReports);
+      setStats(nextStats);
       setStatus("治理完成");
 
       window.dispatchEvent(
         new CustomEvent("bos:college-upload-result", {
           detail: {
-            errorCount: result.stats.disqualified,
-            totalCount: result.stats.total,
-            fixedCount: result.stats.repaired,
+            errorCount: nextStats.disqualified,
+            totalCount: nextStats.total,
+            fixedCount: nextStats.repaired,
             validationErrors: [
-              ...toCollegeValidationErrors(result.errorReports),
-              ...result.disqualifiedRows.map((item) => ({
+              ...toCollegeValidationErrors(nextErrorReports),
+              ...nextDisqualifiedRows.map((item) => ({
                 row: item.rowNumber,
                 column: "整行",
                 field: "不通过原因",
@@ -560,14 +628,15 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
 
 输出数据行数：${result.stats.total}
 自动修复：${result.stats.repaired}
-异常问题：${result.stats.errors}
-标记单元格：${result.stats.highlighted}
-不通过人数：${result.stats.disqualified}
+异常问题：${nextStats.errors}
+标记单元格：${nextStats.highlighted}
+不通过人数：${nextStats.disqualified}
 `);
     } catch (error) {
-      console.error(error);
-      pushLog("error", "困难生数据处理失败");
-      alert("困难生数据处理失败，请检查模板和数据格式。");
+      console.error("Student processing failed:", error);
+      const message = `困难生数据处理失败：${getErrorMessage(error)}`;
+      pushLog("error", message);
+      alert(message);
     } finally {
       setIsProcessing(false);
     }
@@ -673,9 +742,11 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
 
   const loadFamilyDataFile = async (file: File) => {
     if (!isExcelFile(file)) {
-      throw new Error("当前页面仅支持困难生家庭成员信息 Excel 文件");
+      throw new Error("文件类型不支持：仅支持 .xls / .xlsx");
     }
 
+    pushFamilyLog("info", `已选择文件：${file.name}`);
+    pushFamilyLog("info", "开始读取 Excel");
     setFamilyAutoProcessRequested(false);
     setIsFamilyProcessing(true);
     setFamilyProcessedData([]);
@@ -686,34 +757,44 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     setFamilyStatus("正在读取家庭成员信息 Excel...");
     resetFamilyReviewState("重新处理数据后确认状态已重置");
 
-    const workbookData = await readWorkbook(file);
-    if (!looksLikeFamilyFile(file.name, workbookData)) {
-      throw new Error("当前页面仅支持困难生家庭成员信息文件");
+    let workbookData: WorkbookData;
+    try {
+      workbookData = await readWorkbook(file);
+    } catch (error) {
+      console.error("Family Excel parse exception:", error);
+      throw new Error(`Excel 解析异常：${getErrorMessage(error)}`, { cause: error });
+    }
+
+    if (workbookData.sheetNames.length === 0) {
+      throw new Error("没有找到有效 Sheet");
     }
 
     const parsed = parseFamilyTemplate(workbookData);
     if (!parsed.fields.some((field) => /家庭成员|学生身份证|关系|健康|职业|年收入/.test(field))) {
-      throw new Error("当前页面仅支持困难生家庭成员信息文件");
+      throw new Error(looksLikeFamilyFile(file.name, workbookData) ? "没有找到表头" : "当前页面仅支持困难生家庭成员信息文件");
     }
 
     applyFamilyTemplate(parsed);
 
     const collegeDetection = resolveCollegeUpload(file.name);
     setFamilyCollegeName(collegeDetection.collegeName);
-    setFamilyCollegeValidationError(collegeDetection.error);
-    if (collegeDetection.error) pushFamilyLog("error", collegeDetection.error);
+    setFamilyCollegeValidationError("");
+    if (collegeDetection.error) pushFamilyLog("error", `${collegeDetection.error} 系统将继续读取表格，后续按当前账号范围提交。`);
     else pushFamilyLog("success", `所属学部（院）已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
 
-    const firstSheet = workbookData.sheetNames[0];
-    const rows = workbookData.sheets[firstSheet] || [];
+    const { sheetName, rowCount, rows } = getWorkbookReadSummary(workbookData, parsed.outputSheet);
+    if (rowCount === 0) throw new Error("没有读取到数据行");
     setFamilySourceRows(rows);
     setFamilyStatus("已读取 Excel，正在自动治理...");
+    pushFamilyLog("success", `读取到 Sheet：${sheetName}`);
+    pushFamilyLog("success", `读取行数：${rowCount}`);
+    pushFamilyLog("info", "开始治理数据");
 
     pushFamilyLog(
       "success",
       `家庭成员信息 Excel 已读取：${file.name}
-数据表：${firstSheet}
-原始行数：${rows.length}
+数据表：${sheetName}
+原始行数：${rowCount}
 系统将自动执行既有治理规则。`
     );
     setFamilyAutoProcessRequested(true);
@@ -734,7 +815,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       await loadFamilyDataFile(file);
     } catch (error) {
       console.error("Family Excel load failed:", error);
-      const message = error instanceof Error ? error.message : "家庭成员信息读取失败";
+      const message = getErrorMessage(error) || "家庭成员信息读取失败";
       setFamilyStatus("Excel 读取失败");
       pushFamilyLog("error", message);
       alert(message);
@@ -757,12 +838,6 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       alert("请先上传家庭成员数据");
       return;
     }
-    if (familyCollegeValidationError) {
-      pushFamilyLog("error", familyCollegeValidationError);
-      alert(familyCollegeValidationError);
-      return;
-    }
-
     try {
       setIsFamilyProcessing(true);
       setFamilyProcessedData([]);
@@ -820,9 +895,10 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
 数据库未命中：${result.familyStats.databaseMiss}
 `);
     } catch (error) {
-      console.error(error);
-      pushFamilyLog("error", "家庭成员信息处理失败");
-      alert("家庭成员信息处理失败，请检查模板和数据格式。");
+      console.error("Family processing failed:", error);
+      const message = `家庭成员信息处理失败：${getErrorMessage(error)}`;
+      pushFamilyLog("error", message);
+      alert(message);
     } finally {
       setIsFamilyProcessing(false);
     }
@@ -945,7 +1021,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       {activeModule === "merge" && <MergePage />}
 
       {activeModule === "processing" && (
-        <div style={styles.processingWorkspace}>
+        <div style={collegeMode ? { ...styles.processingWorkspace, ...styles.embeddedProcessingWorkspace } : styles.processingWorkspace}>
           {collegeMode && (
             <div style={styles.academicYearBar}>
               <div>
@@ -1052,10 +1128,10 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: "Microsoft YaHei, Segoe UI, Arial, sans-serif",
   },
   embeddedPage: {
-    height: "auto",
-    minHeight: 740,
+    height: "100%",
+    minHeight: 0,
     background: "transparent",
-    overflow: "visible",
+    overflow: "hidden",
   },
   embeddedModuleBar: {
     display: "none",
@@ -1114,6 +1190,11 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: "column",
     minHeight: 0,
     padding: "0 0 4px",
+  },
+  embeddedProcessingWorkspace: {
+    height: "100%",
+    padding: 0,
+    overflow: "hidden",
   },
   academicYearBar: {
     display: "flex",

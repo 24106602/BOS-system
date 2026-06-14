@@ -36,6 +36,8 @@ export const readWorkbook = (file: File): Promise<WorkbookData> => {
       }
     };
 
+    reader.onerror = () => reject(reader.error || new Error("Excel 文件读取失败"));
+
     reader.readAsArrayBuffer(file);
   });
 };
@@ -118,6 +120,79 @@ export const getEffectiveColumnCount = (firstRow: unknown[], secondRow: unknown[
   }
 
   return Math.max(count, 1);
+};
+
+const STUDENT_HEADER_KEYWORDS = [
+  "姓名",
+  "学号",
+  "身份证",
+  "学院",
+  "学部",
+  "院系",
+  "困难",
+  "推荐档次",
+];
+
+const FAMILY_HEADER_KEYWORDS = [
+  "年度",
+  "学年",
+  "学期",
+  "学生身份证",
+  "家庭成员",
+  "成员姓名",
+  "与学生关系",
+  "关系",
+  "年收入",
+  "健康",
+];
+
+const normalizeHeaderText = (value: unknown) =>
+  String(value ?? "")
+    .replace(/\s|\*|（.*?）|\(.*?\)/g, "")
+    .trim();
+
+const rowHasMeaningfulCells = (row: unknown[]) =>
+  row.some((cell) => String(cell ?? "").trim() !== "");
+
+const getHeaderScore = (row: unknown[], keywords: string[]) => {
+  const headers = row.map(normalizeHeaderText).filter(Boolean);
+  return keywords.reduce((score, keyword) => (
+    headers.some((header) => header.includes(keyword) || keyword.includes(header)) ? score + 1 : score
+  ), 0);
+};
+
+const findTemplateHeaderRowIndex = (rows: unknown[][], type: "student" | "family") => {
+  const keywords = type === "student" ? STUDENT_HEADER_KEYWORDS : FAMILY_HEADER_KEYWORDS;
+  let bestIndex = -1;
+  let bestScore = -1;
+
+  rows.slice(0, 12).forEach((row, index) => {
+    if (!rowHasMeaningfulCells(row)) return;
+    const score = getHeaderScore(row, keywords);
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  });
+
+  return bestScore >= 2 ? bestIndex : -1;
+};
+
+const pickTemplateHeaderRows = (rows: unknown[][], type: "student" | "family") => {
+  if (rows.length === 0) throw new Error("没有找到有效 Sheet");
+
+  const headerIndex = findTemplateHeaderRowIndex(rows, type);
+  if (headerIndex < 0) throw new Error("没有找到表头");
+
+  const firstRow = headerIndex > 0 ? rows[headerIndex - 1] || [] : [];
+  const secondRow = rows[headerIndex] || [];
+  const dataRows = rows
+    .slice(headerIndex + 1)
+    .filter(rowHasMeaningfulCells)
+    .filter((row) => getHeaderScore(row, type === "student" ? STUDENT_HEADER_KEYWORDS : FAMILY_HEADER_KEYWORDS) < 2);
+
+  if (dataRows.length === 0) throw new Error("没有读取到数据行");
+  return { firstRow, secondRow, headerIndex, dataRows };
 };
 
 export const FIELD_ALIASES: Record<string, string[]> = {
@@ -263,11 +338,14 @@ const pickTemplateSheets = (workbookData: WorkbookData) => {
 };
 
 export const parseStudentTemplate = (workbookData: WorkbookData): TemplateParseResult => {
-  const { dictSheet, outputSheet } = pickTemplateSheets(workbookData);
+  const { dictSheet, outputSheet: initialOutputSheet } = pickTemplateSheets(workbookData);
+  const outputSheet =
+    findTemplateHeaderRowIndex(workbookData.sheets[initialOutputSheet] || [], "student") >= 0
+      ? initialOutputSheet
+      : workbookData.sheetNames.find((name) => name !== dictSheet && findTemplateHeaderRowIndex(workbookData.sheets[name] || [], "student") >= 0) || initialOutputSheet;
   const outputRows = workbookData.sheets[outputSheet] || [];
   const dictRows = workbookData.sheets[dictSheet] || [];
-  const firstRow = outputRows[0] || [];
-  const secondRow = outputRows[1] || [];
+  const { firstRow, secondRow } = pickTemplateHeaderRows(outputRows, "student");
 
   const fields = secondRow.slice(0, 40).map((item, index) => {
     const value = String(item ?? "").trim();
@@ -290,11 +368,14 @@ export const parseStudentTemplate = (workbookData: WorkbookData): TemplateParseR
 };
 
 export const parseFamilyTemplate = (workbookData: WorkbookData): TemplateParseResult => {
-  const { dictSheet, outputSheet } = pickTemplateSheets(workbookData);
+  const { dictSheet, outputSheet: initialOutputSheet } = pickTemplateSheets(workbookData);
+  const outputSheet =
+    findTemplateHeaderRowIndex(workbookData.sheets[initialOutputSheet] || [], "family") >= 0
+      ? initialOutputSheet
+      : workbookData.sheetNames.find((name) => name !== dictSheet && findTemplateHeaderRowIndex(workbookData.sheets[name] || [], "family") >= 0) || initialOutputSheet;
   const outputRows = workbookData.sheets[outputSheet] || [];
   const dictRows = workbookData.sheets[dictSheet] || [];
-  const firstRow = outputRows[0] || [];
-  const secondRow = outputRows[1] || [];
+  const { firstRow, secondRow } = pickTemplateHeaderRows(outputRows, "family");
   const columnCount = getEffectiveColumnCount(firstRow, secondRow);
 
   const fields = secondRow.slice(0, columnCount).map((item, index) => {

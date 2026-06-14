@@ -105,6 +105,7 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
           <div style={styles.topRight}>
             <span style={styles.topBadge}>校级数据管理</span>
             <span style={styles.adminName}>{getAdminAccountLabel(profile)}</span>
+            <button style={styles.topLogout} onClick={onLogout}>退出登录</button>
           </div>
         </header>
         <main style={styles.main}>{children}</main>
@@ -114,8 +115,8 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: { minHeight: "100vh", display: "grid", gridTemplateColumns: "252px minmax(0, 1fr)", background: "#eef3f8" },
-  sidebar: { minHeight: "100vh", background: "#0b1428", color: "#fff", display: "flex", flexDirection: "column", borderRight: "1px solid #1a2945" },
+  page: { height: "100vh", display: "grid", gridTemplateColumns: "252px minmax(0, 1fr)", background: "#eef3f8", overflow: "hidden" },
+  sidebar: { height: "100vh", background: "#0b1428", color: "#fff", display: "flex", flexDirection: "column", borderRight: "1px solid #1a2945", overflow: "hidden" },
   brand: { display: "flex", alignItems: "center", gap: 12, padding: "22px 18px", borderBottom: "1px solid #1b2a44" },
   brandIcon: { width: 42, height: 42, display: "grid", placeItems: "center", borderRadius: 8, background: "#0495e8", color: "#fff", fontSize: 20, fontWeight: 800 },
   brandTitle: { fontSize: 17, fontWeight: 800 },
@@ -123,7 +124,7 @@ const styles: Record<string, CSSProperties> = {
   sideBlock: { padding: "16px 18px", borderBottom: "1px solid #1b2a44" },
   caption: { color: "#95a8c7", fontSize: 12, marginBottom: 8 },
   roleBadge: { display: "inline-flex", padding: "5px 9px", borderRadius: 999, border: "1px solid #5a450e", background: "#271f0d", color: "#f7c844", fontSize: 12, fontWeight: 700 },
-  nav: { padding: "12px 10px" },
+  nav: { padding: "12px 10px", overflowY: "auto" },
   groupLabel: { padding: "15px 10px 7px", color: "#8ba0c3", fontSize: 12, fontWeight: 700 },
   menu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "none", borderRadius: 6, padding: "10px 11px", background: "transparent", color: "#c6d2e6", cursor: "pointer", textAlign: "left", fontSize: 14 },
   activeMenu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "none", borderRadius: 6, padding: "10px 11px", background: "#078ed8", color: "#fff", cursor: "pointer", textAlign: "left", fontSize: 14, fontWeight: 700 },
@@ -134,12 +135,13 @@ const styles: Record<string, CSSProperties> = {
   pulse: { color: "#21d59c", marginRight: 6 },
   syncText: { marginTop: 7, color: "#9cb0ce", fontSize: 12, lineHeight: 1.7 },
   logout: { margin: "0 12px 16px", border: "1px solid #2c3b55", borderRadius: 6, padding: "9px 10px", background: "#132039", color: "#cbd7eb", cursor: "pointer" },
-  workspace: { minWidth: 0 },
+  workspace: { minWidth: 0, height: "100vh", display: "grid", gridTemplateRows: "68px minmax(0, 1fr)", overflow: "hidden" },
   topbar: { height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", background: "#fff", borderBottom: "1px solid #d7e1ed" },
   topTitle: { color: "#162238", fontSize: 18, fontWeight: 800 },
   breadcrumb: { marginTop: 5, color: "#8290a6", fontSize: 12 },
   topRight: { display: "flex", alignItems: "center", gap: 14 },
   topBadge: { padding: "6px 9px", border: "1px solid #bcd9f5", borderRadius: 999, background: "#f3f9ff", color: "#0879c5", fontSize: 12, fontWeight: 700 },
   adminName: { color: "#334155", fontSize: 13, fontWeight: 700 },
-  main: { minWidth: 0, padding: 18 },
+  topLogout: { border: "1px solid #cbd8e6", borderRadius: 999, padding: "7px 12px", background: "#fff", color: "#26364e", fontSize: 12, fontWeight: 800, cursor: "pointer" },
+  main: { minWidth: 0, minHeight: 0, padding: 14, overflow: "hidden" },
 };
