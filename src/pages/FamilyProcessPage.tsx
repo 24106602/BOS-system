@@ -126,7 +126,9 @@ export default function FamilyProcessPage({
               {isFamilyProcessing ? "处理中..." : "选择 Excel 文件"}
             </button>
           </div>
+        </section>
 
+        <section style={{ ...pageStyles.card, ...pageStyles.statsCard }}>
           <div style={pageStyles.status}>{familyStatus}</div>
           <div style={pageStyles.status}>当前识别学部（院）：{familyCollegeName}</div>
           <div style={reviewConfirmed ? pageStyles.reviewStatusOk : hasBlockingRows ? pageStyles.reviewStatusError : pageStyles.reviewStatus}>
@@ -137,9 +139,11 @@ export default function FamilyProcessPage({
             <Stat label="总数据" value={familyStats.total} />
             <Stat label="通过人数" value={passedRows.length} tone="#087b5b" />
             <Stat label="不通过人数" value={familyReviewRows.length} tone="#b42336" />
-            <Stat label="自动修复数量" value={familyStats.repaired} tone="#0f766e" />
+              <Stat label="自动修复数量" value={familyStats.repaired} tone="#0f766e" />
           </div>
+        </section>
 
+        <section style={{ ...pageStyles.card, ...pageStyles.actionBarCard }}>
           <div style={pageStyles.buttonGrid}>
             <button style={pageStyles.purpleButton} onClick={exportFamilyResult}>导出通过名单</button>
             <button style={pageStyles.purpleButton} onClick={exportFamilyErrorReport}>导出不通过名单</button>
@@ -167,7 +171,9 @@ export default function FamilyProcessPage({
               </button>
             )}
           </div>
+        </section>
 
+        <section style={{ ...pageStyles.card, ...pageStyles.noticeCard }}>
           {familyProcessedData.length > 0 && familyReviewRows.length > 0 && (
             <div style={pageStyles.errorStatus}>当前存在不通过项，不能确认审核，也不能上载到学校端，请导出不通过名单修改后重新处理。</div>
           )}
@@ -255,11 +261,14 @@ const button = (background: string): CSSProperties => ({
 
 const pageStyles: Record<string, CSSProperties> = {
   page: { flex: 1, height: "100%", minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(340px, 420px)", gap: 12, alignItems: "stretch", overflow: "hidden" },
-  mainColumn: { height: "100%", display: "grid", gridTemplateRows: "auto minmax(300px, 1fr) minmax(130px, 180px)", gap: 12, minWidth: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", paddingRight: 4, alignContent: "start" },
+  mainColumn: { height: "100%", display: "flex", flexDirection: "column", gap: 12, minWidth: 0, minHeight: 0, overflowY: "auto", overflowX: "hidden", paddingRight: 4 },
   card: { background: "#fff", borderRadius: 8, border: "1px solid #d7e1ed", padding: 14, boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0, minHeight: 0, boxSizing: "border-box" },
-  actionCard: { overflow: "visible" },
-  previewCard: { display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 260 },
-  analysisCard: { display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 120 },
+  actionCard: { overflow: "visible", flex: "0 0 auto" },
+  statsCard: { overflow: "visible", flex: "0 0 auto" },
+  actionBarCard: { overflow: "visible", flex: "0 0 auto", position: "sticky", top: 0, zIndex: 5 },
+  noticeCard: { overflow: "visible", flex: "0 0 auto", padding: 10 },
+  previewCard: { display: "flex", flexDirection: "column", overflow: "hidden", flex: "0 0 clamp(280px, 42vh, 360px)", minHeight: 280, maxHeight: 360 },
+  analysisCard: { display: "flex", flexDirection: "column", overflow: "hidden", flex: "0 0 clamp(160px, 22vh, 220px)", minHeight: 160, maxHeight: 220 },
   header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 10 },
   eyebrow: { color: "#0077d4", fontSize: 12, fontWeight: 800, marginBottom: 5 },
   title: { margin: 0, color: "#172033", fontSize: 23 },
@@ -268,7 +277,7 @@ const pageStyles: Record<string, CSSProperties> = {
   badge: { padding: "6px 9px", borderRadius: 999, background: "#e8f4ff", color: "#0077d4", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" },
   uploadArea: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, border: "1px dashed #a9c7e1", borderRadius: 8, padding: 12, background: "#f8fbfe", marginBottom: 8, cursor: "pointer" },
   uploadTitle: { color: "#26364e", fontSize: 14 },
-  buttonGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))", gap: 8, marginTop: 12 },
+  buttonGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))", gap: 8, margin: 0, alignItems: "stretch" },
   blueButton: button("#0077d4"),
   purpleButton: button("#6757c8"),
   greenButton: button("#0b9b6f"),
