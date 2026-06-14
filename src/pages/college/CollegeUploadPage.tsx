@@ -11,6 +11,7 @@ export default function CollegeUploadPage({ panel, onNavigate }: CollegeUploadPa
       collegeMode
       fixedProcessingPanel={panel}
       onBackToDifficulty={() => onNavigate?.("/college/difficulty")}
+      onViewDifficultyStudents={() => onNavigate?.("/college/difficulty/students")}
     />
   );
 }

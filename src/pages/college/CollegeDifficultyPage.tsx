@@ -61,6 +61,16 @@ export default function CollegeDifficultyPage({ profile, onNavigate }: CollegeDi
           status={familyCount > 0 ? "已上载" : "待处理"}
           onEnter={() => onNavigate?.("/college/difficulty/family")}
         />
+        <BusinessEntryCard
+          title="困难生明细"
+          description="查看本学院已上载困难生数据，按学年筛选并支持姓名、学号、身份证号和困难等级检索。"
+          total={studentCount}
+          passed={studentCount}
+          failed={0}
+          repaired={0}
+          status={studentCount > 0 ? "可查看" : "待上载"}
+          onEnter={() => onNavigate?.("/college/difficulty/students")}
+        />
       </div>
 
       <section style={styles.card}>

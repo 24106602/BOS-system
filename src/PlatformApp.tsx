@@ -18,6 +18,7 @@ import AdminNationalInspirationalPage from "./pages/admin/awards/AdminNationalIn
 import AdminShanghaiScholarshipPage from "./pages/admin/awards/AdminShanghaiScholarshipPage";
 import CollegeHomePage from "./pages/college/CollegeHomePage";
 import CollegeDifficultyPage from "./pages/college/CollegeDifficultyPage";
+import CollegeDifficultyStudentsPage from "./pages/college/CollegeDifficultyStudentsPage";
 import CollegeUploadPage from "./pages/college/CollegeUploadPage";
 import CollegeRecordsPage from "./pages/college/CollegeRecordsPage";
 import NationalScholarshipPage from "./pages/awards/NationalScholarshipPage";
@@ -53,6 +54,7 @@ const normalizePath = (path: string) => {
     "/college/difficulty",
     "/college/difficulty/student",
     "/college/difficulty/family",
+    "/college/difficulty/students",
     "/college/upload",
     "/college/records",
     "/college/awards/national",
@@ -213,6 +215,8 @@ export default function PlatformApp() {
         <CollegeUploadPage panel="student" onNavigate={navigate} />
       ) : path === "/college/difficulty/family" ? (
         <CollegeUploadPage panel="family" onNavigate={navigate} />
+      ) : path === "/college/difficulty/students" ? (
+        <CollegeDifficultyStudentsPage profile={authState.profile!} />
       ) : path === "/college/difficulty" ? (
         <CollegeDifficultyPage profile={authState.profile!} onNavigate={navigate} />
       ) : path === "/college/records" ? (

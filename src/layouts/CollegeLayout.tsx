@@ -14,6 +14,7 @@ const difficultyMenus = [
   { path: "/college/difficulty", label: "业务首页", mark: "首" },
   { path: "/college/difficulty/student", label: "本专科信息处理", mark: "本" },
   { path: "/college/difficulty/family", label: "家庭成员信息处理", mark: "家" },
+  { path: "/college/difficulty/students", label: "困难生明细", mark: "明" },
   { path: "/college/records", label: "提交记录", mark: "记" },
 ];
 

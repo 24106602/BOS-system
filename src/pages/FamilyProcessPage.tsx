@@ -9,6 +9,10 @@ type FamilyProcessPageProps = {
   exportFamilyResult: () => void;
   exportFamilyErrorReport: () => void;
   addFamilyResultToMergePool: () => void;
+  confirmCollegeReview: () => void;
+  reviewConfirmed: boolean;
+  uploadedToSchool: boolean;
+  onViewDifficultyStudents?: () => void;
   hideSubmitAction?: boolean;
   familyStatus: string;
   familyCollegeName: string;
@@ -30,6 +34,10 @@ export default function FamilyProcessPage({
   exportFamilyResult,
   exportFamilyErrorReport,
   addFamilyResultToMergePool,
+  confirmCollegeReview,
+  reviewConfirmed,
+  uploadedToSchool,
+  onViewDifficultyStudents,
   hideSubmitAction = false,
   familyStatus,
   familyCollegeName,
@@ -51,7 +59,19 @@ export default function FamilyProcessPage({
     () => familyProcessedData.filter((_, index) => !failedRowNumbers.has(index + 1)),
     [failedRowNumbers, familyProcessedData]
   );
-  const canUpload = familyProcessedData.length > 0 && familyReviewRows.length === 0 && familyStats.errors === 0 && !isFamilyProcessing;
+  const hasProcessedRows = familyProcessedData.length > 0 && !isFamilyProcessing;
+  const hasBlockingRows = familyReviewRows.length > 0 || familyStats.errors > 0;
+  const canConfirm = hasProcessedRows && !reviewConfirmed;
+  const uploadButtonStyle =
+    hasProcessedRows && reviewConfirmed && !hasBlockingRows ? pageStyles.greenButton :
+    hasProcessedRows ? pageStyles.orangeButton :
+    pageStyles.disabledButton;
+  const reviewStatus =
+    !familyProcessedData.length ? "未处理" :
+    hasBlockingRows ? "存在不通过数据，禁止确认/上载" :
+    uploadedToSchool ? "已上载学校端" :
+    reviewConfirmed ? "学院已确认" :
+    "已处理，待确认";
 
   const selectFile = () => {
     if (!familyDataRef.current) return;
@@ -109,6 +129,9 @@ export default function FamilyProcessPage({
 
           <div style={pageStyles.status}>{familyStatus}</div>
           <div style={pageStyles.status}>当前识别学部（院）：{familyCollegeName}</div>
+          <div style={reviewConfirmed ? pageStyles.reviewStatusOk : hasBlockingRows ? pageStyles.reviewStatusError : pageStyles.reviewStatus}>
+            学院确认状态：{reviewStatus}
+          </div>
 
           <div style={pageStyles.statsGrid}>
             <Stat label="总数据" value={familyStats.total} />
@@ -121,21 +144,38 @@ export default function FamilyProcessPage({
             <button style={pageStyles.purpleButton} onClick={exportFamilyResult}>导出通过名单</button>
             <button style={pageStyles.purpleButton} onClick={exportFamilyErrorReport}>导出不通过名单</button>
             {!hideSubmitAction && (
-              <button
-                style={canUpload ? pageStyles.greenButton : pageStyles.disabledButton}
-                disabled={!canUpload}
-                onClick={addFamilyResultToMergePool}
-              >
-                上载到学校端
+              <>
+                <button
+                  style={canConfirm ? pageStyles.orangeButton : reviewConfirmed ? pageStyles.greenButton : pageStyles.disabledButton}
+                  disabled={!canConfirm}
+                  onClick={confirmCollegeReview}
+                >
+                  {reviewConfirmed ? "已确认，可上载学校端" : "学院确认审核"}
+                </button>
+                <button
+                  style={uploadButtonStyle}
+                  disabled={!hasProcessedRows}
+                  onClick={addFamilyResultToMergePool}
+                >
+                  上载到学校端
+                </button>
+              </>
+            )}
+            {onViewDifficultyStudents && (
+              <button style={pageStyles.blueButton} onClick={onViewDifficultyStudents}>
+                查看困难生明细
               </button>
             )}
           </div>
 
           {familyProcessedData.length > 0 && familyReviewRows.length > 0 && (
-            <div style={pageStyles.errorStatus}>当前存在不通过项，不能上载到学校端，请导出不通过名单修改后重新处理。</div>
+            <div style={pageStyles.errorStatus}>当前存在不通过项，不能确认审核，也不能上载到学校端，请导出不通过名单修改后重新处理。</div>
           )}
-          {familyProcessedData.length > 0 && familyReviewRows.length === 0 && (
-            <div style={pageStyles.successStatus}>当前数据已全部通过，可以上载到学校端。</div>
+          {familyProcessedData.length > 0 && familyReviewRows.length === 0 && !reviewConfirmed && (
+            <div style={pageStyles.successStatus}>当前数据已全部通过，请先完成学院确认审核。</div>
+          )}
+          {familyProcessedData.length > 0 && familyReviewRows.length === 0 && reviewConfirmed && (
+            <div style={pageStyles.successStatus}>学院已确认，可上载学校端。</div>
           )}
         </section>
 
@@ -227,9 +267,13 @@ const pageStyles: Record<string, CSSProperties> = {
   blueButton: button("#0077d4"),
   purpleButton: button("#6757c8"),
   greenButton: button("#0b9b6f"),
+  orangeButton: button("#d78a14"),
   disabledButton: { ...button("#a6b4c5"), cursor: "not-allowed" },
   backButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "8px 11px", background: "#fff", color: "#26364e", fontWeight: 800, cursor: "pointer", marginBottom: 12 },
   status: { background: "#f3f9ff", color: "#0875bd", border: "1px solid #cce3f8", borderRadius: 6, padding: 9, marginTop: 7, fontSize: 13 },
+  reviewStatus: { background: "#fff8e6", color: "#9a6700", border: "1px solid #fde6a7", borderRadius: 6, padding: 9, marginTop: 7, fontSize: 13, fontWeight: 800 },
+  reviewStatusOk: { background: "#e9f8f2", color: "#087b5b", border: "1px solid #c7eedf", borderRadius: 6, padding: 9, marginTop: 7, fontSize: 13, fontWeight: 800 },
+  reviewStatusError: { background: "#fff1f2", color: "#b42336", border: "1px solid #ffd4da", borderRadius: 6, padding: 9, marginTop: 7, fontSize: 13, fontWeight: 800 },
   errorStatus: { background: "#fff1f2", color: "#b42336", border: "1px solid #ffd4da", borderRadius: 6, padding: 9, marginTop: 10, fontSize: 13, fontWeight: 700 },
   successStatus: { background: "#e9f8f2", color: "#087b5b", border: "1px solid #c7eedf", borderRadius: 6, padding: 9, marginTop: 10, fontSize: 13, fontWeight: 700 },
   statsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 8, marginTop: 12 },

@@ -14,6 +14,7 @@ import StudentProcessPage from "./pages/StudentProcessPage";
 import FamilyProcessPage from "./pages/FamilyProcessPage";
 import { exportFamilyExcel, processFamilyRows } from "./services/familyProcessor";
 import { exportStudentExcel, processStudentRows } from "./services/studentProcessor";
+import { syncCollegeStudentsToSupabase } from "./services/difficultyStudentService";
 
 import {
   parseFamilyTemplate,
@@ -111,9 +112,10 @@ type AppProps = {
   collegeMode?: boolean;
   fixedProcessingPanel?: "student" | "family";
   onBackToDifficulty?: () => void;
+  onViewDifficultyStudents?: () => void;
 };
 
-export default function App({ collegeMode = false, fixedProcessingPanel, onBackToDifficulty }: AppProps) {
+export default function App({ collegeMode = false, fixedProcessingPanel, onBackToDifficulty, onViewDifficultyStudents }: AppProps) {
   const dataRef = useRef<HTMLInputElement>(null);
   const familyDataRef = useRef<HTMLInputElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -164,6 +166,10 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   const [familyAnalysis, setFamilyAnalysis] = useState<Record<string, number>>({});
   const [familyStats, setFamilyStats] = useState<FamilyProcessingStats>(initialFamilyStats);
   const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear());
+  const [studentReviewConfirmed, setStudentReviewConfirmed] = useState(false);
+  const [familyReviewConfirmed, setFamilyReviewConfirmed] = useState(false);
+  const [studentUploadedToSchool, setStudentUploadedToSchool] = useState(false);
+  const [familyUploadedToSchool, setFamilyUploadedToSchool] = useState(false);
 
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -203,6 +209,18 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     setFamilyLogs((prev) => [...prev, { type, message, time: new Date().toLocaleTimeString() }]);
   };
 
+  const resetStudentReviewState = (message = "重新处理数据后确认状态已重置") => {
+    if (studentReviewConfirmed || studentUploadedToSchool) pushLog("info", message);
+    setStudentReviewConfirmed(false);
+    setStudentUploadedToSchool(false);
+  };
+
+  const resetFamilyReviewState = (message = "重新处理数据后确认状态已重置") => {
+    if (familyReviewConfirmed || familyUploadedToSchool) pushFamilyLog("info", message);
+    setFamilyReviewConfirmed(false);
+    setFamilyUploadedToSchool(false);
+  };
+
   const hasBlockingStudentUpload = () =>
     Boolean(studentCollegeValidationError) ||
     stats.errors > 0 ||
@@ -226,7 +244,14 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     }
 
     if (hasBlockingStudentUpload()) {
-      const message = "上传失败，当前数据仍存在不通过项，请查看“不通过预览”";
+      const message = "存在不通过数据，禁止上载学校端。";
+      pushLog("error", message);
+      alert(message);
+      return;
+    }
+
+    if (!studentReviewConfirmed) {
+      const message = "请先完成学院确认审核后再上载学校端。";
       pushLog("error", message);
       alert(message);
       return;
@@ -260,7 +285,14 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       rows: withAcademicYear(processedData, academicYear),
     });
 
+    const cloudResult = await syncCollegeStudentsToSupabase(processedData, academicYear, collegeName);
+    if (cloudResult.configured && cloudResult.failed === 0) pushLog("success", cloudResult.message);
+    else if (cloudResult.configured) pushLog("error", cloudResult.message);
+    else pushLog("info", cloudResult.message);
+
     pushLog("success", `${collegeName} ${academicYear} 本专科信息已上载到学校端，共 ${processedData.length} 条`);
+    setStudentUploadedToSchool(true);
+    setStatus("已上载学校端");
     alert("已上载到学校端");
   };
 
@@ -271,7 +303,14 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     }
 
     if (hasBlockingFamilyUpload()) {
-      const message = "上载失败，当前家庭成员数据仍存在不通过项，请查看“不通过预览”";
+      const message = "存在不通过数据，禁止上载学校端。";
+      pushFamilyLog("error", message);
+      alert(message);
+      return;
+    }
+
+    if (!familyReviewConfirmed) {
+      const message = "请先完成学院确认审核后再上载学校端。";
       pushFamilyLog("error", message);
       alert(message);
       return;
@@ -306,7 +345,45 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     });
 
     pushFamilyLog("success", `${collegeName} ${academicYear} 家庭成员信息已上载到学校端，共 ${familyProcessedData.length} 条`);
+    setFamilyUploadedToSchool(true);
+    setFamilyStatus("已上载学校端");
     alert("家庭成员信息已上载到学校端");
+  };
+
+  const confirmStudentCollegeReview = () => {
+    if (processedData.length === 0) {
+      alert("请先完成本专科信息处理");
+      return;
+    }
+    if (hasBlockingStudentUpload()) {
+      const message = "有不通过数据，无法确认审核";
+      pushLog("error", message);
+      alert(message);
+      return;
+    }
+    if (!confirm("确认本学院困难生数据已核对无误？确认后可上载学校端。")) return;
+    setStudentReviewConfirmed(true);
+    setStudentUploadedToSchool(false);
+    setStatus("学院已确认");
+    pushLog("success", "学院确认审核完成");
+  };
+
+  const confirmFamilyCollegeReview = () => {
+    if (familyProcessedData.length === 0) {
+      alert("请先完成家庭成员信息处理");
+      return;
+    }
+    if (hasBlockingFamilyUpload()) {
+      const message = "有不通过数据，无法确认审核";
+      pushFamilyLog("error", message);
+      alert(message);
+      return;
+    }
+    if (!confirm("确认本学院困难生数据已核对无误？确认后可上载学校端。")) return;
+    setFamilyReviewConfirmed(true);
+    setFamilyUploadedToSchool(false);
+    setFamilyStatus("学院已确认");
+    pushFamilyLog("success", "学院确认审核完成");
   };
 
   const applyStudentTemplate = (parsed: TemplateParseResult) => {
@@ -345,6 +422,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     setAnalysis({});
     setStats(initialStats);
     setStatus("正在读取本专科信息 Excel...");
+    resetStudentReviewState("重新处理数据后确认状态已重置");
 
     const workbookData = await readWorkbook(file);
     if (looksLikeFamilyFile(file.name, workbookData)) {
@@ -432,6 +510,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       setHighlightCellMap({});
       setDisqualifiedRows([]);
       setAnalysis({});
+      resetStudentReviewState("重新处理数据后确认状态已重置");
 
       const result = await processStudentRows({
         templateFields,
@@ -549,6 +628,8 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     familyProcessedData,
     familyCollegeName,
     familyCollegeValidationError,
+    studentReviewConfirmed,
+    familyReviewConfirmed,
   ]);
 
   const exportStudentList = (exportMode: "passed" | "failed") => {
@@ -603,6 +684,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     setFamilyAnalysis({});
     setFamilyStats(initialFamilyStats);
     setFamilyStatus("正在读取家庭成员信息 Excel...");
+    resetFamilyReviewState("重新处理数据后确认状态已重置");
 
     const workbookData = await readWorkbook(file);
     if (!looksLikeFamilyFile(file.name, workbookData)) {
@@ -687,6 +769,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       setFamilyHighlightCellMap({});
       setFamilyReviewRows([]);
       setFamilyAnalysis({});
+      resetFamilyReviewState("重新处理数据后确认状态已重置");
 
       const result = await processFamilyRows({
         familyTemplateFields,
@@ -911,6 +994,10 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
               exportExcel={exportExcel}
               exportStudentErrorReport={exportStudentErrorReport}
               addStudentResultToMergePool={addStudentResultToMergePool}
+              confirmCollegeReview={confirmStudentCollegeReview}
+              reviewConfirmed={studentReviewConfirmed}
+              uploadedToSchool={studentUploadedToSchool}
+              onViewDifficultyStudents={onViewDifficultyStudents}
               hideSubmitAction={false}
               status={status}
               studentCollegeName={studentCollegeName}
@@ -932,6 +1019,10 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
               exportFamilyResult={exportFamilyResult}
               exportFamilyErrorReport={exportFamilyErrorReport}
               addFamilyResultToMergePool={addFamilyResultToMergePool}
+              confirmCollegeReview={confirmFamilyCollegeReview}
+              reviewConfirmed={familyReviewConfirmed}
+              uploadedToSchool={familyUploadedToSchool}
+              onViewDifficultyStudents={onViewDifficultyStudents}
               hideSubmitAction={false}
               familyStatus={familyStatus}
               familyCollegeName={familyCollegeName}
