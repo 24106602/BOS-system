@@ -17,6 +17,24 @@ const statusText: Record<string, string> = {
 
 const displayStatus = (status: string) => statusText[status] || status || "已上载学校端";
 
+const normalizeRawKey = (value: string) =>
+  value.replace(/\s|\*|（.*?）|\(.*?\)/g, "").toLowerCase();
+
+const getRawDetail = (row: DifficultyStudentRow, aliases: string[]) => {
+  const rawData = row.raw_data || {};
+  for (const alias of aliases) {
+    const value = rawData[alias];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+
+  const normalizedAliases = aliases.map(normalizeRawKey);
+  const matchedKey = Object.keys(rawData).find((key) => {
+    const normalizedKey = normalizeRawKey(key);
+    return normalizedAliases.some((alias) => normalizedKey.includes(alias) || alias.includes(normalizedKey));
+  });
+  return matchedKey ? String(rawData[matchedKey] ?? "").trim() : "";
+};
+
 export default function CollegeDifficultyStudentsPage({ profile }: CollegeDifficultyStudentsPageProps) {
   const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear());
   const [nameKeyword, setNameKeyword] = useState("");
@@ -199,21 +217,25 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
       </section>
 
       {selectedRow && (
-        <section style={styles.detailCard}>
-          <div style={styles.detailHeader}>
-            <h2 style={styles.subTitle}>明细详情预留</h2>
-            <button style={styles.closeButton} onClick={() => setSelectedRow(null)}>关闭</button>
-          </div>
-          <div style={styles.detailGrid}>
-            <Detail label="学年" value={selectedRow.academic_year} />
-            <Detail label="学院" value={selectedRow.college_name} />
-            <Detail label="姓名" value={selectedRow.name} />
-            <Detail label="学号" value={selectedRow.student_id} />
-            <Detail label="身份证号" value={selectedRow.id_card} />
-            <Detail label="困难等级" value={selectedRow.difficulty_level} />
-            <Detail label="状态" value={displayStatus(selectedRow.status)} />
-          </div>
-        </section>
+        <div style={styles.modalBackdrop}>
+          <section style={styles.detailModal}>
+            <div style={styles.detailHeader}>
+              <h2 style={styles.subTitle}>困难生明细详情</h2>
+              <button style={styles.closeButton} onClick={() => setSelectedRow(null)}>关闭</button>
+            </div>
+            <div style={styles.detailGrid}>
+              <Detail label="学年" value={selectedRow.academic_year} />
+              <Detail label="学院" value={selectedRow.college_name} />
+              <Detail label="姓名" value={selectedRow.name} />
+              <Detail label="学号" value={selectedRow.student_id} />
+              <Detail label="身份证号" value={selectedRow.id_card} />
+              <Detail label="年级" value={getRawDetail(selectedRow, ["grade", "年级", "所在年级"])} />
+              <Detail label="性别" value={getRawDetail(selectedRow, ["gender", "性别"])} />
+              <Detail label="困难等级" value={selectedRow.difficulty_level} />
+              <Detail label="状态" value={displayStatus(selectedRow.status)} />
+            </div>
+          </section>
+        </div>
       )}
     </section>
   );
@@ -229,7 +251,7 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: { height: "100%", minHeight: 0, display: "grid", gridTemplateRows: "auto auto minmax(0, 1fr) auto", gap: 10, overflow: "hidden", boxSizing: "border-box" },
+  page: { height: "100%", minHeight: 0, display: "grid", gridTemplateRows: "auto auto minmax(0, 1fr)", gap: 10, overflow: "hidden", boxSizing: "border-box" },
   hero: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: 14, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
   eyebrow: { color: "#0077d4", fontSize: 13, fontWeight: 800 },
   title: { margin: "5px 0 7px", color: "#172033", fontSize: 25 },
@@ -252,7 +274,8 @@ const styles: Record<string, CSSProperties> = {
   empty: { padding: 18, color: "#8190a4", textAlign: "center" },
   linkButton: { border: "none", background: "transparent", color: "#0077d4", fontWeight: 800, cursor: "pointer" },
   smallButton: { border: "1px solid #bcd9f5", borderRadius: 6, padding: "6px 9px", background: "#f3f9ff", color: "#0879c5", fontWeight: 800, cursor: "pointer" },
-  detailCard: { maxHeight: 150, overflow: "auto", padding: 12, border: "1px solid #c7eedf", borderRadius: 8, background: "#f5fffa", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
+  modalBackdrop: { position: "fixed", inset: 0, zIndex: 9999, background: "rgba(15,23,42,0.45)", display: "grid", placeItems: "center", padding: 18 },
+  detailModal: { width: "min(720px, 92vw)", maxHeight: "70vh", overflow: "auto", padding: 16, border: "1px solid #c7eedf", borderRadius: 10, background: "#f5fffa", boxShadow: "0 24px 80px rgba(15,23,42,0.28)" },
   detailHeader: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 10 },
   subTitle: { margin: 0, color: "#172033", fontSize: 17 },
   closeButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "7px 10px", background: "#fff", color: "#26364e", fontWeight: 800, cursor: "pointer" },

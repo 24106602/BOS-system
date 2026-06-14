@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import * as XLSX from "xlsx-js-style";
 import { getMergeBatches } from "../../db/localMergeDb";
 import { isSupabaseConfigured, supabase } from "../../lib/supabaseClient";
@@ -367,6 +367,7 @@ export default function AdminStudentsPage() {
   const [isLoadingDatabase, setIsLoadingDatabase] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [searchFilters, setSearchFilters] = useState<SearchFilters>(emptyFilters);
+  const [showImportModal, setShowImportModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -626,6 +627,10 @@ export default function AdminStudentsPage() {
               ))}
             </select>
           </label>
+          <button style={styles.importButton} onClick={() => setShowImportModal(true)}>数据导入</button>
+          <button style={styles.secondaryButton} onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>
+            {isLoadingDatabase ? "刷新中..." : "刷新"}
+          </button>
           <button style={styles.exportButton} onClick={exportCurrentYearDatabase}>导出当前学年困难生数据库</button>
         </div>
       </div>
@@ -637,55 +642,6 @@ export default function AdminStudentsPage() {
         <Stat label="当前学年身份证号关联成功数" value={linkedCount} />
         <Stat label="当前学年家庭成员匹配异常数" value={familyIssueCount} tone="#c2414d" />
       </div>
-
-      <section style={{ ...styles.card, ...styles.importCard }}>
-        <div style={styles.sectionHead}>
-          <div>
-            <h2 style={styles.subTitle}>上载往年数据</h2>
-            <p style={styles.description}>用于导入已有历史名单，例如 2024-2025 学年困难生名单。数据会按所选 academic_year 写入 students 表，不走学部（院）端上载流程。</p>
-          </div>
-          <span style={styles.badge}>学校管理员归档</span>
-        </div>
-        <div style={styles.importGrid}>
-          <label style={styles.yearSelectLabel}>
-            当前选择学年
-            <select style={styles.yearSelect} value={historicalYear} onChange={(event) => setHistoricalYear(event.target.value)}>
-              {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-          </label>
-          <div style={styles.filePicker}>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              style={{ display: "none" }}
-              onChange={(event) => setHistoricalFile(event.target.files?.[0] || null)}
-            />
-            <button style={styles.secondaryButton} onClick={() => fileInputRef.current?.click()}>选择往年困难生数据库文件</button>
-            <span style={styles.fileName}>{historicalFile?.name || "未选择文件"}</span>
-          </div>
-          <button style={isImporting ? styles.disabledButton : styles.importButton} disabled={isImporting} onClick={importHistoricalData}>
-            {isImporting ? "导入中..." : "开始导入"}
-          </button>
-        </div>
-        <div style={styles.importStats}>
-          <Stat label="总行数" value={importStats.total} />
-          <Stat label="成功新增" value={importStats.inserted} tone="#087b5b" />
-          <Stat label="成功更新" value={importStats.updated} tone="#0077d4" />
-          <Stat label="跳过重复数" value={importStats.skipped} tone="#a16207" />
-          <Stat label="失败数" value={importStats.failed} tone="#c2414d" />
-        </div>
-        <div style={styles.yearHint}>当前归档学年：{historicalYear}</div>
-        <div style={styles.importLogBox}>
-          {importLogs.length === 0 ? (
-            <div style={styles.importLogItem}>暂无导入日志</div>
-          ) : (
-            importLogs.map((log, index) => <div key={`${log}_${index}`} style={styles.importLogItem}>{log}</div>)
-          )}
-        </div>
-      </section>
 
       <section style={{ ...styles.card, ...styles.detailCard }}>
         <div style={styles.sectionHead}>
@@ -791,6 +747,63 @@ export default function AdminStudentsPage() {
           </table>
         </div>
       </section>
+
+      {showImportModal && (
+        <Modal title="往年困难生数据导入" onClose={() => setShowImportModal(false)}>
+          <div style={styles.sectionHead}>
+            <div>
+              <h2 style={styles.subTitle}>上传往年数据</h2>
+              <p style={styles.description}>用于导入已有历史名单，例如 2024-2025 学年困难生名单。数据会按所选 academic_year 写入 students 表，不走学部（院）端上载流程。</p>
+            </div>
+            <span style={styles.badge}>学校管理员归档</span>
+          </div>
+          <div style={styles.importGrid}>
+            <label style={styles.yearSelectLabel}>
+              当前选择学年
+              <select style={styles.yearSelect} value={historicalYear} onChange={(event) => setHistoricalYear(event.target.value)}>
+                {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </label>
+            <div style={styles.filePicker}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls"
+                style={{ display: "none" }}
+                onChange={(event) => setHistoricalFile(event.target.files?.[0] || null)}
+              />
+              <button style={styles.secondaryButton} onClick={() => fileInputRef.current?.click()}>选择往年困难生数据库文件</button>
+              <span style={styles.fileName}>{historicalFile?.name || "未选择文件"}</span>
+            </div>
+            <button style={isImporting ? styles.disabledButton : styles.importButton} disabled={isImporting} onClick={importHistoricalData}>
+              {isImporting ? "导入中..." : "开始导入"}
+            </button>
+          </div>
+          <div style={styles.importStats}>
+            <Stat label="总行数" value={importStats.total} />
+            <Stat label="成功新增" value={importStats.inserted} tone="#087b5b" />
+            <Stat label="成功更新" value={importStats.updated} tone="#0077d4" />
+            <Stat label="跳过重复数" value={importStats.skipped} tone="#a16207" />
+            <Stat label="失败数" value={importStats.failed} tone="#c2414d" />
+          </div>
+          <div style={styles.yearHint}>当前归档学年：{historicalYear}</div>
+          <div style={styles.importLogBox}>
+            {importLogs.length === 0 ? (
+              <div style={styles.importLogItem}>暂无导入日志</div>
+            ) : (
+              importLogs.map((log, index) => <div key={`${log}_${index}`} style={styles.importLogItem}>{log}</div>)
+            )}
+          </div>
+          <div style={styles.modalFooter}>
+            <button style={styles.secondaryButton} onClick={() => setShowImportModal(false)}>关闭</button>
+            <button style={isImporting ? styles.disabledButton : styles.importButton} disabled={isImporting} onClick={importHistoricalData}>
+              {isImporting ? "导入中..." : "开始导入"}
+            </button>
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }
@@ -804,8 +817,22 @@ function Stat({ label, value, tone = "#0077d4" }: { label: string; value: number
   );
 }
 
+function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  return (
+    <div style={styles.modalBackdrop}>
+      <section style={styles.modal}>
+        <div style={styles.modalHeader}>
+          <h2 style={styles.modalTitle}>{title}</h2>
+          <button style={styles.closeButton} onClick={onClose}>关闭</button>
+        </div>
+        <div style={styles.modalBody}>{children}</div>
+      </section>
+    </div>
+  );
+}
+
 const styles: Record<string, CSSProperties> = {
-  page: { height: "calc(100vh - 104px)", minHeight: 720, display: "grid", gridTemplateRows: "auto auto minmax(190px, 0.7fr) minmax(0, 1.3fr)", gap: 10, overflow: "hidden" },
+  page: { height: "calc(100vh - 104px)", minHeight: 0, display: "grid", gridTemplateRows: "auto auto minmax(0, 1fr)", gap: 10, overflow: "hidden" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, marginBottom: 10, padding: 14, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
   headerActions: { display: "flex", alignItems: "end", gap: 10, flexWrap: "wrap" },
   eyebrow: { color: "#0077d4", fontSize: 12, fontWeight: 800, marginBottom: 5 },
@@ -844,4 +871,11 @@ const styles: Record<string, CSSProperties> = {
   th: { position: "sticky", top: 0, zIndex: 1, background: "#edf4fa", color: "#40526a", padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" },
   td: { borderTop: "1px solid #e3ebf3", padding: "7px 8px", color: "#52647b", textAlign: "center", whiteSpace: "nowrap" },
   empty: { borderTop: "1px solid #e3ebf3", padding: 16, color: "#8190a4", textAlign: "center" },
+  modalBackdrop: { position: "fixed", inset: 0, zIndex: 9999, background: "rgba(15,23,42,0.45)", display: "grid", placeItems: "center", padding: 18 },
+  modal: { width: "min(860px, 94vw)", height: "70vh", minHeight: 430, background: "#fff", borderRadius: 10, boxShadow: "0 24px 80px rgba(15,23,42,0.28)", display: "flex", flexDirection: "column", overflow: "hidden" },
+  modalHeader: { flex: "0 0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "14px 16px", borderBottom: "1px solid #d7e1ed" },
+  modalTitle: { margin: 0, color: "#172033", fontSize: 18 },
+  modalBody: { flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 },
+  modalFooter: { flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 10, borderTop: "1px solid #eef2f7" },
+  closeButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "7px 10px", background: "#fff", color: "#26364e", fontWeight: 800, cursor: "pointer" },
 };
