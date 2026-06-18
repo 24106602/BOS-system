@@ -45,6 +45,14 @@ const englishLabels: Record<string, string> = {
   "/admin/awards/shanghai": "Shanghai Scholarship",
 };
 
+const workspacePaths = new Set([
+  "/admin/students",
+  "/admin/awards",
+  "/admin/awards/national",
+  "/admin/awards/inspirational",
+  "/admin/awards/shanghai",
+]);
+
 function MenuButton({
   item,
   active,
@@ -133,7 +141,7 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
             <button onClick={onLogout}>退出登录</button>
           </div>
         </header>
-        <main className={`bos-page-main${path === "/admin/students" ? " bos-page-main--workspace" : ""}`}>{children}</main>
+        <main className={`bos-page-main${workspacePaths.has(path) ? " bos-page-main--workspace" : ""}`}>{children}</main>
       </div>
     </div>
   );

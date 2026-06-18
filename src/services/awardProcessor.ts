@@ -18,6 +18,7 @@ import type {
   AwardProcessResult,
   AwardProcessedRow,
   AwardRepairLog,
+  AwardAdminRecord,
   AwardSubmission,
   AwardTemplate,
   AwardType,
@@ -1314,32 +1315,86 @@ export const buildAwardTypeCounts = (rows: AwardProcessedRow[], fields: string[]
 
 export const makeAwardSubmission = ({
   awardType,
+  academicYear,
   collegeName,
   fields,
   result,
 }: {
   awardType: AwardType;
+  academicYear: string;
   collegeName: string;
   fields: string[];
   result: AwardProcessResult;
-}): AwardSubmission => ({
-  id: crypto.randomUUID(),
-  awardType,
-  collegeName: normalizeSubmissionCollegeName(collegeName),
-  createdAt: new Date().toISOString(),
-  rowCount: result.passedRows.length,
-  awardTypeCounts: buildAwardTypeCounts(result.passedRows, fields),
-  rows: result.passedRows.map((row) => row.values),
-});
+}): AwardSubmission => {
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    awardType,
+    academicYear,
+    collegeName: normalizeSubmissionCollegeName(collegeName),
+    createdAt: now,
+    confirmedAt: now,
+    reviewStatus: "confirmed",
+    submitStatus: "submitted",
+    rowCount: result.passedRows.length,
+    awardTypeCounts: buildAwardTypeCounts(result.passedRows, fields),
+    fields,
+    rows: result.passedRows.map((row) => row.values),
+  };
+};
+
+const getAcademicYearForDate = (value: string | Date) => {
+  const date = value instanceof Date ? value : new Date(value);
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  const year = safeDate.getFullYear();
+  const startYear = safeDate.getMonth() >= 7 ? year : year - 1;
+  return `${startYear}-${startYear + 1}`;
+};
+
+export const getCurrentAcademicYear = () => getAcademicYearForDate(new Date());
+
+export const getAwardAcademicYearOptions = (submissions: AwardSubmission[] = []) => {
+  const currentStart = Number(getCurrentAcademicYear().slice(0, 4));
+  const years = new Set([
+    ...Array.from({ length: 6 }, (_, index) => `${currentStart - index}-${currentStart - index + 1}`),
+    ...submissions.map((submission) => submission.academicYear),
+  ]);
+  return [...years].filter(Boolean).sort((left, right) => right.localeCompare(left));
+};
+
+const normalizeAwardSubmission = (
+  submission: Partial<AwardSubmission> & Pick<AwardSubmission, "id" | "awardType" | "collegeName" | "createdAt" | "rows">
+): AwardSubmission => {
+  const rows = Array.isArray(submission.rows) ? submission.rows : [];
+  const fields =
+    Array.isArray(submission.fields) && submission.fields.length > 0
+      ? submission.fields
+      : Object.keys(rows[0] || {});
+  return {
+    id: submission.id,
+    awardType: submission.awardType,
+    academicYear: submission.academicYear || getAcademicYearForDate(submission.createdAt),
+    collegeName: normalizeSubmissionCollegeName(submission.collegeName),
+    createdAt: submission.createdAt,
+    confirmedAt: submission.confirmedAt || submission.createdAt,
+    reviewStatus: submission.reviewStatus || "confirmed",
+    submitStatus: submission.submitStatus || "submitted",
+    rowCount: submission.rowCount ?? rows.length,
+    awardTypeCounts: submission.awardTypeCounts || buildAwardTypeCounts(
+      rows.map((values, sourceRowIndex) => ({ sourceRowIndex, excelRowNumber: sourceRowIndex + 3, values })),
+      fields
+    ),
+    fields,
+    rows,
+  };
+};
 
 export const getAwardSubmissions = (awardType: AwardType): AwardSubmission[] => {
   try {
-    return (JSON.parse(localStorage.getItem(awardStorageKeys[awardType]) || "[]") as AwardSubmission[]).map(
-      (submission) => ({
-        ...submission,
-        collegeName: normalizeSubmissionCollegeName(submission.collegeName),
-      })
-    );
+    const stored = JSON.parse(localStorage.getItem(awardStorageKeys[awardType]) || "[]") as Array<
+      Partial<AwardSubmission> & Pick<AwardSubmission, "id" | "awardType" | "collegeName" | "createdAt" | "rows">
+    >;
+    return stored.map((submission) => normalizeAwardSubmission({ ...submission, awardType }));
   } catch {
     return [];
   }
@@ -1347,13 +1402,96 @@ export const getAwardSubmissions = (awardType: AwardType): AwardSubmission[] => 
 
 export const saveAwardSubmission = (awardType: AwardType, submission: AwardSubmission) => {
   const submissions = getAwardSubmissions(awardType);
+  const normalized = normalizeAwardSubmission({
+    ...submission,
+    awardType,
+    collegeName: normalizeSubmissionCollegeName(submission.collegeName),
+  });
+  const duplicateIndex = submissions.findIndex(
+    (item) =>
+      item.academicYear === normalized.academicYear &&
+      item.collegeName === normalized.collegeName
+  );
+  const nextSubmissions =
+    duplicateIndex >= 0
+      ? submissions.map((item, index) => (index === duplicateIndex ? normalized : item))
+      : [...submissions, normalized];
   localStorage.setItem(
     awardStorageKeys[awardType],
-    JSON.stringify([
-      ...submissions,
-      { ...submission, collegeName: normalizeSubmissionCollegeName(submission.collegeName) },
-    ])
+    JSON.stringify(nextSubmissions)
   );
+};
+
+export const getAllAwardSubmissions = () =>
+  (["national", "inspirational", "shanghai"] as AwardType[]).flatMap((awardType) =>
+    getAwardSubmissions(awardType)
+  );
+
+const pickAwardRowValue = (row: Record<string, unknown>, aliases: string[]) => {
+  const normalizedAliases = aliases.map(normalizeHeaderName);
+  const match = Object.entries(row).find(([field]) => {
+    const normalizedField = normalizeHeaderName(field);
+    return normalizedAliases.some(
+      (alias) => alias === normalizedField || normalizedField.includes(alias) || alias.includes(normalizedField)
+    );
+  });
+  return toText(match?.[1]);
+};
+
+export const getAwardAdminRecords = (awardType?: AwardType): AwardAdminRecord[] => {
+  const submissions = awardType ? getAwardSubmissions(awardType) : getAllAwardSubmissions();
+  return submissions.flatMap((submission) =>
+    submission.rows.map((rawData, rowIndex) => ({
+      id: `${submission.id}_${rowIndex}`,
+      submissionId: submission.id,
+      academicYear: submission.academicYear,
+      awardType: submission.awardType,
+      collegeName:
+        pickAwardRowValue(rawData, ["院系名称", "学院", "所在学院"]) || submission.collegeName,
+      studentId: pickAwardRowValue(rawData, ["学生学号", "学号"]),
+      name: pickAwardRowValue(rawData, ["学生姓名", "姓名"]),
+      idCard: pickAwardRowValue(rawData, ["身份证号", "身份证件号", "证件号"]),
+      major: pickAwardRowValue(rawData, ["专业名称", "所在专业", "专业"]),
+      grade: pickAwardRowValue(rawData, ["年级"]),
+      gender: pickAwardRowValue(rawData, ["性别"]),
+      status: pickAwardRowValue(rawData, ["状态", "审核状态"]) || "已上载",
+      reviewStatus: submission.reviewStatus,
+      submitStatus: submission.submitStatus,
+      submittedAt: submission.createdAt,
+      rawData,
+    }))
+  );
+};
+
+export const exportAwardIssues = (result: AwardProcessResult, awardName = "三大奖") => {
+  if (result.issues.length === 0) throw new Error("当前没有可导出的问题说明");
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, makeIssueSheet(result.issues), "问题说明");
+  XLSX.writeFile(workbook, `${awardName}问题说明_${Date.now()}.xlsx`);
+};
+
+export const exportAwardAdminRecords = (records: AwardAdminRecord[], awardName = "三大奖") => {
+  if (records.length === 0) throw new Error("当前筛选条件下暂无可导出数据");
+  const rows = records.map((record) => ({
+    学年: record.academicYear,
+    奖项: awardTypeLabels[record.awardType],
+    学院: record.collegeName,
+    学号: record.studentId,
+    姓名: record.name,
+    身份证号: record.idCard,
+    专业: record.major,
+    年级: record.grade,
+    性别: record.gender,
+    状态: record.status,
+    学院确认: record.reviewStatus === "confirmed" ? "已确认" : "待确认",
+    上载状态: record.submitStatus === "submitted" ? "已上载" : "待上载",
+    上载时间: new Date(record.submittedAt).toLocaleString(),
+    ...record.rawData,
+  }));
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet(rows);
+  XLSX.utils.book_append_sheet(workbook, worksheet, `${awardName}汇总`.slice(0, 31));
+  XLSX.writeFile(workbook, `${awardName}当前名单_${Date.now()}.xlsx`);
 };
 
 export const exportAwardSummary = (submissions: AwardSubmission[], awardName = "三大奖") => {

@@ -19,6 +19,7 @@ const difficultyMenus = [
 ];
 
 const awardMenus = [
+  { path: "/college/awards", label: "三奖业务首页", mark: "奖" },
   { path: "/college/awards/national", label: "国家奖学金数据处理", mark: "国" },
   { path: "/college/awards/inspirational", label: "国家励志奖学金数据处理", mark: "励" },
   { path: "/college/awards/shanghai", label: "上海市奖学金数据处理", mark: "沪" },
@@ -31,6 +32,7 @@ const englishLabels: Record<string, string> = {
   "/college/difficulty/family": "Family Information",
   "/college/difficulty/students": "Student Records",
   "/college/records": "Submission Records",
+  "/college/awards": "Awards Home",
   "/college/awards/national": "National Scholarship",
   "/college/awards/inspirational": "Inspirational Scholarship",
   "/college/awards/shanghai": "Shanghai Scholarship",
@@ -41,6 +43,10 @@ const workspacePaths = new Set([
   "/college/difficulty/student",
   "/college/difficulty/family",
   "/college/difficulty/students",
+  "/college/awards",
+  "/college/awards/national",
+  "/college/awards/inspirational",
+  "/college/awards/shanghai",
 ]);
 
 function MenuButton({

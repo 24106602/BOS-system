@@ -1,72 +1,138 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from "react";
+import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { readWorkbook } from "../../services/templateParser";
 import {
   exportAwardExcel,
+  exportAwardIssues,
+  getAwardAcademicYearOptions,
   getAwardImportDiagnostics,
+  getCurrentAcademicYear,
   makeAwardSubmission,
   parseAwardWorkbook,
   processAwardWorkbook,
   saveAwardSubmission,
 } from "../../services/awardProcessor";
-import { awardTypeLabels, getAwardTemplateValidationError } from "../../services/awardConfig";
+import { awardTypeLabels, awardTypes, getAwardTemplateValidationError } from "../../services/awardConfig";
+import { normalizeHeaderName } from "../../services/awardFieldResolver";
 import { resolveCollegeUpload } from "../../utils/collegeDetector";
-import type { AwardIssue, AwardProcessResult, AwardProcessedRow, AwardTemplate, AwardType } from "../../types/award";
+import type {
+  AwardIssue,
+  AwardProcessResult,
+  AwardProcessedRow,
+  AwardTemplate,
+  AwardType,
+} from "../../types/award";
+import "./awards.css";
 
-type PageLog = {
-  type: "info" | "success" | "error";
-  message: string;
-  time: string;
-};
-
-const addTime = (type: PageLog["type"], message: string): PageLog => ({
-  type,
-  message,
-  time: new Date().toLocaleTimeString(),
-});
+type ModalName = "import" | "passed" | "failed" | "issues" | "detail" | null;
+type ImportLog = { tone: "info" | "success" | "error"; message: string };
 
 type AwardProcessPageProps = {
   awardType: AwardType;
 };
 
+const awardPaths: Record<AwardType, string> = {
+  national: "/college/awards/national",
+  inspirational: "/college/awards/inspirational",
+  shanghai: "/college/awards/shanghai",
+};
+
+const findField = (fields: string[], aliases: string[]) => {
+  const normalizedAliases = aliases.map(normalizeHeaderName);
+  return fields.find((field) => {
+    const normalizedField = normalizeHeaderName(field);
+    return normalizedAliases.some(
+      (alias) => normalizedField === alias || normalizedField.includes(alias) || alias.includes(normalizedField)
+    );
+  });
+};
+
+const rowValue = (row: AwardProcessedRow, field?: string) => String(field ? row.values[field] ?? "" : "");
+
 export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
   const awardName = awardTypeLabels[awardType];
   const fileRef = useRef<HTMLInputElement>(null);
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear);
   const [template, setTemplate] = useState<AwardTemplate | null>(null);
   const [result, setResult] = useState<AwardProcessResult | null>(null);
-  const [collegeName, setCollegeName] = useState("未知学院");
+  const [collegeName, setCollegeName] = useState("待识别学院");
   const [collegeError, setCollegeError] = useState("");
   const [fileName, setFileName] = useState("");
-  const [status, setStatus] = useState("等待上传 Excel");
-  const [logs, setLogs] = useState<PageLog[]>([]);
+  const [statusMessage, setStatusMessage] = useState("请先导入 Excel，系统将自动识别模板、Sheet 并治理数据。");
+  const [importLogs, setImportLogs] = useState<ImportLog[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [confirmed, setConfirmed] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [modal, setModal] = useState<ModalName>(null);
+  const [selectedRow, setSelectedRow] = useState<AwardProcessedRow | null>(null);
+  const [keyword, setKeyword] = useState("");
+  const [majorFilter, setMajorFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [logs]);
+  const fields = useMemo(() => template?.fields || [], [template]);
+  const nameField = useMemo(() => findField(fields, ["学生姓名", "姓名"]), [fields]);
+  const studentIdField = useMemo(() => findField(fields, ["学生学号", "学号"]), [fields]);
+  const idCardField = useMemo(() => findField(fields, ["身份证号", "身份证件号", "证件号"]), [fields]);
+  const majorField = useMemo(() => findField(fields, ["专业名称", "所在专业", "专业"]), [fields]);
 
-  const pushLog = (type: PageLog["type"], message: string) => {
-    setLogs((current) => [...current, addTime(type, message)]);
+  const failedRowIndexes = useMemo(
+    () => new Set((result?.failedRows || []).map((row) => row.sourceRowIndex)),
+    [result]
+  );
+  const allProcessedRows = useMemo(
+    () =>
+      result
+        ? [...result.passedRows, ...result.failedRows].sort((left, right) => left.sourceRowIndex - right.sourceRowIndex)
+        : [],
+    [result]
+  );
+  const majors = useMemo(
+    () =>
+      [...new Set(allProcessedRows.map((row) => rowValue(row, majorField)).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b, "zh-CN")
+      ),
+    [allProcessedRows, majorField]
+  );
+  const filteredRows = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    return allProcessedRows.filter((row) => {
+      const failed = failedRowIndexes.has(row.sourceRowIndex);
+      if (statusFilter === "passed" && failed) return false;
+      if (statusFilter === "failed" && !failed) return false;
+      if (majorFilter && rowValue(row, majorField) !== majorFilter) return false;
+      if (!normalizedKeyword) return true;
+      return [nameField, studentIdField, idCardField, majorField].some((field) =>
+        rowValue(row, field).toLowerCase().includes(normalizedKeyword)
+      );
+    });
+  }, [
+    allProcessedRows,
+    failedRowIndexes,
+    idCardField,
+    keyword,
+    majorField,
+    majorFilter,
+    nameField,
+    statusFilter,
+    studentIdField,
+  ]);
+
+  const issuesByRow = useMemo(() => {
+    const map = new Map<number, AwardIssue[]>();
+    (result?.issues || []).forEach((issue) => {
+      map.set(issue.rowIndex, [...(map.get(issue.rowIndex) || []), issue]);
+    });
+    return map;
+  }, [result]);
+
+  const openImport = () => {
+    if (!fileName) {
+      setImportLogs([]);
+      setStatusMessage("请选择 Excel 文件，系统将自动读取并执行治理。");
+    }
+    setModal("import");
   };
 
-  const resetProcessingState = () => {
-    setTemplate(null);
-    setResult(null);
-    setCollegeName("未知学院");
-    setCollegeError("");
-    setFileName("");
-    setStatus("等待上传 Excel");
-    setLogs([]);
-    setIsProcessing(false);
-    setIsLoading(false);
-    setErrorMessage("");
-    setHasSubmitted(false);
-  };
-
-  const selectFile = () => {
+  const chooseFile = () => {
     if (!fileRef.current) return;
     fileRef.current.value = "";
     fileRef.current.click();
@@ -77,133 +143,99 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
     const file = input.files?.[0];
     if (!file) return;
 
-    resetProcessingState();
-    setIsLoading(true);
+    setTemplate(null);
+    setResult(null);
+    setCollegeName("待识别学院");
+    setCollegeError("");
+    setIsProcessing(true);
     setFileName(file.name);
-    setStatus("正在读取 Excel...");
+    setConfirmed(false);
+    setSubmitted(false);
+    setImportLogs([{ tone: "info", message: `正在读取 ${file.name}` }]);
 
     let workbookData: Awaited<ReturnType<typeof readWorkbook>> | null = null;
     let nextTemplate: AwardTemplate | null = null;
-
     try {
       workbookData = await readWorkbook(file);
       nextTemplate = parseAwardWorkbook(workbookData);
       const templateError = getAwardTemplateValidationError(awardType, file.name, nextTemplate);
       if (templateError) throw new Error(templateError);
+
       const detection = resolveCollegeUpload(file.name);
+      const nextResult = processAwardWorkbook(nextTemplate, awardType);
+      const diagnostics = getAwardImportDiagnostics({
+        fileName: file.name,
+        workbookData,
+        template: nextTemplate,
+        awardType,
+      });
+
       setTemplate(nextTemplate);
-      setResult(null);
-      setHasSubmitted(false);
-      setFileName(file.name);
+      setResult(nextResult);
       setCollegeName(detection.collegeName);
       setCollegeError(detection.error);
-      setStatus(`已读取模板：${nextTemplate.fields.length} 个字段，${nextTemplate.sourceRows.length} 行待处理数据`);
-      setLogs([
-        addTime("success", `已读取 Excel：${file.name}`),
-        addTime("info", "已自动读取第 1 行填写要求、第 2 行字段名称，第 3 行起作为待处理数据"),
-        ...getAwardImportDiagnostics({ fileName: file.name, workbookData, template: nextTemplate, awardType }).map((message) =>
-          addTime("info", message)
-        ),
-        addTime(
-          detection.error ? "error" : "success",
-          detection.error || `已识别所属学院：${detection.collegeName}`
-        ),
+      setImportLogs([
+        { tone: "success", message: `已识别官方/有效 Sheet：${nextTemplate.outputSheet}` },
+        ...diagnostics.map((message) => ({ tone: "info" as const, message })),
+        {
+          tone: detection.error ? "error" : "success",
+          message: detection.error || `已识别学院：${detection.collegeName}`,
+        },
+        {
+          tone: nextResult.failedRows.length > 0 ? "error" : "success",
+          message: `治理完成：通过 ${nextResult.passedRows.length} 条，不通过 ${nextResult.failedRows.length} 条，自动修复 ${nextResult.logs.length} 项。`,
+        },
       ]);
+      setStatusMessage(
+        nextResult.failedRows.length > 0
+          ? `治理完成，存在 ${nextResult.failedRows.length} 条不通过数据，请查看问题分析并修正后重新导入。`
+          : `治理完成，${nextResult.passedRows.length} 条数据全部通过，可以进行学院确认审核。`
+      );
     } catch (error) {
-      console.error("Award Excel parse failed:", error);
-      const message = error instanceof Error ? error.message : "Excel 读取失败";
+      const message = error instanceof Error ? error.message : "Excel 读取或治理失败";
       setTemplate(null);
       setResult(null);
-      setStatus("Excel 读取失败");
-      setErrorMessage(message);
-      setLogs([
-        addTime("error", message),
-        ...getAwardImportDiagnostics({ fileName: file.name, workbookData, template: nextTemplate, awardType }).map((item) =>
-          addTime("info", item)
-        ),
+      setCollegeName("待识别学院");
+      setCollegeError("");
+      setImportLogs([
+        { tone: "error", message },
+        ...getAwardImportDiagnostics({
+          fileName: file.name,
+          workbookData,
+          template: nextTemplate,
+          awardType,
+        }).map((item) => ({ tone: "info" as const, message: item })),
       ]);
+      setStatusMessage(message);
     } finally {
       setIsProcessing(false);
-      setIsLoading(false);
       input.value = "";
       if (fileRef.current) fileRef.current.value = "";
     }
   };
 
-  const startProcessing = () => {
-    if (!template) {
-      alert(`请先选择${awardName} Excel 文件`);
-      return;
-    }
-
-    setIsProcessing(true);
-    setIsLoading(false);
-    setResult(null);
-    setHasSubmitted(false);
-    setErrorMessage("");
-    setStatus("正在检查并自动修复...");
-
-    try {
-      const nextResult = processAwardWorkbook(template, awardType);
-      const totalRows = nextResult.passedRows.length + nextResult.failedRows.length;
-      setResult(nextResult);
-      setLogs((current) => [
-        ...current,
-        ...nextResult.logs.map((item) =>
-          addTime(
-            "success",
-            `第 ${item.rowNumber} 行 ${item.field}：${item.reason}\n原值：${String(item.originalValue ?? "")}\n修复后：${String(item.fixedValue ?? "")}`
-          )
-        ),
-        ...nextResult.issues.map((item) =>
-          addTime("error", `第 ${item.rowNumber} 行 ${item.field}：${item.reason}`)
-        ),
-        addTime(
-          nextResult.failedRows.length > 0 ? "error" : "success",
-          totalRows === 0
-            ? "处理完成：未发现正式学生数据，可能当前文件只有模板说明或空行"
-            : `处理完成：通过 ${nextResult.passedRows.length} 行，不通过 ${nextResult.failedRows.length} 行，自动修复 ${nextResult.logs.length} 项`
-        ),
-      ]);
-      setStatus(
-        totalRows === 0
-          ? "处理完成：未发现正式学生数据"
-          : nextResult.failedRows.length > 0
-          ? "处理完成：存在不通过项，请导出不通过名单修改"
-          : "处理完成：全部通过，可以上载到学校端"
-      );
-    } catch (error) {
-      console.error("Award data processing failed:", error);
-      const message = error instanceof Error ? error.message : "数据处理失败";
-      setResult(null);
-      setErrorMessage(message);
-      setStatus("数据处理失败");
-      pushLog("error", message);
-    } finally {
-      setIsProcessing(false);
-      setIsLoading(false);
-    }
-  };
-
-  const exportPassedRows = () => {
-    if (!template || !result || result.passedRows.length === 0) {
-      alert("暂无可导出的通过名单");
-      return;
-    }
+  const exportPassed = () => {
+    if (!template || !result || result.passedRows.length === 0) return;
     exportAwardExcel({ awardType, template, result, exportMode: "passed" });
   };
 
-  const exportFailedRows = () => {
-    if (!template || !result || result.failedRows.length === 0) {
-      alert("暂无可导出的不通过名单");
-      return;
-    }
+  const exportFailed = () => {
+    if (!template || !result || result.failedRows.length === 0) return;
     exportAwardExcel({ awardType, template, result, exportMode: "failed" });
   };
 
-  const uploadToSchool = () => {
-    if (!template || !result) {
-      alert("请先完成数据处理");
+  const exportIssues = () => {
+    if (!result) return;
+    try {
+      exportAwardIssues(result, awardName);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "问题说明导出失败");
+    }
+  };
+
+  const confirmReview = () => {
+    if (!result || result.passedRows.length === 0) {
+      alert("请先完成数据导入与治理");
       return;
     }
     if (collegeError) {
@@ -211,216 +243,351 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
       return;
     }
     if (result.failedRows.length > 0) {
-      alert("上载失败：当前数据仍存在不通过项，请导出不通过名单修改");
+      alert("存在不通过数据，不能确认审核");
       return;
     }
-    if (result.passedRows.length === 0) {
-      alert("没有可上载的数据");
-      return;
-    }
-
-    saveAwardSubmission(awardType, makeAwardSubmission({ awardType, collegeName, fields: template.fields, result }));
-    setHasSubmitted(true);
-    setStatus(`${awardName}数据已上载到学校端`);
-    pushLog("success", `${collegeName} ${awardName}数据已上载到学校端，共 ${result.passedRows.length} 行`);
-    alert(`${awardName}数据已上载到学校端`);
+    setConfirmed(true);
+    setSubmitted(false);
+    setStatusMessage(`学院确认审核完成：${academicYear} 学年 ${awardName} 共 ${result.passedRows.length} 条。`);
   };
 
-  const total = result ? result.passedRows.length + result.failedRows.length : 0;
-  const canUpload =
-    Boolean(template && result) &&
-    !collegeError &&
-    !isLoading &&
-    !isProcessing &&
-    result?.failedRows.length === 0 &&
-    (result?.passedRows.length || 0) > 0;
+  const uploadToSchool = () => {
+    if (!template || !result || !confirmed) {
+      alert("请先完成学院确认审核");
+      return;
+    }
+    if (result.failedRows.length > 0 || collegeError) {
+      alert(collegeError || "存在不通过数据，不能上载学校端");
+      return;
+    }
+    saveAwardSubmission(
+      awardType,
+      makeAwardSubmission({
+        awardType,
+        academicYear,
+        collegeName,
+        fields: template.fields,
+        result,
+      })
+    );
+    setSubmitted(true);
+    setStatusMessage(`${academicYear} 学年 ${awardName} 已上载学校端，管理员汇总页面可查看。`);
+  };
 
-  const sourceRows = useMemo<AwardProcessedRow[]>(
-    () =>
-      (template?.sourceRows || [])
-        .map((row, sourceRowIndex) => ({
-          sourceRowIndex,
-          excelRowNumber: sourceRowIndex + 3,
-          values: (template?.fields || []).reduce<Record<string, unknown>>((values, field, index) => {
-            values[field] = row[index] ?? "";
-            return values;
-          }, {}),
-        }))
-        .filter((row) => Object.values(row.values).some((value) => String(value ?? "").trim() !== "")),
-    [template]
-  );
+  const changeAcademicYear = (value: string) => {
+    setAcademicYear(value);
+    if (result) {
+      setConfirmed(false);
+      setSubmitted(false);
+      setStatusMessage("学年已变更，请重新完成学院确认审核。");
+    }
+  };
+
+  const openDetail = (row: AwardProcessedRow) => {
+    setSelectedRow(row);
+    setModal("detail");
+  };
+
+  const canConfirm =
+    Boolean(result?.passedRows.length) &&
+    result?.failedRows.length === 0 &&
+    !collegeError &&
+    !isProcessing &&
+    !confirmed;
+  const canSubmit = canConfirm === false && Boolean(result?.passedRows.length) && confirmed && !submitted;
 
   return (
-    <section style={styles.page}>
-      <div style={styles.mainColumn}>
-        <section style={styles.card}>
-          <div style={styles.header}>
-            <div>
-              <div style={styles.eyebrow}>三奖业务 / 学院端数据处理</div>
-              <h1 style={styles.title}>{awardName}数据处理</h1>
-              <p style={styles.description}>上传 Excel 后，系统自动读取填写要求并进行检查。第 1 行为填写要求，第 2 行为字段名称，第 3 行开始为数据。</p>
-            </div>
-            <span style={styles.badge}>模板规则自动解析</span>
-          </div>
-
-          <div style={styles.uploadArea}>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileChange} />
-            <div>
-              <strong style={styles.uploadTitle}>上传{awardName} Excel</strong>
-              <div style={styles.description}>{fileName || "请选择包含填写要求、字段名和数据的 Excel 文件"}</div>
-            </div>
-            <button
-              style={isLoading || isProcessing ? styles.disabledButton : styles.blueButton}
-              disabled={isLoading || isProcessing}
-              onClick={selectFile}
-            >
-              {isLoading ? "读取中..." : "选择 Excel 文件"}
-            </button>
-          </div>
-
-          <div style={styles.buttonGrid}>
-            <button style={isProcessing || isLoading ? styles.disabledButton : styles.orangeButton} disabled={isProcessing || isLoading} onClick={startProcessing}>
-              {isProcessing ? "处理中..." : "开始处理"}
-            </button>
-            <button style={styles.purpleButton} onClick={exportPassedRows}>导出通过名单</button>
-            <button style={styles.purpleButton} onClick={exportFailedRows}>导出不通过名单</button>
-            <button style={canUpload ? styles.greenButton : styles.disabledButton} disabled={!canUpload} onClick={uploadToSchool}>
-              上载到学校端
-            </button>
-          </div>
-
-          <div style={styles.status}>{status}</div>
-          {errorMessage && <div style={styles.errorStatus}>{errorMessage}</div>}
-          <div style={collegeError ? styles.errorStatus : styles.status}>当前识别学院：{collegeName}{collegeError ? `；${collegeError}` : ""}</div>
-          {hasSubmitted && <div style={styles.successStatus}>本次{awardName}数据已上载，学校端汇总页面会自动读取。</div>}
-
-          <div style={styles.statsGrid}>
-            <Stat label="总人数" value={total} />
-            <Stat label="通过人数" value={result?.passedRows.length || 0} tone="#087b5b" />
-            <Stat label="不通过人数" value={result?.failedRows.length || 0} tone="#b42336" />
-            <Stat label="自动修复项" value={result?.logs.length || 0} tone="#0f766e" />
-          </div>
-        </section>
-
-        <section style={styles.card}>
-          <h2 style={styles.subTitle}>自动解析规则</h2>
-          <RuleTable template={template} />
-        </section>
-
-        <section style={styles.card}>
-          <h2 style={styles.subTitle}>待处理数据预览</h2>
-          <DataTable fields={template?.fields || []} rows={sourceRows} />
-        </section>
-
-        <section style={styles.card}>
-          <h2 style={styles.subTitle}>通过名单预览</h2>
-          <DataTable fields={template?.fields || []} rows={result?.passedRows || []} />
-        </section>
-
-        <section style={styles.card}>
-          <h2 style={styles.subTitle}>不通过名单预览</h2>
-          <DataTable fields={template?.fields || []} rows={result?.failedRows || []} issues={result?.issues || []} />
-        </section>
+    <section className="bos-processing-frame award-workspace">
+      <div className="bos-page-title-row award-title-row">
+        <div>
+          <div className="bos-breadcrumb">三大奖业务 / 学院端数据治理</div>
+          <h1>{awardName}数据处理</h1>
+          <p>识别官方模板与 Sheet，执行现有治理规则，并按“治理 → 学院确认 → 上载学校端”完成业务闭环。</p>
+        </div>
+        <label className="bos-current-year">
+          当前学年
+          <select value={academicYear} onChange={(event) => changeAcademicYear(event.target.value)}>
+            {getAwardAcademicYearOptions().map((year) => (
+              <option key={year}>{year}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
-      <aside style={styles.logPanel}>
-        <h2 style={styles.logTitle}>{awardName}处理日志</h2>
-        <div style={styles.logBox}>
-          {logs.length === 0 && <div style={styles.logItem}>[等待] {awardName}数据处理功能区已就绪</div>}
-          {logs.map((item, index) => (
-            <div
-              key={`${item.time}_${index}`}
-              style={{
-                ...styles.logItem,
-                color: item.type === "error" ? "#f87171" : item.type === "success" ? "#4ade80" : "#ffffff",
-              }}
-            >
-              [{item.time}] {item.message}
-            </div>
-          ))}
-          <div ref={logEndRef} />
+      <div className="award-switcher" aria-label="三大奖类型选择">
+        {awardTypes.map((type) => (
+          <a key={type} className={type === awardType ? "is-active" : ""} href={awardPaths[type]}>
+            {awardTypeLabels[type]}
+          </a>
+        ))}
+      </div>
+
+      <section className="bos-filter-card">
+        <div className="award-filter-grid">
+          <label className="bos-filter-field">
+            关键词
+            <input
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              placeholder="姓名 / 学号 / 身份证 / 专业"
+            />
+          </label>
+          <label className="bos-filter-field">
+            专业
+            <select value={majorFilter} onChange={(event) => setMajorFilter(event.target.value)}>
+              <option value="">全部专业</option>
+              {majors.map((major) => (
+                <option key={major}>{major}</option>
+              ))}
+            </select>
+          </label>
+          <label className="bos-filter-field">
+            治理状态
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="all">全部状态</option>
+              <option value="passed">通过</option>
+              <option value="failed">不通过</option>
+            </select>
+          </label>
+          <button
+            onClick={() => {
+              setKeyword("");
+              setMajorFilter("");
+              setStatusFilter("all");
+            }}
+          >
+            重置筛选
+          </button>
         </div>
-      </aside>
+      </section>
+
+      <div className="bos-action-toolbar award-toolbar">
+        <button className="is-primary" onClick={openImport}>数据导入</button>
+        <button disabled={!result} onClick={() => setModal("passed")}>通过数据（{result?.passedRows.length || 0}）</button>
+        <button disabled={!result} onClick={() => setModal("failed")}>不通过数据（{result?.failedRows.length || 0}）</button>
+        <button disabled={!result} onClick={() => setModal("issues")}>问题分析（{result?.issues.length || 0}）</button>
+        <button className="is-purple" disabled={!result?.passedRows.length} onClick={exportPassed}>导出通过名单</button>
+        <button className="is-purple" disabled={!result?.failedRows.length} onClick={exportFailed}>导出不通过名单</button>
+        <button className="is-purple" disabled={!result?.issues.length} onClick={exportIssues}>导出问题说明</button>
+        <button className="is-warning" disabled={!canConfirm} onClick={confirmReview}>
+          {confirmed ? "学院已确认" : "学院确认审核"}
+        </button>
+        <button className="is-success" disabled={!canSubmit} onClick={uploadToSchool}>
+          {submitted ? "已上载学校端" : "上载学校端"}
+        </button>
+      </div>
+
+      <div className="bos-status-row">
+        <span className={`bos-status-badge${collegeError ? " is-danger" : result ? " is-success" : ""}`}>
+          学院：{collegeError || collegeName}
+        </span>
+        <span className={`bos-status-badge${result?.failedRows.length ? " is-danger" : result ? " is-success" : ""}`}>
+          治理：{result ? (result.failedRows.length ? "存在不通过数据" : "全部通过") : "待导入"}
+        </span>
+        <span className={`bos-status-badge${confirmed ? " is-success" : ""}`}>审核：{confirmed ? "学院已确认" : "待确认"}</span>
+        <span className={`bos-status-badge${submitted ? " is-success" : ""}`}>上载：{submitted ? "已上载" : "待上载"}</span>
+        <span className="bos-status-badge">存储：localStorage 本地暂存</span>
+      </div>
+
+      <div className="award-message">{statusMessage}</div>
+
+      <section className="bos-table-card">
+        <div className="bos-table-card-head">
+          <h2>{awardName}治理结果</h2>
+          <span>当前显示 {filteredRows.length} 条 · 点击姓名查看学生详情</span>
+        </div>
+        <div className="bos-table-card-body">
+          <AwardDataTable
+            fields={fields}
+            rows={filteredRows}
+            failedRowIndexes={failedRowIndexes}
+            issuesByRow={issuesByRow}
+            nameField={nameField}
+            onDetail={openDetail}
+          />
+        </div>
+        <div className="bos-table-card-foot">
+          <span>文件：{fileName || "未导入"}</span>
+          <span>三大奖数据当前暂存本地，后续接入 Supabase</span>
+        </div>
+      </section>
+
+      {modal === "import" && (
+        <AwardModal title={`${awardName}数据导入`} compact onClose={() => setModal(null)}>
+          <div className="award-import-panel">
+            <input ref={fileRef} type="file" accept=".xlsx,.xls" hidden onChange={handleFileChange} />
+            <div className="award-upload-drop">
+              <div>
+                <strong>{fileName || `上传${awardName} Excel`}</strong>
+                <p>系统优先识别官方 Sheet，并保留申请理由、排名、课程数、日期、获奖信息和院系意见等现有校验规则。</p>
+              </div>
+              <button className="award-primary-button" disabled={isProcessing} onClick={chooseFile}>
+                {isProcessing ? "读取并治理中..." : "选择 Excel 文件"}
+              </button>
+            </div>
+            <div className="award-import-log">
+              {importLogs.length === 0 ? (
+                <div className="is-info">等待选择文件</div>
+              ) : (
+                importLogs.map((log, index) => (
+                  <div key={`${log.message}_${index}`} className={`is-${log.tone}`}>{log.message}</div>
+                ))
+              )}
+            </div>
+          </div>
+        </AwardModal>
+      )}
+
+      {modal === "passed" && (
+        <AwardModal title={`通过数据（${result?.passedRows.length || 0}）`} onClose={() => setModal(null)}>
+          <AwardDataTable
+            fields={fields}
+            rows={result?.passedRows || []}
+            failedRowIndexes={new Set()}
+            issuesByRow={new Map()}
+            nameField={nameField}
+            onDetail={openDetail}
+          />
+        </AwardModal>
+      )}
+
+      {modal === "failed" && (
+        <AwardModal title={`不通过数据（${result?.failedRows.length || 0}）`} onClose={() => setModal(null)}>
+          <AwardDataTable
+            fields={fields}
+            rows={result?.failedRows || []}
+            failedRowIndexes={failedRowIndexes}
+            issuesByRow={issuesByRow}
+            nameField={nameField}
+            onDetail={openDetail}
+          />
+        </AwardModal>
+      )}
+
+      {modal === "issues" && (
+        <AwardModal title={`问题分析（${result?.issues.length || 0}）`} onClose={() => setModal(null)}>
+          <IssueTable issues={result?.issues || []} />
+        </AwardModal>
+      )}
+
+      {modal === "detail" && selectedRow && (
+        <AwardModal title={`${rowValue(selectedRow, nameField) || "学生"}详情`} compact onClose={() => setModal(null)}>
+          <div className="award-detail-grid">
+            <DetailItem label="Excel 行号" value={selectedRow.excelRowNumber} />
+            <DetailItem label="治理状态" value={failedRowIndexes.has(selectedRow.sourceRowIndex) ? "不通过" : "通过"} />
+            {fields.map((field) => <DetailItem key={field} label={field} value={selectedRow.values[field]} />)}
+          </div>
+        </AwardModal>
+      )}
     </section>
   );
 }
 
-function Stat({ label, value, tone = "#0077d4" }: { label: string; value: number; tone?: string }) {
+function AwardModal({
+  title,
+  compact = false,
+  onClose,
+  children,
+}: {
+  title: string;
+  compact?: boolean;
+  onClose: () => void;
+  children: ReactNode;
+}) {
   return (
-    <div style={styles.statCard}>
-      <div style={styles.statLabel}>{label}</div>
-      <strong style={{ ...styles.statValue, color: tone }}>{value}</strong>
+    <div className="bos-modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className={`bos-modal${compact ? " bos-modal--compact" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="bos-modal-header">
+          <h2>{title}</h2>
+          <button onClick={onClose}>关闭</button>
+        </header>
+        <div className="bos-modal-body award-modal-body">{children}</div>
+      </section>
     </div>
   );
 }
 
-function RuleTable({ template }: { template: AwardTemplate | null }) {
-  if (!template) return <div style={styles.empty}>上传 Excel 后自动显示模板规则</div>;
-  return (
-    <div style={styles.tableWrap}>
-      <table style={styles.table}>
-        <thead>
-          <tr>
-            <th style={styles.th}>字段名</th>
-            <th style={styles.th}>填写要求</th>
-            <th style={styles.th}>是否必填</th>
-            <th style={styles.th}>解析类型</th>
-            <th style={styles.th}>补充规则</th>
-          </tr>
-        </thead>
-        <tbody>
-          {template.rules.map((rule) => (
-            <tr key={`${rule.columnIndex}_${rule.field}`}>
-              <td style={styles.td}>{rule.field}</td>
-              <td style={styles.td}>{rule.requirement || "-"}</td>
-              <td style={styles.td}>{rule.required ? "必填" : "非必填"}</td>
-              <td style={styles.td}>{rule.kind}</td>
-              <td style={styles.td}>
-                {rule.maxLength ? `最多 ${rule.maxLength} 字` : ""}
-                {rule.enumValues?.length ? `允许值：${rule.enumValues.join("、")}` : ""}
-                {!rule.maxLength && !rule.enumValues?.length ? "-" : ""}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function DataTable({
+function AwardDataTable({
   fields,
   rows,
-  issues = [],
+  failedRowIndexes,
+  issuesByRow,
+  nameField,
+  onDetail,
 }: {
   fields: string[];
   rows: AwardProcessedRow[];
-  issues?: AwardIssue[];
+  failedRowIndexes: Set<number>;
+  issuesByRow: Map<number, AwardIssue[]>;
+  nameField?: string;
+  onDetail: (row: AwardProcessedRow) => void;
 }) {
-  if (rows.length === 0) return <div style={styles.empty}>暂无数据</div>;
-  const issueKeys = new Set(issues.map((issue) => `${issue.rowIndex}_${issue.columnIndex}`));
-
+  if (rows.length === 0) return <div className="award-empty">暂无数据</div>;
   return (
-    <div style={styles.tableWrap}>
-      <table style={styles.table}>
+    <div className="award-table-scroll">
+      <table className="award-data-table">
         <thead>
           <tr>
-            <th style={styles.th}>Excel 行号</th>
-            {fields.map((field, columnIndex) => <th key={`${columnIndex}_${field}`} style={styles.th}>{field}</th>)}
+            <th>Excel 行号</th>
+            <th>治理状态</th>
+            <th>问题数</th>
+            {fields.map((field) => <th key={field}>{field}</th>)}
           </tr>
         </thead>
         <tbody>
-          {rows.slice(0, 30).map((row) => (
-            <tr key={row.sourceRowIndex}>
-              <td style={styles.td}>{row.excelRowNumber}</td>
-              {fields.map((field, columnIndex) => (
-                <td
-                  key={`${columnIndex}_${field}`}
-                  style={issueKeys.has(`${row.sourceRowIndex}_${columnIndex}`) ? styles.warningCell : styles.td}
-                >
-                  {String(row.values[field] ?? "")}
-                </td>
-              ))}
+          {rows.map((row) => {
+            const failed = failedRowIndexes.has(row.sourceRowIndex);
+            return (
+              <tr key={row.sourceRowIndex}>
+                <td>{row.excelRowNumber}</td>
+                <td><span className={`award-row-status ${failed ? "is-failed" : "is-passed"}`}>{failed ? "不通过" : "通过"}</span></td>
+                <td>{issuesByRow.get(row.sourceRowIndex)?.length || 0}</td>
+                {fields.map((field) => (
+                  <td key={field} className={field === nameField ? "award-name-cell" : ""}>
+                    {field === nameField ? (
+                      <button onClick={() => onDetail(row)}>{String(row.values[field] ?? "-")}</button>
+                    ) : (
+                      String(row.values[field] ?? "")
+                    )}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function IssueTable({ issues }: { issues: AwardIssue[] }) {
+  if (issues.length === 0) return <div className="award-empty">当前没有问题，数据已全部通过。</div>;
+  return (
+    <div className="award-table-scroll">
+      <table className="award-data-table">
+        <thead>
+          <tr>
+            <th>Excel 行号</th>
+            <th>字段</th>
+            <th>原值</th>
+            <th>问题原因</th>
+            <th>修改建议</th>
+          </tr>
+        </thead>
+        <tbody>
+          {issues.map((issue, index) => (
+            <tr key={`${issue.rowIndex}_${issue.columnIndex}_${index}`}>
+              <td>{issue.rowNumber}</td>
+              <td>{issue.field}</td>
+              <td>{String(issue.originalValue ?? "")}</td>
+              <td className="award-issue-reason">{issue.reason}</td>
+              <td>{issue.suggestion}</td>
             </tr>
           ))}
         </tbody>
@@ -429,50 +596,11 @@ function DataTable({
   );
 }
 
-const button = (background: string): CSSProperties => ({
-  background,
-  color: "#fff",
-  border: "none",
-  borderRadius: 6,
-  padding: "10px 12px",
-  fontSize: 13,
-  fontWeight: 700,
-  cursor: "pointer",
-});
-
-const styles: Record<string, CSSProperties> = {
-  page: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(300px, 34%)", gap: 12, alignItems: "start" },
-  mainColumn: { display: "grid", gap: 12, minWidth: 0 },
-  card: { background: "#fff", borderRadius: 8, border: "1px solid #d7e1ed", padding: 16, boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0 },
-  header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 14 },
-  eyebrow: { color: "#0077d4", fontSize: 12, fontWeight: 800, marginBottom: 5 },
-  title: { margin: 0, color: "#172033", fontSize: 23 },
-  subTitle: { margin: "0 0 10px", color: "#172033", fontSize: 17 },
-  description: { color: "#63738a", fontSize: 13, lineHeight: 1.7, margin: "7px 0 0" },
-  badge: { padding: "6px 9px", borderRadius: 999, background: "#e8f4ff", color: "#0077d4", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" },
-  uploadArea: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, border: "1px dashed #a9c7e1", borderRadius: 8, padding: 14, background: "#f8fbfe", marginBottom: 10 },
-  uploadTitle: { color: "#26364e", fontSize: 14 },
-  buttonGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(132px, 1fr))", gap: 8, marginBottom: 10 },
-  blueButton: button("#0077d4"),
-  orangeButton: button("#d78a14"),
-  purpleButton: button("#6757c8"),
-  greenButton: button("#0b9b6f"),
-  disabledButton: { ...button("#a6b4c5"), cursor: "not-allowed" },
-  status: { background: "#f3f9ff", color: "#0875bd", border: "1px solid #cce3f8", borderRadius: 6, padding: 9, marginTop: 7, fontSize: 13 },
-  errorStatus: { background: "#fff1f2", color: "#b42336", border: "1px solid #ffd4da", borderRadius: 6, padding: 9, marginTop: 7, fontSize: 13 },
-  successStatus: { background: "#e9f8f2", color: "#087b5b", border: "1px solid #c7eedf", borderRadius: 6, padding: 9, marginTop: 7, fontSize: 13, fontWeight: 700 },
-  statsGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))", gap: 8, marginTop: 12 },
-  statCard: { padding: 11, borderRadius: 6, border: "1px solid #dbe5ef", background: "#f8fbfe", textAlign: "center" },
-  statLabel: { color: "#63738a", fontSize: 12, marginBottom: 5 },
-  statValue: { fontSize: 21 },
-  empty: { color: "#8190a4", padding: 12 },
-  tableWrap: { overflow: "auto", maxHeight: 280, border: "1px solid #d7e1ed", borderRadius: 6 },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  th: { position: "sticky", top: 0, zIndex: 1, padding: "8px 9px", border: "1px solid #cbd5e1", background: "#edf4fa", color: "#40526a", whiteSpace: "nowrap", textAlign: "center" },
-  td: { padding: "8px 9px", border: "1px solid #d7e1ed", color: "#52647b", whiteSpace: "nowrap", textAlign: "center" },
-  warningCell: { padding: "8px 9px", border: "1px solid #d7e1ed", color: "#713f12", background: "#fef08a", whiteSpace: "nowrap", textAlign: "center", fontWeight: 700 },
-  logPanel: { position: "sticky", top: 18, padding: 16, borderRadius: 8, background: "#0b1428", overflow: "hidden" },
-  logTitle: { color: "#e5efff", fontSize: 18, margin: "0 0 12px" },
-  logBox: { maxHeight: 320, overflowY: "auto", fontFamily: "Consolas, monospace", fontSize: 13, lineHeight: 1.6 },
-  logItem: { color: "#fff", whiteSpace: "pre-line", marginBottom: 10 },
-};
+function DetailItem({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div className="award-detail-item">
+      <span>{label}</span>
+      <strong>{String(value ?? "-") || "-"}</strong>
+    </div>
+  );
+}
