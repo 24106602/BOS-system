@@ -96,7 +96,7 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
 
 const styles: Record<string, CSSProperties> = {
   page: { height: "100vh", display: "grid", gridTemplateColumns: "252px minmax(0, 1fr)", background: "#eef3f8", overflow: "hidden" },
-  sidebar: { height: "100vh", background: "#0b1428", color: "#fff", display: "flex", flexDirection: "column", borderRight: "1px solid #1a2945", overflow: "hidden" },
+  sidebar: { position: "sticky", top: 0, height: "100vh", background: "linear-gradient(180deg, #0b1c30 0%, #091426 100%)", color: "#fff", display: "flex", flexDirection: "column", borderRight: "1px solid #1a2945", overflow: "hidden", boxShadow: "4px 0 18px rgba(8,20,40,0.12)", zIndex: 20 },
   brand: { display: "flex", alignItems: "center", gap: 12, padding: "22px 18px", borderBottom: "1px solid #1b2a44" },
   brandIcon: { width: 42, height: 42, display: "grid", placeItems: "center", borderRadius: 8, background: "#0495e8", color: "#fff", fontSize: 20, fontWeight: 800 },
   brandTitle: { fontSize: 17, fontWeight: 800 },
@@ -104,7 +104,7 @@ const styles: Record<string, CSSProperties> = {
   sideBlock: { padding: "16px 18px", borderBottom: "1px solid #1b2a44" },
   caption: { color: "#95a8c7", fontSize: 12, marginBottom: 8 },
   roleBadge: { display: "inline-flex", padding: "5px 9px", borderRadius: 999, border: "1px solid #145d77", background: "#0b263a", color: "#55ccff", fontSize: 12, fontWeight: 700 },
-  nav: { padding: "12px 10px", overflowY: "auto" },
+  nav: { minHeight: 0, padding: "12px 10px", overflowY: "auto" },
   groupLabel: { padding: "15px 10px 7px", color: "#8ba0c3", fontSize: 12, fontWeight: 700 },
   menu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "none", borderRadius: 6, padding: "10px 11px", background: "transparent", color: "#c6d2e6", cursor: "pointer", textAlign: "left", fontSize: 14 },
   activeMenu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "none", borderRadius: 6, padding: "10px 11px", background: "#078ed8", color: "#fff", cursor: "pointer", textAlign: "left", fontSize: 14, fontWeight: 700 },
@@ -116,12 +116,12 @@ const styles: Record<string, CSSProperties> = {
   syncText: { marginTop: 7, color: "#9cb0ce", fontSize: 12, lineHeight: 1.7 },
   logout: { margin: "0 12px 16px", border: "1px solid #2c3b55", borderRadius: 6, padding: "9px 10px", background: "#132039", color: "#cbd7eb", cursor: "pointer" },
   workspace: { minWidth: 0, height: "100vh", display: "grid", gridTemplateRows: "68px minmax(0, 1fr)", overflow: "hidden" },
-  topbar: { height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", background: "#fff", borderBottom: "1px solid #d7e1ed" },
+  topbar: { position: "sticky", top: 0, zIndex: 15, height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", background: "rgba(255,255,255,0.98)", borderBottom: "1px solid #d7e1ed", boxShadow: "0 2px 10px rgba(15,35,64,0.04)" },
   topTitle: { color: "#162238", fontSize: 18, fontWeight: 800 },
   breadcrumb: { marginTop: 5, color: "#8290a6", fontSize: 12 },
   topRight: { display: "flex", alignItems: "center", gap: 14 },
   topBadge: { padding: "6px 9px", border: "1px solid #bcd9f5", borderRadius: 999, background: "#f3f9ff", color: "#0879c5", fontSize: 12, fontWeight: 700 },
   adminName: { color: "#334155", fontSize: 13, fontWeight: 700 },
   topLogout: { border: "1px solid #cbd8e6", borderRadius: 999, padding: "7px 12px", background: "#fff", color: "#26364e", fontSize: 12, fontWeight: 800, cursor: "pointer" },
-  main: { minWidth: 0, minHeight: 0, padding: 14, overflow: "hidden" },
+  main: { minWidth: 0, minHeight: 0, padding: 12, overflow: "hidden", background: "#eef3f8" },
 };

@@ -610,143 +610,167 @@ export default function AdminStudentsPage() {
 
   return (
     <section style={styles.page}>
-      <div style={styles.header}>
-        <div>
-          <div style={styles.eyebrow}>困难生业务 / 系统自动关联</div>
-          <h1 style={styles.title}>困难生数据库</h1>
-          <p style={styles.description}>
-            困难生数据库由系统按学年归档管理。管理员可导入往年困难生数据库，数据保存到后端信息库 Supabase，刷新页面后仍然保留。
-          </p>
-        </div>
-        <div style={styles.headerActions}>
-          <label style={styles.yearSelectLabel}>
-            学年
-            <select style={styles.yearSelect} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
-              {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-          </label>
-          <button style={styles.importButton} onClick={() => setShowImportModal(true)}>数据导入</button>
-          <button style={styles.secondaryButton} onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>
-            {isLoadingDatabase ? "刷新中..." : "刷新"}
-          </button>
-          <button style={styles.exportButton} onClick={exportCurrentYearDatabase}>导出当前学年困难生数据库</button>
-        </div>
-      </div>
-
-      <div style={styles.stats}>
-        <Stat label="当前学年合并学生总数" value={mergedRows.length} />
-        <Stat label="当前学年本专科信息数" value={studentCount} />
-        <Stat label="当前学年家庭成员信息数" value={familyCount} />
-        <Stat label="当前学年身份证号关联成功数" value={linkedCount} />
-        <Stat label="当前学年家庭成员匹配异常数" value={familyIssueCount} tone="#c2414d" />
-      </div>
-
-      <section style={{ ...styles.card, ...styles.detailCard }}>
-        <div style={styles.sectionHead}>
+      <div style={styles.mainColumn}>
+        <div style={styles.header}>
           <div>
-            <h2 style={styles.subTitle}>当前学年困难生数据库明细表</h2>
+            <div style={styles.eyebrow}>困难生业务 / 系统自动关联</div>
+            <h1 style={styles.title}>困难生数据库</h1>
             <p style={styles.description}>
-              可按姓名、学号、学部（院）、身份证号、年级、性别查找学生。当前显示 {filteredRows.length} 条 / 当前学年共 {mergedRows.length} 条。
+              困难生数据库由系统按学年归档管理。管理员可导入往年困难生数据库，数据保存到后端信息库 Supabase，刷新页面后仍然保留。
             </p>
           </div>
-          <span style={styles.badge}>按 id_card = student_id_card 自动生成</span>
+          <div style={styles.headerActions}>
+            <label style={styles.yearSelectLabel}>
+              学年
+              <select style={styles.yearSelect} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
+                {ACADEMIC_YEAR_OPTIONS.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </label>
+            <button style={styles.importButton} onClick={() => setShowImportModal(true)}>数据导入</button>
+            <button style={styles.secondaryButton} onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>
+              {isLoadingDatabase ? "刷新中..." : "刷新"}
+            </button>
+            <button style={styles.exportButton} onClick={exportCurrentYearDatabase}>导出当前学年困难生数据库</button>
+          </div>
         </div>
-        {isLoadingDatabase && <div style={styles.infoMessage}>正在加载困难生数据库……</div>}
-        {loadError && <div style={styles.errorMessage}>{loadError}</div>}
-        <div style={styles.searchGrid}>
-          <label style={styles.fieldLabel}>
-            姓名
-            <input
-              style={styles.searchInput}
-              value={searchFilters.name}
-              onChange={(event) => setSearchFilters((current) => ({ ...current, name: event.target.value }))}
-              placeholder="支持模糊查询"
-            />
-          </label>
-          <label style={styles.fieldLabel}>
-            学号
-            <input
-              style={styles.searchInput}
-              value={searchFilters.studentId}
-              onChange={(event) => setSearchFilters((current) => ({ ...current, studentId: event.target.value }))}
-              placeholder="输入学号"
-            />
-          </label>
-          <label style={styles.fieldLabel}>
-            学部（院）
-            <select
-              style={styles.searchInput}
-              value={searchFilters.collegeName}
-              onChange={(event) => setSearchFilters((current) => ({ ...current, collegeName: event.target.value }))}
-            >
-              <option value="">全部</option>
-              {availableColleges.map((college) => <option key={college} value={college}>{college}</option>)}
-            </select>
-          </label>
-          <label style={styles.fieldLabel}>
-            身份证号
-            <input
-              style={styles.searchInput}
-              value={searchFilters.idCard}
-              onChange={(event) => setSearchFilters((current) => ({ ...current, idCard: event.target.value }))}
-              placeholder="输入身份证号"
-            />
-          </label>
-          <label style={styles.fieldLabel}>
-            年级
-            <select
-              style={styles.searchInput}
-              value={searchFilters.grade}
-              onChange={(event) => setSearchFilters((current) => ({ ...current, grade: event.target.value }))}
-            >
-              <option value="">全部</option>
-              {availableGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
-            </select>
-          </label>
-          <label style={styles.fieldLabel}>
-            性别
-            <select
-              style={styles.searchInput}
-              value={searchFilters.gender}
-              onChange={(event) => setSearchFilters((current) => ({ ...current, gender: event.target.value }))}
-            >
-              <option value="">全部</option>
-              <option value="男">男</option>
-              <option value="女">女</option>
-            </select>
-          </label>
-          <button style={styles.secondaryButton} onClick={() => setSearchFilters(emptyFilters)}>重置筛选</button>
+
+        <div style={styles.stats}>
+          <Stat label="当前学年合并学生总数" value={mergedRows.length} />
+          <Stat label="当前学年本专科信息数" value={studentCount} />
+          <Stat label="当前学年家庭成员信息数" value={familyCount} />
+          <Stat label="当前学年身份证号关联成功数" value={linkedCount} />
+          <Stat label="当前学年家庭成员匹配异常数" value={familyIssueCount} tone="#c2414d" />
         </div>
-        <div style={styles.tableWrap}>
-          <table style={styles.table}>
-            <thead><tr>{columns.map((column) => <th key={column} style={styles.th}>{column}</th>)}</tr></thead>
-            <tbody>
-              {filteredRows.length === 0 ? (
-                <tr><td style={styles.empty} colSpan={columns.length}>{mergedRows.length === 0 ? "暂无当前学年已合并数据" : "没有符合筛选条件的数据"}</td></tr>
-              ) : (
-                filteredRows.map((row) => (
-                  <tr key={`${row.collegeName}_${row.idCard}_${row.studentId}`}>
-                    <td style={styles.td}>{row.collegeName}</td>
-                    <td style={styles.td}>{row.name || "-"}</td>
-                    <td style={styles.td}>{row.studentId || "-"}</td>
-                    <td style={styles.td}>{row.idCard || "-"}</td>
-                    <td style={styles.td}>{row.grade || "-"}</td>
-                    <td style={styles.td}>{row.gender || "-"}</td>
-                    <td style={styles.td}>{row.difficultyLevel || "-"}</td>
-                    <td style={styles.td}>{row.familyMembers.length}</td>
-                    <td style={styles.td}>{row.familyMembers[0] || "-"}</td>
-                    <td style={styles.td}>{row.familyMembers[1] || "-"}</td>
-                    <td style={styles.td}>{row.familyMembers[2] || "-"}</td>
-                    <td style={styles.td}>{row.relationStatus}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+
+        <section style={{ ...styles.card, ...styles.detailCard }}>
+          <div style={styles.sectionHead}>
+            <div>
+              <h2 style={styles.subTitle}>当前学年困难生数据库明细表</h2>
+              <p style={styles.description}>
+                可按姓名、学号、学部（院）、身份证号、年级、性别查找学生。当前显示 {filteredRows.length} 条 / 当前学年共 {mergedRows.length} 条。
+              </p>
+            </div>
+            <span style={styles.badge}>按 id_card = student_id_card 自动生成</span>
+          </div>
+          <div style={styles.sectionLabel}>筛选区</div>
+          {isLoadingDatabase && <div style={styles.infoMessage}>正在加载困难生数据库……</div>}
+          {loadError && <div style={styles.errorMessage}>{loadError}</div>}
+          <div style={styles.searchGrid}>
+            <label style={styles.fieldLabel}>
+              姓名
+              <input
+                style={styles.searchInput}
+                value={searchFilters.name}
+                onChange={(event) => setSearchFilters((current) => ({ ...current, name: event.target.value }))}
+                placeholder="支持模糊查询"
+              />
+            </label>
+            <label style={styles.fieldLabel}>
+              学号
+              <input
+                style={styles.searchInput}
+                value={searchFilters.studentId}
+                onChange={(event) => setSearchFilters((current) => ({ ...current, studentId: event.target.value }))}
+                placeholder="输入学号"
+              />
+            </label>
+            <label style={styles.fieldLabel}>
+              学部（院）
+              <select
+                style={styles.searchInput}
+                value={searchFilters.collegeName}
+                onChange={(event) => setSearchFilters((current) => ({ ...current, collegeName: event.target.value }))}
+              >
+                <option value="">全部</option>
+                {availableColleges.map((college) => <option key={college} value={college}>{college}</option>)}
+              </select>
+            </label>
+            <label style={styles.fieldLabel}>
+              身份证号
+              <input
+                style={styles.searchInput}
+                value={searchFilters.idCard}
+                onChange={(event) => setSearchFilters((current) => ({ ...current, idCard: event.target.value }))}
+                placeholder="输入身份证号"
+              />
+            </label>
+            <label style={styles.fieldLabel}>
+              年级
+              <select
+                style={styles.searchInput}
+                value={searchFilters.grade}
+                onChange={(event) => setSearchFilters((current) => ({ ...current, grade: event.target.value }))}
+              >
+                <option value="">全部</option>
+                {availableGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+              </select>
+            </label>
+            <label style={styles.fieldLabel}>
+              性别
+              <select
+                style={styles.searchInput}
+                value={searchFilters.gender}
+                onChange={(event) => setSearchFilters((current) => ({ ...current, gender: event.target.value }))}
+              >
+                <option value="">全部</option>
+                <option value="男">男</option>
+                <option value="女">女</option>
+              </select>
+            </label>
+            <button style={styles.secondaryButton} onClick={() => setSearchFilters(emptyFilters)}>重置筛选</button>
+          </div>
+          <div style={styles.sectionLabel}>表格区</div>
+          <div style={styles.tableWrap}>
+            <table style={styles.table}>
+              <thead><tr>{columns.map((column) => <th key={column} style={styles.th}>{column}</th>)}</tr></thead>
+              <tbody>
+                {filteredRows.length === 0 ? (
+                  <tr><td style={styles.empty} colSpan={columns.length}>{mergedRows.length === 0 ? "暂无当前学年已合并数据" : "没有符合筛选条件的数据"}</td></tr>
+                ) : (
+                  filteredRows.map((row) => (
+                    <tr key={`${row.collegeName}_${row.idCard}_${row.studentId}`}>
+                      <td style={styles.td}>{row.collegeName}</td>
+                      <td style={styles.td}>{row.name || "-"}</td>
+                      <td style={styles.td}>{row.studentId || "-"}</td>
+                      <td style={styles.td}>{row.idCard || "-"}</td>
+                      <td style={styles.td}>{row.grade || "-"}</td>
+                      <td style={styles.td}>{row.gender || "-"}</td>
+                      <td style={styles.td}>{row.difficultyLevel || "-"}</td>
+                      <td style={styles.td}>{row.familyMembers.length}</td>
+                      <td style={styles.td}>{row.familyMembers[0] || "-"}</td>
+                      <td style={styles.td}>{row.familyMembers[1] || "-"}</td>
+                      <td style={styles.td}>{row.familyMembers[2] || "-"}</td>
+                      <td style={styles.td}>{row.relationStatus}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <aside style={styles.logPanel}>
+        <div style={styles.logHeader}>
+          <h2 style={styles.logTitle}>数据库日志</h2>
+          <span style={styles.liveBadge}><span style={styles.liveDot} />实时</span>
         </div>
-      </section>
+        <div style={styles.logBox}>
+          <div style={styles.logItem}>[学年] 当前查看 {academicYear}</div>
+          <div style={styles.logItem}>[Supabase] 已读取 {cloudStudents.length} 条云端记录</div>
+          <div style={styles.logItem}>[合并] 当前生成 {mergedRows.length} 条困难生记录</div>
+          <div style={styles.logItem}>[筛选] 当前显示 {filteredRows.length} 条</div>
+          {isLoadingDatabase && <div style={styles.logItem}>[读取] 正在刷新 students 表……</div>}
+          {loadError && <div style={{ ...styles.logItem, color: "#fda4af" }}>[错误] {loadError}</div>}
+          {importLogs.length === 0 ? (
+            <div style={styles.logMuted}>[等待] 暂无往年数据导入日志</div>
+          ) : (
+            importLogs.map((log, index) => <div key={`${log}_${index}`} style={styles.logItem}>[{index + 1}] {log}</div>)
+          )}
+        </div>
+      </aside>
 
       {showImportModal && (
         <Modal title="往年困难生数据导入" onClose={() => setShowImportModal(false)}>
@@ -832,27 +856,29 @@ function Modal({ title, children, onClose }: { title: string; children: ReactNod
 }
 
 const styles: Record<string, CSSProperties> = {
-  page: { height: "calc(100vh - 104px)", minHeight: 0, display: "grid", gridTemplateRows: "auto auto minmax(0, 1fr)", gap: 10, overflow: "hidden" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, marginBottom: 10, padding: 14, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
+  page: { height: "100%", minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) clamp(280px, 23vw, 340px)", gap: 10, overflow: "hidden" },
+  mainColumn: { height: "100%", minWidth: 0, minHeight: 0, display: "grid", gridTemplateRows: "auto auto minmax(0, 1fr)", gap: 10, overflow: "hidden" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, padding: 12, border: "1px solid #d5dee9", borderRadius: 9, background: "#fff", boxShadow: "0 2px 10px rgba(15,35,64,0.05)" },
   headerActions: { display: "flex", alignItems: "end", gap: 10, flexWrap: "wrap" },
-  eyebrow: { color: "#0077d4", fontSize: 12, fontWeight: 800, marginBottom: 5 },
-  title: { margin: 0, color: "#172033", fontSize: 22 },
+  eyebrow: { color: "#1e5aa8", fontSize: 11, fontWeight: 900, marginBottom: 4, letterSpacing: "0.04em" },
+  title: { margin: 0, color: "#0f1f33", fontSize: 21 },
   description: { color: "#63738a", fontSize: 12, lineHeight: 1.55, margin: "6px 0 0" },
   yearSelectLabel: { display: "grid", gap: 5, color: "#40526a", fontSize: 12, fontWeight: 700 },
   yearSelect: { minWidth: 132, border: "1px solid #cfdbe7", borderRadius: 6, padding: "8px 10px", color: "#15304f", background: "#fff", fontSize: 13 },
-  exportButton: { border: "none", borderRadius: 6, padding: "9px 12px", background: "#0077d4", color: "#fff", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
+  exportButton: { border: "none", borderRadius: 6, padding: "9px 12px", background: "#1e5aa8", color: "#fff", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
   secondaryButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "9px 11px", background: "#fff", color: "#26364e", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
   importButton: { border: "none", borderRadius: 6, padding: "9px 12px", background: "#0b9b6f", color: "#fff", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
   disabledButton: { border: "none", borderRadius: 6, padding: "9px 12px", background: "#a6b4c5", color: "#fff", cursor: "not-allowed", fontWeight: 700, whiteSpace: "nowrap" },
-  stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 8 },
-  stat: { height: 64, boxSizing: "border-box", background: "#fff", border: "1px solid #d7e1ed", borderRadius: 8, padding: 10 },
-  statLabel: { color: "#63738a", marginBottom: 5, fontSize: 12 },
-  statValue: { fontSize: 20 },
-  card: { minHeight: 0, background: "#fff", border: "1px solid #d7e1ed", borderRadius: 8, padding: 12, overflow: "hidden" },
+  stats: { display: "grid", gridTemplateColumns: "repeat(5, minmax(115px, 1fr))", gap: 7 },
+  stat: { height: 58, boxSizing: "border-box", background: "#fff", border: "1px solid #d7e1ed", borderLeft: "3px solid #1e5aa8", borderRadius: 7, padding: "8px 9px" },
+  statLabel: { color: "#63738a", marginBottom: 3, fontSize: 10 },
+  statValue: { fontSize: 18 },
+  card: { minHeight: 0, background: "#fff", border: "1px solid #d5dee9", borderRadius: 9, padding: 12, overflow: "hidden", boxShadow: "0 2px 10px rgba(15,35,64,0.04)" },
   importCard: { display: "grid", gridTemplateRows: "auto auto auto auto minmax(0, 1fr)", gap: 6 },
   detailCard: { display: "flex", flexDirection: "column" },
   sectionHead: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 8 },
   subTitle: { margin: 0, color: "#172033", fontSize: 16 },
+  sectionLabel: { margin: "2px 0 6px", color: "#334155", fontSize: 11, fontWeight: 900, letterSpacing: "0.05em" },
   badge: { padding: "5px 8px", borderRadius: 999, background: "#e8f4ff", color: "#0077d4", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" },
   importGrid: { display: "grid", gridTemplateColumns: "minmax(150px, 180px) minmax(260px, 1fr) auto", gap: 8, alignItems: "end", marginTop: 8 },
   filePicker: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
@@ -861,7 +887,7 @@ const styles: Record<string, CSSProperties> = {
   yearHint: { color: "#40526a", fontSize: 12, fontWeight: 700 },
   importLogBox: { minHeight: 0, maxHeight: 220, overflowY: "auto", border: "1px solid #d7e1ed", borderRadius: 6, background: "#f8fbfe", padding: 8 },
   importLogItem: { color: "#52647b", fontSize: 12, lineHeight: 1.5, marginBottom: 5 },
-  searchGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, alignItems: "end", marginBottom: 10 },
+  searchGrid: { display: "grid", gridTemplateColumns: "repeat(4, minmax(120px, 1fr))", gap: 7, alignItems: "end", marginBottom: 8 },
   fieldLabel: { display: "grid", gap: 4, color: "#40526a", fontSize: 12, fontWeight: 700 },
   searchInput: { border: "1px solid #cfdbe7", borderRadius: 6, padding: "8px 9px", color: "#15304f", background: "#fff", fontSize: 13, minWidth: 0 },
   infoMessage: { marginBottom: 8, border: "1px solid #c6e2ff", background: "#f1f8ff", color: "#075f9e", borderRadius: 6, padding: "8px 10px", fontSize: 12, fontWeight: 700 },
@@ -871,11 +897,19 @@ const styles: Record<string, CSSProperties> = {
   th: { position: "sticky", top: 0, zIndex: 1, background: "#edf4fa", color: "#40526a", padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" },
   td: { borderTop: "1px solid #e3ebf3", padding: "7px 8px", color: "#52647b", textAlign: "center", whiteSpace: "nowrap" },
   empty: { borderTop: "1px solid #e3ebf3", padding: 16, color: "#8190a4", textAlign: "center" },
-  modalBackdrop: { position: "fixed", inset: 0, zIndex: 9999, background: "rgba(15,23,42,0.45)", display: "grid", placeItems: "center", padding: 18 },
-  modal: { width: "min(860px, 94vw)", height: "70vh", minHeight: 430, background: "#fff", borderRadius: 10, boxShadow: "0 24px 80px rgba(15,23,42,0.28)", display: "flex", flexDirection: "column", overflow: "hidden" },
-  modalHeader: { flex: "0 0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "14px 16px", borderBottom: "1px solid #d7e1ed" },
+  logPanel: { height: "100%", minHeight: 0, padding: 14, borderRadius: 9, background: "linear-gradient(180deg, #0b1c30 0%, #0a1426 100%)", border: "1px solid #1e3350", overflow: "hidden", display: "flex", flexDirection: "column", boxSizing: "border-box", boxShadow: "0 4px 18px rgba(8,20,40,0.16)" },
+  logHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingBottom: 10, borderBottom: "1px solid rgba(148,163,184,0.2)" },
+  logTitle: { color: "#e5efff", fontSize: 15, margin: 0 },
+  liveBadge: { display: "inline-flex", alignItems: "center", gap: 5, color: "#9fdcc8", fontSize: 10, fontWeight: 800 },
+  liveDot: { width: 7, height: 7, borderRadius: "50%", background: "#21d59c", boxShadow: "0 0 0 3px rgba(33,213,156,0.12)" },
+  logBox: { flex: 1, minHeight: 0, overflowY: "auto", paddingTop: 10, color: "#dceafe", fontFamily: "Consolas, monospace", fontSize: 12, lineHeight: 1.55 },
+  logItem: { paddingBottom: 8, marginBottom: 8, borderBottom: "1px solid rgba(148,163,184,0.1)", whiteSpace: "pre-wrap" },
+  logMuted: { color: "#8fa3bf", paddingTop: 4 },
+  modalBackdrop: { position: "fixed", inset: 0, zIndex: 9999, background: "rgba(11,28,48,0.58)", display: "grid", placeItems: "center", padding: 18, backdropFilter: "blur(2px)" },
+  modal: { width: "min(900px, 94vw)", height: "78vh", minHeight: 430, background: "#fff", borderRadius: 10, border: "1px solid #cbd5e1", boxShadow: "0 28px 90px rgba(15,23,42,0.34)", display: "flex", flexDirection: "column", overflow: "hidden" },
+  modalHeader: { flex: "0 0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: "1px solid #d7e1ed", background: "#f8fafc" },
   modalTitle: { margin: 0, color: "#172033", fontSize: 18 },
   modalBody: { flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 },
-  modalFooter: { flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 10, borderTop: "1px solid #eef2f7" },
+  modalFooter: { position: "sticky", bottom: 0, zIndex: 2, flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: 8, padding: "11px 0 0", borderTop: "1px solid #e2e8f0", background: "#fff" },
   closeButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "7px 10px", background: "#fff", color: "#26364e", fontWeight: 800, cursor: "pointer" },
 };

@@ -128,6 +128,10 @@ export default function FamilyProcessPage({
         </section>
 
         <section style={{ ...pageStyles.card, ...pageStyles.toolbarCard }}>
+          <div style={pageStyles.sectionTitleBar}>
+            <span style={pageStyles.sectionTitle}>筛选区</span>
+            <span style={pageStyles.sectionHint}>按当前处理结果快速定位家庭成员</span>
+          </div>
           <div style={pageStyles.filterGrid}>
             <label style={pageStyles.fieldLabel}>
               关键词
@@ -143,21 +147,10 @@ export default function FamilyProcessPage({
             <button style={pageStyles.secondaryButton} onClick={() => setAppliedKeyword(keyword.trim())}>刷新</button>
           </div>
 
-          <div style={pageStyles.statusLine}>
-            <span>当前状态：{familyStatus}</span>
-            <span>学院确认：{reviewStatus}</span>
-            {familyProcessedData.length > 0 && hasBlockingRows && <span style={pageStyles.errorText}>存在不通过数据，禁止确认/上载</span>}
-            {familyProcessedData.length > 0 && !hasBlockingRows && !reviewConfirmed && <span style={pageStyles.warnText}>请先完成学院确认审核后再上载学校端</span>}
-            {familyProcessedData.length > 0 && !hasBlockingRows && reviewConfirmed && <span style={pageStyles.okText}>学院已确认，可上载学校端</span>}
+          <div style={pageStyles.sectionTitleBar}>
+            <span style={pageStyles.sectionTitle}>操作按钮区</span>
+            <span style={pageStyles.sectionHint}>导入、查看、导出、确认与上载</span>
           </div>
-
-          <div style={pageStyles.statsGrid}>
-            <Stat label="总人数" value={familyStats.total} />
-            <Stat label="通过人数" value={passedRows.length} tone="#087b5b" />
-            <Stat label="不通过人数" value={familyReviewRows.length} tone="#b42336" />
-            <Stat label="自动修复项" value={familyStats.repaired} tone="#0f766e" />
-          </div>
-
           <div style={pageStyles.buttonGrid}>
             <button style={pageStyles.blueButton} onClick={() => setActiveModal("import")}>数据导入</button>
             <button style={pageStyles.blueButton} onClick={() => setActiveModal("passed")}>查看通过数据</button>
@@ -187,6 +180,25 @@ export default function FamilyProcessPage({
               <button style={pageStyles.secondaryButton} onClick={onViewDifficultyStudents}>查看困难生明细</button>
             )}
           </div>
+
+          <div style={pageStyles.sectionTitleBar}>
+            <span style={pageStyles.sectionTitle}>统计状态区</span>
+            <span style={pageStyles.sectionHint}>业务规则与审核状态保持原逻辑</span>
+          </div>
+          <div style={pageStyles.statusLine}>
+            <span>当前状态：{familyStatus}</span>
+            <span>学院确认：{reviewStatus}</span>
+            {familyProcessedData.length > 0 && hasBlockingRows && <span style={pageStyles.errorText}>存在不通过数据，禁止确认/上载</span>}
+            {familyProcessedData.length > 0 && !hasBlockingRows && !reviewConfirmed && <span style={pageStyles.warnText}>请先完成学院确认审核后再上载学校端</span>}
+            {familyProcessedData.length > 0 && !hasBlockingRows && reviewConfirmed && <span style={pageStyles.okText}>学院已确认，可上载学校端</span>}
+          </div>
+
+          <div style={pageStyles.statsGrid}>
+            <Stat label="总人数" value={familyStats.total} />
+            <Stat label="通过人数" value={passedRows.length} tone="#087b5b" />
+            <Stat label="不通过人数" value={familyReviewRows.length} tone="#b42336" />
+            <Stat label="自动修复项" value={familyStats.repaired} tone="#0f766e" />
+          </div>
         </section>
 
         <section style={{ ...pageStyles.card, ...pageStyles.tableCard }}>
@@ -203,7 +215,10 @@ export default function FamilyProcessPage({
       </div>
 
       <aside style={pageStyles.logPanel}>
-        <h2 style={pageStyles.logTitle}>处理日志</h2>
+        <div style={pageStyles.logHeader}>
+          <h2 style={pageStyles.logTitle}>处理日志</h2>
+          <span style={pageStyles.liveBadge}><span style={pageStyles.liveDot} />实时</span>
+        </div>
         <div style={pageStyles.logBox}>
           {familyLogs.length === 0 && <div style={pageStyles.logItem}>[等待] 家庭成员信息处理功能区已就绪</div>}
           {familyLogs.map((item, index) => (
@@ -369,62 +384,70 @@ function ListModal({
 const button = (background: string): CSSProperties => ({
   background,
   color: "#fff",
-  border: "none",
+  border: "1px solid transparent",
   borderRadius: 6,
-  padding: "10px 12px",
-  fontSize: 13,
+  minHeight: 34,
+  padding: "8px 11px",
+  fontSize: 12,
   fontWeight: 800,
   cursor: "pointer",
+  whiteSpace: "nowrap",
 });
 
 const pageStyles: Record<string, CSSProperties> = {
-  page: { flex: 1, height: "100%", minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(340px, 420px)", gap: 12, alignItems: "stretch", overflow: "hidden" },
-  mainColumn: { height: "100%", display: "grid", gridTemplateRows: "auto auto minmax(0, 1fr)", gap: 12, minWidth: 0, minHeight: 0, overflow: "hidden" },
-  card: { background: "#fff", borderRadius: 8, border: "1px solid #d7e1ed", padding: 14, boxShadow: "0 4px 14px rgba(15,35,64,0.05)", minWidth: 0, minHeight: 0, boxSizing: "border-box" },
+  page: { flex: 1, height: "100%", minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) clamp(280px, 24vw, 350px)", gap: 10, alignItems: "stretch", overflow: "hidden" },
+  mainColumn: { height: "100%", display: "grid", gridTemplateRows: "auto auto minmax(0, 1fr)", gap: 10, minWidth: 0, minHeight: 0, overflow: "hidden" },
+  card: { background: "#fff", borderRadius: 9, border: "1px solid #d5dee9", padding: 12, boxShadow: "0 2px 10px rgba(15,35,64,0.05)", minWidth: 0, minHeight: 0, boxSizing: "border-box" },
   headerCard: { overflow: "hidden" },
   toolbarCard: { overflow: "hidden" },
   tableCard: { display: "flex", flexDirection: "column", overflow: "hidden" },
-  header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 10 },
-  eyebrow: { color: "#0077d4", fontSize: 12, fontWeight: 800, marginBottom: 5 },
-  title: { margin: 0, color: "#172033", fontSize: 23 },
-  subTitle: { margin: "0 0 4px", color: "#172033", fontSize: 17 },
-  description: { color: "#63738a", fontSize: 13, lineHeight: 1.7, margin: "5px 0 0" },
-  badge: { padding: "6px 9px", borderRadius: 999, background: "#e8f4ff", color: "#0077d4", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" },
+  header: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, marginBottom: 6 },
+  eyebrow: { color: "#1e5aa8", fontSize: 11, fontWeight: 900, marginBottom: 4, letterSpacing: "0.04em" },
+  title: { margin: 0, color: "#0f1f33", fontSize: 21 },
+  subTitle: { margin: "0 0 3px", color: "#0f1f33", fontSize: 15 },
+  description: { color: "#66758a", fontSize: 12, lineHeight: 1.55, margin: "4px 0 0" },
+  badge: { padding: "5px 9px", borderRadius: 999, background: "#eff4ff", color: "#1e5aa8", border: "1px solid #cbd9ee", fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" },
   backButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "8px 11px", background: "#fff", color: "#26364e", fontWeight: 800, cursor: "pointer" },
-  filterGrid: { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) auto auto auto", gap: 8, alignItems: "end", marginBottom: 10 },
+  sectionTitleBar: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, margin: "0 0 6px", color: "#334155" },
+  sectionTitle: { fontSize: 11, fontWeight: 900, letterSpacing: "0.05em" },
+  sectionHint: { color: "#94a3b8", fontSize: 10 },
+  filterGrid: { display: "grid", gridTemplateColumns: "minmax(220px, 1fr) auto auto auto", gap: 7, alignItems: "end", marginBottom: 8 },
   fieldLabel: { display: "grid", gap: 5, color: "#40526a", fontSize: 12, fontWeight: 800 },
-  input: { border: "1px solid #cfdbe7", borderRadius: 6, padding: "8px 9px", color: "#15304f", background: "#fff", fontSize: 13 },
-  statusLine: { display: "flex", gap: 10, flexWrap: "wrap", padding: 8, borderRadius: 6, background: "#f3f9ff", color: "#0875bd", border: "1px solid #cce3f8", fontSize: 12, fontWeight: 700 },
+  input: { border: "1px solid #cfd8e3", borderRadius: 6, padding: "7px 9px", color: "#15304f", background: "#fff", fontSize: 12, outline: "none" },
+  statusLine: { display: "flex", gap: 10, flexWrap: "wrap", padding: "7px 9px", borderRadius: 6, background: "#f3f7fc", color: "#1e5aa8", border: "1px solid #d6e0ec", fontSize: 11, fontWeight: 800 },
   okText: { color: "#087b5b" },
   warnText: { color: "#9a6700" },
   errorText: { color: "#b42336" },
-  statsGrid: { display: "grid", gridTemplateColumns: "repeat(4, minmax(90px, 1fr))", gap: 8, marginTop: 10 },
-  statCard: { padding: 9, borderRadius: 6, border: "1px solid #dbe5ef", background: "#f8fbfe", textAlign: "center" },
-  statLabel: { color: "#63738a", fontSize: 12, marginBottom: 5 },
-  statValue: { fontSize: 20 },
-  buttonGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(128px, 1fr))", gap: 8, marginTop: 10 },
+  statsGrid: { display: "grid", gridTemplateColumns: "repeat(4, minmax(90px, 1fr))", gap: 7, marginTop: 7 },
+  statCard: { padding: "7px 8px", borderRadius: 6, border: "1px solid #dbe3ec", borderLeft: "3px solid #1e5aa8", background: "#f8fafc", textAlign: "left" },
+  statLabel: { color: "#718096", fontSize: 10, marginBottom: 2 },
+  statValue: { fontSize: 18 },
+  buttonGrid: { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 7, marginBottom: 8 },
   tableHeader: { display: "flex", justifyContent: "space-between", gap: 10, flexShrink: 0, marginBottom: 8 },
   tableBody: { flex: 1, minHeight: 0, display: "flex", overflow: "hidden" },
-  blueButton: button("#0077d4"),
-  purpleButton: button("#6757c8"),
-  greenButton: button("#0b9b6f"),
-  orangeButton: button("#d78a14"),
+  blueButton: button("#1e5aa8"),
+  purpleButton: button("#5d5ab5"),
+  greenButton: button("#0a8f68"),
+  orangeButton: button("#c77a0a"),
   disabledButton: { ...button("#a6b4c5"), cursor: "not-allowed" },
-  secondaryButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "9px 12px", background: "#fff", color: "#26364e", fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" },
+  secondaryButton: { border: "1px solid #cbd8e6", borderRadius: 6, minHeight: 34, padding: "7px 11px", background: "#fff", color: "#26364e", fontSize: 12, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" },
   empty: { color: "#8190a4", padding: 18, textAlign: "center", width: "100%" },
-  logPanel: { height: "100%", maxHeight: "100%", minHeight: 0, padding: 16, borderRadius: 8, background: "#0b1428", overflow: "hidden", display: "flex", flexDirection: "column", boxSizing: "border-box" },
-  logTitle: { color: "#e5efff", fontSize: 18, margin: "0 0 12px" },
-  logBox: { flex: 1, minHeight: 0, overflowY: "auto", fontFamily: "Consolas, monospace", fontSize: 13, lineHeight: 1.6, paddingRight: 4 },
-  logItem: { color: "#fff", whiteSpace: "pre-line", marginBottom: 10 },
-  modalBackdrop: { position: "fixed", inset: 0, zIndex: 9999, background: "rgba(15, 23, 42, 0.45)", display: "grid", placeItems: "center", padding: 18 },
-  modal: { maxWidth: "96vw", height: "70vh", maxHeight: "760px", minHeight: 420, background: "#fff", borderRadius: 10, boxShadow: "0 24px 80px rgba(15,23,42,0.28)", display: "flex", flexDirection: "column", overflow: "hidden" },
-  modalHeader: { flex: "0 0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "14px 16px", borderBottom: "1px solid #d7e1ed" },
+  logPanel: { height: "100%", maxHeight: "100%", minHeight: 0, padding: 14, borderRadius: 9, background: "linear-gradient(180deg, #0b1c30 0%, #0a1426 100%)", border: "1px solid #1e3350", overflow: "hidden", display: "flex", flexDirection: "column", boxSizing: "border-box", boxShadow: "0 4px 18px rgba(8,20,40,0.16)" },
+  logHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingBottom: 10, borderBottom: "1px solid rgba(148,163,184,0.2)" },
+  logTitle: { color: "#e5efff", fontSize: 15, margin: 0 },
+  liveBadge: { display: "inline-flex", alignItems: "center", gap: 5, color: "#9fdcc8", fontSize: 10, fontWeight: 800 },
+  liveDot: { width: 7, height: 7, borderRadius: "50%", background: "#21d59c", boxShadow: "0 0 0 3px rgba(33,213,156,0.12)" },
+  logBox: { flex: 1, minHeight: 0, overflowY: "auto", fontFamily: "Consolas, monospace", fontSize: 12, lineHeight: 1.55, padding: "10px 3px 0 0" },
+  logItem: { color: "#fff", whiteSpace: "pre-line", marginBottom: 9 },
+  modalBackdrop: { position: "fixed", inset: 0, zIndex: 9999, background: "rgba(11, 28, 48, 0.58)", display: "grid", placeItems: "center", padding: 18, backdropFilter: "blur(2px)" },
+  modal: { maxWidth: "96vw", height: "78vh", maxHeight: "820px", minHeight: 420, background: "#fff", borderRadius: 10, border: "1px solid #cbd5e1", boxShadow: "0 28px 90px rgba(15,23,42,0.34)", display: "flex", flexDirection: "column", overflow: "hidden" },
+  modalHeader: { flex: "0 0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: "1px solid #d7e1ed", background: "#f8fafc" },
   modalTitle: { margin: 0, color: "#172033", fontSize: 18 },
   closeButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "7px 10px", background: "#fff", color: "#26364e", fontWeight: 800, cursor: "pointer" },
   modalBody: { flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 },
-  modalFooter: { flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 10, borderTop: "1px solid #eef2f7" },
-  modalTableScroll: { height: "calc(70vh - 120px)", minHeight: 300, display: "flex", overflow: "auto" },
-  importDrop: { display: "grid", gap: 8, placeItems: "center", textAlign: "center", border: "1px dashed #9fc7e6", borderRadius: 8, background: "#f8fbfe", padding: 20, cursor: "pointer", color: "#40526a" },
+  modalFooter: { position: "sticky", bottom: 0, zIndex: 2, flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: 8, padding: "11px 0 0", borderTop: "1px solid #e2e8f0", background: "#fff" },
+  modalTableScroll: { flex: 1, minHeight: 280, display: "flex", overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
+  importDrop: { display: "grid", gap: 8, placeItems: "center", textAlign: "center", border: "1px dashed #7faed4", borderRadius: 8, background: "#f7fbff", padding: 20, cursor: "pointer", color: "#40526a" },
   modalInfoGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 },
   infoItem: { display: "grid", gap: 4, padding: 10, border: "1px solid #d7e1ed", borderRadius: 6, background: "#f8fbfe", color: "#63738a", fontSize: 12 },
   modalLogBox: { minHeight: 120, maxHeight: 180, overflow: "auto", padding: 10, borderRadius: 6, background: "#0b1428", color: "#dceafe", fontFamily: "Consolas, monospace", fontSize: 12, lineHeight: 1.6 },
