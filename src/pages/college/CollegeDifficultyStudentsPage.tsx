@@ -41,6 +41,7 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
   const [studentIdKeyword, setStudentIdKeyword] = useState("");
   const [idCardKeyword, setIdCardKeyword] = useState("");
   const [difficultyKeyword, setDifficultyKeyword] = useState("");
+  const [statusKeyword, setStatusKeyword] = useState("");
   const [rows, setRows] = useState<DifficultyStudentRow[]>([]);
   const [selectedRow, setSelectedRow] = useState<DifficultyStudentRow | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -77,114 +78,79 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
     const studentId = studentIdKeyword.trim();
     const idCard = normalizeIdCard(idCardKeyword.trim());
     const difficulty = difficultyKeyword.trim();
-    if (!name && !studentId && !idCard && !difficulty) return rows;
+    const status = statusKeyword.trim();
+    if (!name && !studentId && !idCard && !difficulty && !status) return rows;
 
     return rows.filter((row) => {
       if (name && !row.name.includes(name)) return false;
       if (studentId && !row.student_id.includes(studentId)) return false;
       if (idCard && !normalizeIdCard(row.id_card).includes(idCard)) return false;
       if (difficulty && !row.difficulty_level.includes(difficulty)) return false;
+      if (status && !displayStatus(row.status).includes(status)) return false;
       return true;
     });
-  }, [difficultyKeyword, idCardKeyword, nameKeyword, rows, studentIdKeyword]);
+  }, [difficultyKeyword, idCardKeyword, nameKeyword, rows, statusKeyword, studentIdKeyword]);
 
   const resetFilters = () => {
     setNameKeyword("");
     setStudentIdKeyword("");
     setIdCardKeyword("");
     setDifficultyKeyword("");
+    setStatusKeyword("");
   };
 
   return (
-    <section style={styles.page}>
-      <div style={styles.mainColumn}>
-        <div style={styles.hero}>
+    <section className="bos-table-page">
+      <header className="bos-page-title-row">
+        <div>
+          <div className="bos-breadcrumb">困难生业务 / 困难生明细 / Student Records</div>
+          <h1>困难生明细</h1>
+          <p>按学年查看本学院已经上载的困难生数据，点击姓名或操作按钮查看学生详情。</p>
+        </div>
+        <label className="bos-current-year">
+          当前学年
+          <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
+            {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
+          </select>
+        </label>
+      </header>
+
+      <section className="bos-filter-card">
+        <div className="bos-filter-grid">
+          <label className="bos-filter-field">学院/学部<input value={collegeName || "学院账号"} readOnly /></label>
+          <label className="bos-filter-field">姓名<input value={nameKeyword} onChange={(event) => setNameKeyword(event.target.value)} /></label>
+          <label className="bos-filter-field">学号<input value={studentIdKeyword} onChange={(event) => setStudentIdKeyword(event.target.value)} /></label>
+          <label className="bos-filter-field">身份证号<input value={idCardKeyword} onChange={(event) => setIdCardKeyword(event.target.value)} /></label>
+          <label className="bos-filter-field">困难等级<input value={difficultyKeyword} onChange={(event) => setDifficultyKeyword(event.target.value)} /></label>
+          <label className="bos-filter-field">状态<input value={statusKeyword} onChange={(event) => setStatusKeyword(event.target.value)} /></label>
+          <button className="is-primary" onClick={() => void loadRows()} disabled={isLoading}>{isLoading ? "查询中..." : "查询"}</button>
+          <button onClick={resetFilters}>重置</button>
+        </div>
+        {loadMessage && <div style={dataSource === "supabase" ? styles.info : styles.warning}>{loadMessage}</div>}
+      </section>
+
+      <div className="bos-action-toolbar">
+        <button className="is-primary" onClick={() => void loadRows()} disabled={isLoading}>{isLoading ? "刷新中..." : "刷新数据"}</button>
+      </div>
+
+      <div className="bos-status-row">
+        <span className="bos-status-badge">学年 {academicYear}</span>
+        <span className="bos-status-badge">{collegeName || "学院账号"}</span>
+        <span className="bos-status-badge is-success">数据源 {dataSource === "supabase" ? "Supabase" : "本地记录"}</span>
+        <span className="bos-status-badge">总数 {rows.length}</span>
+        <span className="bos-status-badge">筛选结果 {filteredRows.length}</span>
+      </div>
+
+      <section className="bos-table-card">
+        <div className="bos-table-card-head">
           <div>
-            <div style={styles.eyebrow}>困难生业务 / 学院端困难生明细</div>
-            <h1 style={styles.title}>困难生明细</h1>
-            <p style={styles.description}>
-              当前页面只展示本学院困难生数据，按学年归档查看。点击姓名可查看本次预留的详情信息。
-            </p>
+            <h2>学院困难生数据表</h2>
+            <span>点击姓名或“查看详情”打开学生详情弹窗</span>
           </div>
-          <span style={styles.badge}>当前学院：{collegeName || "学院账号"}</span>
+          <span>显示 {filteredRows.length} / {rows.length} 条</span>
         </div>
-
-        <section style={styles.card}>
-          <div style={styles.sectionLabel}>筛选区</div>
-          <div style={styles.toolbar}>
-            <label style={styles.fieldLabel}>
-              学年
-              <select style={styles.select} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
-                {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-            </label>
-            <label style={styles.fieldLabel}>
-              姓名
-              <input
-                style={styles.input}
-                value={nameKeyword}
-                placeholder="姓名"
-                onChange={(event) => setNameKeyword(event.target.value)}
-              />
-            </label>
-            <label style={styles.fieldLabel}>
-              学号
-              <input
-                style={styles.input}
-                value={studentIdKeyword}
-                placeholder="学号"
-                onChange={(event) => setStudentIdKeyword(event.target.value)}
-              />
-            </label>
-            <label style={styles.fieldLabel}>
-              身份证
-              <input
-                style={styles.input}
-                value={idCardKeyword}
-                placeholder="身份证号"
-                onChange={(event) => setIdCardKeyword(event.target.value)}
-              />
-            </label>
-            <label style={styles.fieldLabel}>
-              困难等级
-              <input
-                style={styles.input}
-                value={difficultyKeyword}
-                placeholder="困难等级"
-                onChange={(event) => setDifficultyKeyword(event.target.value)}
-              />
-            </label>
-            <button style={styles.secondaryButton} onClick={resetFilters}>重置</button>
-            <button style={styles.primaryButton} onClick={() => void loadRows()} disabled={isLoading}>
-              {isLoading ? "刷新中" : "刷新数据"}
-            </button>
-          </div>
-          <div style={styles.metaRow}>
-            <span>当前学年：{academicYear}</span>
-            <span>数据来源：{dataSource === "supabase" ? "Supabase students 表" : "本地上载记录"}</span>
-            <span>显示 {filteredRows.length} / {rows.length} 条</span>
-          </div>
-          {loadMessage && <div style={dataSource === "supabase" ? styles.info : styles.warning}>{loadMessage}</div>}
-        </section>
-
-        <div style={styles.stats}>
-          <Metric label="本学年总数" value={rows.length} />
-          <Metric label="当前筛选结果" value={filteredRows.length} tone="#087b5b" />
-          <Metric label="云端读取状态" value={dataSource === "supabase" ? "已连接" : "本地回退"} tone={dataSource === "supabase" ? "#087b5b" : "#9a6700"} />
-          <Metric label="当前学院" value={collegeName || "学院账号"} compact />
-        </div>
-
-        <section style={{ ...styles.card, ...styles.tableCard }}>
-          <div style={styles.tableHead}>
-            <div>
-              <div style={styles.sectionLabel}>表格区</div>
-              <p style={styles.tableHint}>点击学生姓名或“查看详情”打开学生详情弹窗。</p>
-            </div>
-            <span style={styles.resultBadge}>共 {filteredRows.length} 条</span>
-          </div>
-          <div style={styles.tableWrap}>
+        <div className="bos-table-card-body">
+          <div>
             <table style={styles.table}>
               <thead>
                 <tr>
@@ -230,32 +196,21 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
               </tbody>
             </table>
           </div>
-        </section>
-      </div>
-
-      <aside style={styles.logPanel}>
-        <div style={styles.logHeader}>
-          <h2 style={styles.logTitle}>读取日志</h2>
-          <span style={styles.liveBadge}><span style={styles.liveDot} />实时</span>
         </div>
-        <div style={styles.logBox}>
-          <div style={styles.logItem}>[学院] {collegeName || "等待识别学院账号"}</div>
-          <div style={styles.logItem}>[学年] {academicYear}</div>
-          <div style={styles.logItem}>[来源] {dataSource === "supabase" ? "Supabase students 表" : "本地上载记录"}</div>
-          <div style={styles.logItem}>[结果] 已加载 {rows.length} 条，筛选后显示 {filteredRows.length} 条</div>
-          {isLoading && <div style={styles.logItem}>[读取] 正在同步困难生明细……</div>}
-          {loadMessage && <div style={{ ...styles.logItem, color: dataSource === "supabase" ? "#86efac" : "#fcd34d" }}>[状态] {loadMessage}</div>}
+        <div className="bos-table-card-foot">
+          <span>第 1 页</span>
+          <span>共 {filteredRows.length} 条</span>
         </div>
-      </aside>
+      </section>
 
       {selectedRow && (
-        <div style={styles.modalBackdrop}>
-          <section style={styles.detailModal}>
-            <div style={styles.detailHeader}>
+        <div className="bos-modal-backdrop">
+          <section className="bos-modal bos-modal--compact">
+            <div className="bos-modal-header">
               <h2 style={styles.subTitle}>困难生明细详情</h2>
-              <button style={styles.closeButton} onClick={() => setSelectedRow(null)}>关闭</button>
+              <button onClick={() => setSelectedRow(null)}>关闭</button>
             </div>
-            <div style={styles.detailBody}>
+            <div className="bos-modal-body">
               <div style={styles.detailGrid}>
                 <Detail label="学年" value={selectedRow.academic_year} />
                 <Detail label="学院" value={selectedRow.college_name} />
@@ -280,15 +235,6 @@ function Detail({ label, value }: { label: string; value: string }) {
     <div style={styles.detailItem}>
       <span>{label}</span>
       <strong>{value || "-"}</strong>
-    </div>
-  );
-}
-
-function Metric({ label, value, tone = "#1e5aa8", compact = false }: { label: string; value: string | number; tone?: string; compact?: boolean }) {
-  return (
-    <div style={styles.metric}>
-      <span style={styles.metricLabel}>{label}</span>
-      <strong style={{ ...styles.metricValue, color: tone, fontSize: compact ? 13 : 18 }}>{value}</strong>
     </div>
   );
 }

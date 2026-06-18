@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { UserProfile } from "../types/auth";
 import { getCollegeAccountLabel } from "../services/routeGuard";
 
@@ -24,104 +24,115 @@ const awardMenus = [
   { path: "/college/awards/shanghai", label: "上海市奖学金数据处理", mark: "沪" },
 ];
 
+const englishLabels: Record<string, string> = {
+  "/college": "Platform Home",
+  "/college/difficulty": "Difficulty Overview",
+  "/college/difficulty/student": "Student Information",
+  "/college/difficulty/family": "Family Information",
+  "/college/difficulty/students": "Student Records",
+  "/college/records": "Submission Records",
+  "/college/awards/national": "National Scholarship",
+  "/college/awards/inspirational": "Inspirational Scholarship",
+  "/college/awards/shanghai": "Shanghai Scholarship",
+};
+
+const workspacePaths = new Set([
+  "/college/upload",
+  "/college/difficulty/student",
+  "/college/difficulty/family",
+  "/college/difficulty/students",
+]);
+
+function MenuButton({
+  item,
+  active,
+  onClick,
+}: {
+  item: { path: string; label: string; mark: string };
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button className={`bos-nav-item${active ? " is-active" : ""}`} onClick={onClick}>
+      <span className="bos-nav-mark">{item.mark}</span>
+      <span className="bos-nav-copy">
+        <strong>{item.label}</strong>
+        <small>{englishLabels[item.path]}</small>
+      </span>
+    </button>
+  );
+}
+
 export default function CollegeLayout({ path, profile, onNavigate, onLogout, children }: CollegeLayoutProps) {
-  const breadcrumbBusiness = path.startsWith("/college/awards") ? "三大奖业务" : "困难生业务";
+  const account = getCollegeAccountLabel(profile);
 
   return (
-    <div style={styles.page}>
-      <aside style={styles.sidebar}>
-        <div style={styles.brand}>
-          <div style={styles.brandIcon}>校</div>
-          <div>
-            <div style={styles.brandTitle}>学部（院）业务工作台</div>
-            <div style={styles.brandSub}>学生事务数据治理</div>
+    <div className="bos-app-frame">
+      <aside className="bos-sidebar-modern">
+        <div className="bos-sidebar-brand">
+          <span className="bos-sidebar-logo">BOS</span>
+          <span>
+            <strong>学部（院）业务工作台</strong>
+            <small>Student Affairs Platform</small>
+          </span>
+        </div>
+
+        <div className="bos-sidebar-role">
+          <span className="bos-role-dot" />
+          <span>
+            <strong>学部（院）端</strong>
+            <small>{account}</small>
+          </span>
+        </div>
+
+        <nav className="bos-sidebar-nav">
+          <div className="bos-nav-group">
+            <div className="bos-nav-group-title">平台导航 / PLATFORM</div>
+            <MenuButton
+              item={{ path: "/college", label: "平台首页", mark: "首" }}
+              active={path === "/college"}
+              onClick={() => onNavigate("/college")}
+            />
           </div>
-        </div>
 
-        <div style={styles.sideBlock}>
-          <div style={styles.caption}>当前视图</div>
-          <div style={styles.roleBadge}>学部（院）端</div>
-        </div>
+          <div className="bos-nav-group">
+            <div className="bos-nav-group-title">困难生业务 / DIFFICULTY</div>
+            {difficultyMenus.map((item) => (
+              <MenuButton key={item.path} item={item} active={path === item.path || (path === "/college/upload" && item.path === "/college/difficulty/student")} onClick={() => onNavigate(item.path)} />
+            ))}
+          </div>
 
-        <nav style={styles.nav}>
-          <button onClick={() => onNavigate("/college")} style={path === "/college" ? styles.activeMenu : styles.menu}>
-            <span style={styles.menuMark}>首</span>
-            平台首页
-          </button>
-
-          <div style={styles.groupLabel}>困难生业务</div>
-          {difficultyMenus.map((item) => (
-            <button key={item.path} onClick={() => onNavigate(item.path)} style={path === item.path ? styles.activeMenu : styles.menu}>
-              <span style={styles.menuMark}>{item.mark}</span>
-              {item.label}
-            </button>
-          ))}
-
-          <div style={styles.groupLabel}>三大奖业务</div>
-          {awardMenus.map((item) => (
-            <button key={item.path} onClick={() => onNavigate(item.path)} style={path === item.path ? styles.activeMenu : styles.menu}>
-              <span style={styles.menuMark}>{item.mark}</span>
-              {item.label}
-            </button>
-          ))}
+          <div className="bos-nav-group">
+            <div className="bos-nav-group-title">三大奖业务 / AWARDS</div>
+            {awardMenus.map((item) => (
+              <MenuButton key={item.path} item={item} active={path === item.path} onClick={() => onNavigate(item.path)} />
+            ))}
+          </div>
         </nav>
 
-        <div style={styles.syncCard}>
-          <div style={styles.syncTitle}><span style={styles.pulse}>●</span> 数据治理状态</div>
-          <div style={styles.syncText}>困难生业务已启用；有不通过项时不能上载到学校端，需导出名单修改后重新治理。</div>
+        <div className="bos-sidebar-foot">
+          <span className="bos-sidebar-health"><i /> 数据治理服务正常</span>
+          <button onClick={onLogout}>退出当前角色</button>
         </div>
-
-        <button onClick={onLogout} style={styles.logout}>退出当前角色</button>
       </aside>
 
-      <div style={styles.workspace}>
-        <header style={styles.topbar}>
-          <div>
-            <div style={styles.topTitle}>学生事务数据治理平台</div>
-            <div style={styles.breadcrumb}>
-              {path === "/college" ? "学部（院）端 / 平台业务入口" : `学部（院）端 / ${breadcrumbBusiness}`}
-            </div>
+      <div className="bos-shell-workspace">
+        <header className="bos-topbar-modern">
+          <div className="bos-topbar-search">
+            <span>⌕</span>
+            <input aria-label="搜索系统内容" placeholder="搜索菜单、学生或业务..." />
           </div>
-          <div style={styles.topRight}>
-            <span style={styles.topBadge}>{getCollegeAccountLabel(profile)}</span>
-            <span style={styles.adminName}>{profile.display_name || "学部（院）经办人"}</span>
-            <button style={styles.topLogout} onClick={onLogout}>退出登录</button>
+          <div className="bos-topbar-account">
+            <span className="bos-account-avatar">院</span>
+            <span className="bos-account-copy">
+              <strong>{profile.display_name || "学部（院）经办人"}</strong>
+              <small>{account}</small>
+            </span>
+            <button onClick={onLogout}>退出登录</button>
           </div>
         </header>
-        <main style={styles.main}>{children}</main>
+        <main className={`bos-page-main${workspacePaths.has(path) ? " bos-page-main--workspace" : ""}`}>{children}</main>
       </div>
     </div>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  page: { height: "100vh", display: "grid", gridTemplateColumns: "252px minmax(0, 1fr)", background: "#eef3f8", overflow: "hidden" },
-  sidebar: { position: "sticky", top: 0, height: "100vh", background: "linear-gradient(180deg, #0b1c30 0%, #091426 100%)", color: "#fff", display: "flex", flexDirection: "column", borderRight: "1px solid #1a2945", overflow: "hidden", boxShadow: "4px 0 18px rgba(8,20,40,0.12)", zIndex: 20 },
-  brand: { display: "flex", alignItems: "center", gap: 12, padding: "22px 18px", borderBottom: "1px solid #1b2a44" },
-  brandIcon: { width: 42, height: 42, display: "grid", placeItems: "center", borderRadius: 8, background: "#0495e8", color: "#fff", fontSize: 20, fontWeight: 800 },
-  brandTitle: { fontSize: 17, fontWeight: 800 },
-  brandSub: { marginTop: 3, color: "#28b8ff", fontSize: 12 },
-  sideBlock: { padding: "16px 18px", borderBottom: "1px solid #1b2a44" },
-  caption: { color: "#95a8c7", fontSize: 12, marginBottom: 8 },
-  roleBadge: { display: "inline-flex", padding: "5px 9px", borderRadius: 999, border: "1px solid #145d77", background: "#0b263a", color: "#55ccff", fontSize: 12, fontWeight: 700 },
-  nav: { minHeight: 0, padding: "12px 10px", overflowY: "auto" },
-  groupLabel: { padding: "15px 10px 7px", color: "#8ba0c3", fontSize: 12, fontWeight: 700 },
-  menu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "none", borderRadius: 6, padding: "10px 11px", background: "transparent", color: "#c6d2e6", cursor: "pointer", textAlign: "left", fontSize: 14 },
-  activeMenu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "none", borderRadius: 6, padding: "10px 11px", background: "#078ed8", color: "#fff", cursor: "pointer", textAlign: "left", fontSize: 14, fontWeight: 700 },
-  disabledMenu: { width: "100%", display: "flex", alignItems: "center", gap: 10, border: "1px solid #223451", borderRadius: 6, padding: "10px 11px", background: "#101d33", color: "#7f91ad", cursor: "not-allowed", textAlign: "left", fontSize: 14 },
-  menuMark: { width: 18, textAlign: "center", fontSize: 13, fontWeight: 800 },
-  syncCard: { margin: "auto 12px 12px", padding: 12, border: "1px solid #203352", borderRadius: 8, background: "#0d172b" },
-  syncTitle: { color: "#fff", fontSize: 13, fontWeight: 700 },
-  pulse: { color: "#21d59c", marginRight: 6 },
-  syncText: { marginTop: 7, color: "#9cb0ce", fontSize: 12, lineHeight: 1.7 },
-  logout: { margin: "0 12px 16px", border: "1px solid #2c3b55", borderRadius: 6, padding: "9px 10px", background: "#132039", color: "#cbd7eb", cursor: "pointer" },
-  workspace: { minWidth: 0, height: "100vh", display: "grid", gridTemplateRows: "68px minmax(0, 1fr)", overflow: "hidden" },
-  topbar: { position: "sticky", top: 0, zIndex: 15, height: 68, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 24px", background: "rgba(255,255,255,0.98)", borderBottom: "1px solid #d7e1ed", boxShadow: "0 2px 10px rgba(15,35,64,0.04)" },
-  topTitle: { color: "#162238", fontSize: 18, fontWeight: 800 },
-  breadcrumb: { marginTop: 5, color: "#8290a6", fontSize: 12 },
-  topRight: { display: "flex", alignItems: "center", gap: 14 },
-  topBadge: { padding: "6px 9px", border: "1px solid #bcd9f5", borderRadius: 999, background: "#f3f9ff", color: "#0879c5", fontSize: 12, fontWeight: 700 },
-  adminName: { color: "#334155", fontSize: 13, fontWeight: 700 },
-  topLogout: { border: "1px solid #cbd8e6", borderRadius: 999, padding: "7px 12px", background: "#fff", color: "#26364e", fontSize: 12, fontWeight: 800, cursor: "pointer" },
-  main: { minWidth: 0, minHeight: 0, padding: 12, overflow: "hidden", background: "#eef3f8" },
-};

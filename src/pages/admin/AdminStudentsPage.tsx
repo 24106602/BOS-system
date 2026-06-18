@@ -65,6 +65,8 @@ type SearchFilters = {
   idCard: string;
   grade: string;
   gender: string;
+  difficultyLevel: string;
+  status: string;
 };
 
 const columns = [
@@ -108,6 +110,8 @@ const emptyFilters: SearchFilters = {
   idCard: "",
   grade: "",
   gender: "",
+  difficultyLevel: "",
+  status: "",
 };
 
 const logSupabaseError = (title: string, error: unknown) => {
@@ -442,6 +446,8 @@ export default function AdminStudentsPage() {
     const idCard = normalizeIdCard(searchFilters.idCard.trim());
     const grade = searchFilters.grade.trim();
     const gender = searchFilters.gender.trim();
+    const difficultyLevel = searchFilters.difficultyLevel.trim();
+    const status = searchFilters.status.trim();
 
     return mergedRows.filter((row) => {
       if (name && !row.name.includes(name)) return false;
@@ -450,6 +456,8 @@ export default function AdminStudentsPage() {
       if (idCard && !normalizeIdCard(row.idCard).includes(idCard)) return false;
       if (grade && row.grade !== grade && !row.grade.includes(grade)) return false;
       if (gender && row.gender !== gender) return false;
+      if (difficultyLevel && !row.difficultyLevel.includes(difficultyLevel)) return false;
+      if (status && !row.relationStatus.includes(status)) return false;
       return true;
     });
   }, [mergedRows, searchFilters]);
@@ -609,120 +617,74 @@ export default function AdminStudentsPage() {
   };
 
   return (
-    <section style={styles.page}>
-      <div style={styles.mainColumn}>
-        <div style={styles.header}>
+    <section className="bos-table-page">
+      <div className="bos-layout-active">AI Studio Layout Active - Admin Students</div>
+
+      <header className="bos-page-title-row">
+        <div>
+          <div className="bos-breadcrumb">困难生业务 / 困难生数据库 / Student Database</div>
+          <h1>困难生数据库</h1>
+          <p>按学年汇总学院上载数据，并保留管理员往年 Excel 导入与 Supabase 持久化读写。</p>
+        </div>
+        <label className="bos-current-year">
+          当前学年
+          <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
+            {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
+          </select>
+        </label>
+      </header>
+
+      <section className="bos-filter-card">
+        {isLoadingDatabase && <div style={styles.infoMessage}>正在加载困难生数据库……</div>}
+        {loadError && <div style={styles.errorMessage}>{loadError}</div>}
+        <div className="bos-filter-grid">
+          <label className="bos-filter-field">学院/学部
+            <select value={searchFilters.collegeName} onChange={(event) => setSearchFilters((current) => ({ ...current, collegeName: event.target.value }))}>
+              <option value="">全部</option>
+              {availableColleges.map((college) => <option key={college} value={college}>{college}</option>)}
+            </select>
+          </label>
+          <label className="bos-filter-field">姓名<input value={searchFilters.name} onChange={(event) => setSearchFilters((current) => ({ ...current, name: event.target.value }))} /></label>
+          <label className="bos-filter-field">学号<input value={searchFilters.studentId} onChange={(event) => setSearchFilters((current) => ({ ...current, studentId: event.target.value }))} /></label>
+          <label className="bos-filter-field">身份证号<input value={searchFilters.idCard} onChange={(event) => setSearchFilters((current) => ({ ...current, idCard: event.target.value }))} /></label>
+          <label className="bos-filter-field">困难等级<input value={searchFilters.difficultyLevel} onChange={(event) => setSearchFilters((current) => ({ ...current, difficultyLevel: event.target.value }))} /></label>
+          <label className="bos-filter-field">状态<input value={searchFilters.status} onChange={(event) => setSearchFilters((current) => ({ ...current, status: event.target.value }))} /></label>
+          <label className="bos-filter-field">年级
+            <select value={searchFilters.grade} onChange={(event) => setSearchFilters((current) => ({ ...current, grade: event.target.value }))}>
+              <option value="">全部</option>
+              {availableGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
+            </select>
+          </label>
+          <button className="is-primary" onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>{isLoadingDatabase ? "查询中..." : "查询"}</button>
+          <button onClick={() => setSearchFilters(emptyFilters)}>重置</button>
+        </div>
+      </section>
+
+      <div className="bos-action-toolbar">
+        <button className="is-primary" onClick={() => setShowImportModal(true)}>数据导入</button>
+        <button onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>{isLoadingDatabase ? "刷新中..." : "刷新"}</button>
+        <button className="is-purple" onClick={exportCurrentYearDatabase}>导出当前学年数据库</button>
+      </div>
+
+      <div className="bos-status-row">
+        <span className="bos-status-badge">合并学生 {mergedRows.length}</span>
+        <span className="bos-status-badge">本专科 {studentCount}</span>
+        <span className="bos-status-badge">家庭成员 {familyCount}</span>
+        <span className="bos-status-badge is-success">关联成功 {linkedCount}</span>
+        <span className={`bos-status-badge${familyIssueCount ? " is-danger" : " is-success"}`}>匹配异常 {familyIssueCount}</span>
+        <span className="bos-status-badge is-success">Supabase {isSupabaseConfigured ? "已配置" : "未配置"}</span>
+      </div>
+
+      <section className="bos-table-card">
+        <div className="bos-table-card-head">
           <div>
-            <div style={styles.eyebrow}>困难生业务 / 系统自动关联</div>
-            <h1 style={styles.title}>困难生数据库</h1>
-            <p style={styles.description}>
-              困难生数据库由系统按学年归档管理。管理员可导入往年困难生数据库，数据保存到后端信息库 Supabase，刷新页面后仍然保留。
-            </p>
+            <h2>当前学年困难生数据库明细表</h2>
+            <span>按 id_card = student_id_card 自动关联生成</span>
           </div>
-          <div style={styles.headerActions}>
-            <label style={styles.yearSelectLabel}>
-              学年
-              <select style={styles.yearSelect} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
-                {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-            </label>
-            <button style={styles.importButton} onClick={() => setShowImportModal(true)}>数据导入</button>
-            <button style={styles.secondaryButton} onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>
-              {isLoadingDatabase ? "刷新中..." : "刷新"}
-            </button>
-            <button style={styles.exportButton} onClick={exportCurrentYearDatabase}>导出当前学年困难生数据库</button>
-          </div>
+          <span>显示 {filteredRows.length} / {mergedRows.length} 条</span>
         </div>
-
-        <div style={styles.stats}>
-          <Stat label="当前学年合并学生总数" value={mergedRows.length} />
-          <Stat label="当前学年本专科信息数" value={studentCount} />
-          <Stat label="当前学年家庭成员信息数" value={familyCount} />
-          <Stat label="当前学年身份证号关联成功数" value={linkedCount} />
-          <Stat label="当前学年家庭成员匹配异常数" value={familyIssueCount} tone="#c2414d" />
-        </div>
-
-        <section style={{ ...styles.card, ...styles.detailCard }}>
-          <div style={styles.sectionHead}>
-            <div>
-              <h2 style={styles.subTitle}>当前学年困难生数据库明细表</h2>
-              <p style={styles.description}>
-                可按姓名、学号、学部（院）、身份证号、年级、性别查找学生。当前显示 {filteredRows.length} 条 / 当前学年共 {mergedRows.length} 条。
-              </p>
-            </div>
-            <span style={styles.badge}>按 id_card = student_id_card 自动生成</span>
-          </div>
-          <div style={styles.sectionLabel}>筛选区</div>
-          {isLoadingDatabase && <div style={styles.infoMessage}>正在加载困难生数据库……</div>}
-          {loadError && <div style={styles.errorMessage}>{loadError}</div>}
-          <div style={styles.searchGrid}>
-            <label style={styles.fieldLabel}>
-              姓名
-              <input
-                style={styles.searchInput}
-                value={searchFilters.name}
-                onChange={(event) => setSearchFilters((current) => ({ ...current, name: event.target.value }))}
-                placeholder="支持模糊查询"
-              />
-            </label>
-            <label style={styles.fieldLabel}>
-              学号
-              <input
-                style={styles.searchInput}
-                value={searchFilters.studentId}
-                onChange={(event) => setSearchFilters((current) => ({ ...current, studentId: event.target.value }))}
-                placeholder="输入学号"
-              />
-            </label>
-            <label style={styles.fieldLabel}>
-              学部（院）
-              <select
-                style={styles.searchInput}
-                value={searchFilters.collegeName}
-                onChange={(event) => setSearchFilters((current) => ({ ...current, collegeName: event.target.value }))}
-              >
-                <option value="">全部</option>
-                {availableColleges.map((college) => <option key={college} value={college}>{college}</option>)}
-              </select>
-            </label>
-            <label style={styles.fieldLabel}>
-              身份证号
-              <input
-                style={styles.searchInput}
-                value={searchFilters.idCard}
-                onChange={(event) => setSearchFilters((current) => ({ ...current, idCard: event.target.value }))}
-                placeholder="输入身份证号"
-              />
-            </label>
-            <label style={styles.fieldLabel}>
-              年级
-              <select
-                style={styles.searchInput}
-                value={searchFilters.grade}
-                onChange={(event) => setSearchFilters((current) => ({ ...current, grade: event.target.value }))}
-              >
-                <option value="">全部</option>
-                {availableGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
-              </select>
-            </label>
-            <label style={styles.fieldLabel}>
-              性别
-              <select
-                style={styles.searchInput}
-                value={searchFilters.gender}
-                onChange={(event) => setSearchFilters((current) => ({ ...current, gender: event.target.value }))}
-              >
-                <option value="">全部</option>
-                <option value="男">男</option>
-                <option value="女">女</option>
-              </select>
-            </label>
-            <button style={styles.secondaryButton} onClick={() => setSearchFilters(emptyFilters)}>重置筛选</button>
-          </div>
-          <div style={styles.sectionLabel}>表格区</div>
-          <div style={styles.tableWrap}>
+        <div className="bos-table-card-body">
+          <div>
             <table style={styles.table}>
               <thead><tr>{columns.map((column) => <th key={column} style={styles.th}>{column}</th>)}</tr></thead>
               <tbody>
@@ -749,28 +711,12 @@ export default function AdminStudentsPage() {
               </tbody>
             </table>
           </div>
-        </section>
-      </div>
-
-      <aside style={styles.logPanel}>
-        <div style={styles.logHeader}>
-          <h2 style={styles.logTitle}>数据库日志</h2>
-          <span style={styles.liveBadge}><span style={styles.liveDot} />实时</span>
         </div>
-        <div style={styles.logBox}>
-          <div style={styles.logItem}>[学年] 当前查看 {academicYear}</div>
-          <div style={styles.logItem}>[Supabase] 已读取 {cloudStudents.length} 条云端记录</div>
-          <div style={styles.logItem}>[合并] 当前生成 {mergedRows.length} 条困难生记录</div>
-          <div style={styles.logItem}>[筛选] 当前显示 {filteredRows.length} 条</div>
-          {isLoadingDatabase && <div style={styles.logItem}>[读取] 正在刷新 students 表……</div>}
-          {loadError && <div style={{ ...styles.logItem, color: "#fda4af" }}>[错误] {loadError}</div>}
-          {importLogs.length === 0 ? (
-            <div style={styles.logMuted}>[等待] 暂无往年数据导入日志</div>
-          ) : (
-            importLogs.map((log, index) => <div key={`${log}_${index}`} style={styles.logItem}>[{index + 1}] {log}</div>)
-          )}
+        <div className="bos-table-card-foot">
+          <span>第 1 页</span>
+          <span>共 {filteredRows.length} 条 · Supabase 云端 {cloudStudents.length} 条</span>
         </div>
-      </aside>
+      </section>
 
       {showImportModal && (
         <Modal title="往年困难生数据导入" onClose={() => setShowImportModal(false)}>
@@ -843,13 +789,13 @@ function Stat({ label, value, tone = "#0077d4" }: { label: string; value: number
 
 function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return (
-    <div style={styles.modalBackdrop}>
-      <section style={styles.modal}>
-        <div style={styles.modalHeader}>
+    <div className="bos-modal-backdrop">
+      <section className="bos-modal bos-modal--compact">
+        <div className="bos-modal-header">
           <h2 style={styles.modalTitle}>{title}</h2>
-          <button style={styles.closeButton} onClick={onClose}>关闭</button>
+          <button onClick={onClose}>关闭</button>
         </div>
-        <div style={styles.modalBody}>{children}</div>
+        <div className="bos-modal-body">{children}</div>
       </section>
     </div>
   );

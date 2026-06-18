@@ -10,6 +10,7 @@ export default function CollegeUploadPage({ panel, onNavigate }: CollegeUploadPa
     <ProcessingWorkbench
       collegeMode
       fixedProcessingPanel={panel}
+      layoutMarker="AI Studio Layout Active - College Upload"
       onBackToDifficulty={() => onNavigate?.("/college/difficulty")}
       onViewDifficultyStudents={() => onNavigate?.("/college/difficulty/students")}
     />

@@ -1,5 +1,6 @@
 import { useMemo, useState, type CSSProperties, type ChangeEventHandler, type DragEvent, type ReactNode, type RefObject } from "react";
 import type { DisqualifiedRow, LogItem, ProcessingStats } from "../services/types";
+import { ACADEMIC_YEAR_OPTIONS } from "../utils/academicYear";
 
 type StudentProcessPageProps = {
   dataRef: RefObject<HTMLInputElement | null>;
@@ -15,6 +16,8 @@ type StudentProcessPageProps = {
   onViewDifficultyStudents?: () => void;
   hideSubmitAction?: boolean;
   status: string;
+  academicYear: string;
+  onAcademicYearChange: (year: string) => void;
   studentCollegeName: string;
   stats: ProcessingStats;
   renderTable: (rows: Record<string, unknown>[] | DisqualifiedRow[]) => ReactNode;
@@ -43,6 +46,8 @@ export default function StudentProcessPage({
   onViewDifficultyStudents,
   hideSubmitAction = false,
   status,
+  academicYear,
+  onAcademicYearChange,
   studentCollegeName,
   stats,
   renderTable,
@@ -56,8 +61,14 @@ export default function StudentProcessPage({
 }: StudentProcessPageProps) {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [importFileName, setImportFileName] = useState("");
-  const [keyword, setKeyword] = useState("");
-  const [appliedKeyword, setAppliedKeyword] = useState("");
+  const [filters, setFilters] = useState({
+    name: "",
+    studentId: "",
+    idCard: "",
+    difficulty: "",
+    status: "",
+  });
+  const [appliedFilters, setAppliedFilters] = useState(filters);
 
   const failedRowNumbers = useMemo(
     () => new Set(disqualifiedRows.map((row) => row.rowNumber)),
@@ -68,18 +79,17 @@ export default function StudentProcessPage({
     [failedRowNumbers, processedData]
   );
   const summaryRows = useMemo(() => {
-    const key = appliedKeyword.trim();
-    if (!key) return processedData;
-    return processedData.filter((row) => Object.values(row).some((value) => String(value ?? "").includes(key)));
-  }, [appliedKeyword, processedData]);
+    const terms = Object.values(appliedFilters).map((value) => value.trim()).filter(Boolean);
+    if (terms.length === 0) return processedData;
+    return processedData.filter((row) => {
+      const rowText = Object.values(row).map((value) => String(value ?? "")).join(" ");
+      return terms.every((term) => rowText.includes(term));
+    });
+  }, [appliedFilters, processedData]);
 
   const hasProcessedRows = processedData.length > 0 && !isProcessing;
   const hasBlockingRows = disqualifiedRows.length > 0 || stats.errors > 0;
   const canConfirm = hasProcessedRows && !reviewConfirmed && !hasBlockingRows;
-  const uploadButtonStyle =
-    hasProcessedRows && reviewConfirmed && !hasBlockingRows ? pageStyles.greenButton :
-    hasProcessedRows ? pageStyles.orangeButton :
-    pageStyles.disabledButton;
   const reviewStatus =
     !processedData.length ? "未处理" :
     hasBlockingRows ? "存在不通过数据，禁止确认/上载" :
@@ -108,135 +118,84 @@ export default function StudentProcessPage({
   };
 
   const resetSearch = () => {
-    setKeyword("");
-    setAppliedKeyword("");
+    const empty = { name: "", studentId: "", idCard: "", difficulty: "", status: "" };
+    setFilters(empty);
+    setAppliedFilters(empty);
   };
 
   return (
-    <section style={pageStyles.page}>
-      <div style={pageStyles.mainColumn}>
-        <section style={{ ...pageStyles.card, ...pageStyles.headerCard }}>
-          <div style={pageStyles.header}>
-            <div>
-              <div style={pageStyles.eyebrow}>困难生业务 / 学院端数据处理</div>
-              <h1 style={pageStyles.title}>困难生本专科信息处理</h1>
-              <p style={pageStyles.description}>主页面用于查询、查看摘要和执行操作；Excel 导入、名单查看和问题分析均在弹窗中完成。</p>
-            </div>
-            <span style={pageStyles.badge}>当前学部（院）：{studentCollegeName}</span>
-          </div>
-          {onBackToDifficulty && (
-            <button style={pageStyles.backButton} onClick={onBackToDifficulty}>返回业务首页</button>
-          )}
-        </section>
+    <section className="bos-table-page">
+      <header className="bos-page-title-row">
+        <div>
+          <div className="bos-breadcrumb">困难生业务 / 本专科信息 / Student Information</div>
+          <h1>困难生本专科信息处理</h1>
+          <p>保留原 Excel 解析、数据治理、自动修复、名单导出、学院确认和学校端上载逻辑。</p>
+        </div>
+        <div className="bos-status-row">
+          <span className="bos-status-badge">{studentCollegeName}</span>
+          {onBackToDifficulty && <button style={pageStyles.backButton} onClick={onBackToDifficulty}>返回业务首页</button>}
+        </div>
+      </header>
 
-        <section style={{ ...pageStyles.card, ...pageStyles.toolbarCard }}>
-          <div style={pageStyles.sectionTitleBar}>
-            <span style={pageStyles.sectionTitle}>筛选区</span>
-            <span style={pageStyles.sectionHint}>按当前处理结果快速定位学生</span>
-          </div>
-          <div style={pageStyles.filterGrid}>
-            <label style={pageStyles.fieldLabel}>
-              关键词
-              <input
-                style={pageStyles.input}
-                value={keyword}
-                placeholder="姓名 / 学号 / 身份证号 / 困难等级"
-                onChange={(event) => setKeyword(event.target.value)}
-              />
-            </label>
-            <button style={pageStyles.secondaryButton} onClick={() => setAppliedKeyword(keyword.trim())}>查询</button>
-            <button style={pageStyles.secondaryButton} onClick={resetSearch}>重置</button>
-            <button style={pageStyles.secondaryButton} onClick={() => setAppliedKeyword(keyword.trim())}>刷新</button>
-          </div>
+      <section className="bos-filter-card">
+        <div className="bos-filter-grid">
+          <label className="bos-filter-field">学年
+            <select value={academicYear} onChange={(event) => onAcademicYearChange(event.target.value)}>
+              {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
+            </select>
+          </label>
+          <label className="bos-filter-field">学院/学部<input value={studentCollegeName} readOnly /></label>
+          <label className="bos-filter-field">姓名<input value={filters.name} onChange={(event) => setFilters((current) => ({ ...current, name: event.target.value }))} /></label>
+          <label className="bos-filter-field">学号<input value={filters.studentId} onChange={(event) => setFilters((current) => ({ ...current, studentId: event.target.value }))} /></label>
+          <label className="bos-filter-field">身份证号<input value={filters.idCard} onChange={(event) => setFilters((current) => ({ ...current, idCard: event.target.value }))} /></label>
+          <label className="bos-filter-field">困难等级<input value={filters.difficulty} onChange={(event) => setFilters((current) => ({ ...current, difficulty: event.target.value }))} /></label>
+          <label className="bos-filter-field">状态<input value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))} /></label>
+          <button className="is-primary" onClick={() => setAppliedFilters(filters)}>查询</button>
+          <button onClick={resetSearch}>重置</button>
+        </div>
+      </section>
 
-          <div style={pageStyles.sectionTitleBar}>
-            <span style={pageStyles.sectionTitle}>操作按钮区</span>
-            <span style={pageStyles.sectionHint}>导入、查看、导出、确认与上载</span>
-          </div>
-          <div style={pageStyles.buttonGrid}>
-            <button style={pageStyles.blueButton} onClick={() => setActiveModal("import")}>数据导入</button>
-            <button style={pageStyles.blueButton} onClick={() => setActiveModal("passed")}>查看通过数据</button>
-            <button style={pageStyles.blueButton} onClick={() => setActiveModal("failed")}>查看不通过数据</button>
-            <button style={pageStyles.blueButton} onClick={() => setActiveModal("analysis")}>查看问题分析</button>
-            <button style={pageStyles.purpleButton} onClick={exportExcel}>导出通过名单</button>
-            <button style={pageStyles.purpleButton} onClick={exportStudentErrorReport}>导出不通过名单</button>
-            {!hideSubmitAction && (
-              <>
-                <button
-                  style={canConfirm ? pageStyles.orangeButton : reviewConfirmed ? pageStyles.greenButton : pageStyles.disabledButton}
-                  disabled={!canConfirm}
-                  onClick={confirmCollegeReview}
-                >
-                  {reviewConfirmed ? "已确认，可上载学校端" : "学院确认审核"}
-                </button>
-                <button
-                  style={uploadButtonStyle}
-                  disabled={!hasProcessedRows}
-                  onClick={addStudentResultToMergePool}
-                >
-                  上载到学校端
-                </button>
-              </>
-            )}
-            {onViewDifficultyStudents && (
-              <button style={pageStyles.secondaryButton} onClick={onViewDifficultyStudents}>查看困难生明细</button>
-            )}
-          </div>
-
-          <div style={pageStyles.sectionTitleBar}>
-            <span style={pageStyles.sectionTitle}>统计状态区</span>
-            <span style={pageStyles.sectionHint}>业务规则与审核状态保持原逻辑</span>
-          </div>
-          <div style={pageStyles.statusLine}>
-            <span>当前状态：{status}</span>
-            <span>学院确认：{reviewStatus}</span>
-            {processedData.length > 0 && hasBlockingRows && <span style={pageStyles.errorText}>存在不通过数据，禁止确认/上载</span>}
-            {processedData.length > 0 && !hasBlockingRows && !reviewConfirmed && <span style={pageStyles.warnText}>请先完成学院确认审核后再上载学校端</span>}
-            {processedData.length > 0 && !hasBlockingRows && reviewConfirmed && <span style={pageStyles.okText}>学院已确认，可上载学校端</span>}
-          </div>
-
-          <div style={pageStyles.statsGrid}>
-            <Stat label="总人数" value={stats.total} />
-            <Stat label="通过人数" value={passedRows.length} tone="#087b5b" />
-            <Stat label="不通过人数" value={disqualifiedRows.length} tone="#b42336" />
-            <Stat label="自动修复项" value={stats.repaired} tone="#0f766e" />
-          </div>
-        </section>
-
-        <section style={{ ...pageStyles.card, ...pageStyles.tableCard }}>
-          <div style={pageStyles.tableHeader}>
-            <div>
-              <h2 style={pageStyles.subTitle}>当前数据表格摘要</h2>
-              <p style={pageStyles.description}>显示 {summaryRows.length} / {processedData.length} 条处理结果。完整通过名单和不通过名单请通过弹窗查看。</p>
-            </div>
-          </div>
-          <div style={pageStyles.tableBody}>
-            {summaryRows.length === 0 ? <div style={pageStyles.empty}>暂无处理数据，请点击“数据导入”上传 Excel。</div> : renderTable(summaryRows)}
-          </div>
-        </section>
+      <div className="bos-action-toolbar">
+        <button className="is-primary" onClick={() => setActiveModal("import")}>数据导入</button>
+        <button onClick={() => setAppliedFilters(filters)}>刷新</button>
+        <button onClick={() => setActiveModal("passed")}>查看通过数据</button>
+        <button onClick={() => setActiveModal("failed")}>查看不通过数据</button>
+        <button onClick={() => setActiveModal("analysis")}>问题分析</button>
+        <button className="is-purple" onClick={exportExcel}>导出通过名单</button>
+        <button className="is-purple" onClick={exportStudentErrorReport}>导出不通过名单</button>
+        {!hideSubmitAction && (
+          <>
+            <button className={reviewConfirmed ? "is-success" : "is-warning"} disabled={!canConfirm} onClick={confirmCollegeReview}>
+              {reviewConfirmed ? "学院已确认" : "学院确认审核"}
+            </button>
+            <button className={hasProcessedRows && reviewConfirmed && !hasBlockingRows ? "is-success" : "is-warning"} disabled={!hasProcessedRows} onClick={addStudentResultToMergePool}>上载到学校端</button>
+          </>
+        )}
+        {onViewDifficultyStudents && <button onClick={onViewDifficultyStudents}>学生详情</button>}
       </div>
 
-      <aside style={pageStyles.logPanel}>
-        <div style={pageStyles.logHeader}>
-          <h2 style={pageStyles.logTitle}>处理日志</h2>
-          <span style={pageStyles.liveBadge}><span style={pageStyles.liveDot} />实时</span>
+      <div className="bos-status-row">
+        <span className="bos-status-badge">当前状态：{status}</span>
+        <span className={`bos-status-badge${hasBlockingRows ? " is-danger" : " is-success"}`}>学院确认：{reviewStatus}</span>
+        <span className="bos-status-badge">总数 {stats.total}</span>
+        <span className="bos-status-badge is-success">通过 {passedRows.length}</span>
+        <span className={`bos-status-badge${disqualifiedRows.length ? " is-danger" : ""}`}>不通过 {disqualifiedRows.length}</span>
+        <span className="bos-status-badge">自动修复 {stats.repaired}</span>
+      </div>
+
+      <section className="bos-table-card">
+        <div className="bos-table-card-head">
+          <h2>本专科困难生数据表</h2>
+          <span>显示 {summaryRows.length} / {processedData.length} 条</span>
         </div>
-        <div style={pageStyles.logBox}>
-          {logs.length === 0 && <div style={pageStyles.logItem}>[等待] 本专科信息处理功能区已就绪</div>}
-          {logs.map((item, index) => (
-            <div
-              key={`${item.time}_${index}`}
-              style={{
-                ...pageStyles.logItem,
-                color: item.type === "error" ? "#f87171" : item.type === "success" ? "#4ade80" : "#ffffff",
-              }}
-            >
-              [{item.time}] {item.message}
-            </div>
-          ))}
-          <div ref={logEndRef} />
+        <div className="bos-table-card-body">
+          {summaryRows.length === 0 ? <div style={pageStyles.empty}>暂无处理数据，请点击“数据导入”上传 Excel。</div> : renderTable(summaryRows)}
         </div>
-      </aside>
+        <div className="bos-table-card-foot">
+          <span>第 1 页</span>
+          <span>当前页最多展示 30 条 · 共 {summaryRows.length} 条</span>
+        </div>
+      </section>
 
       {activeModal === "import" && (
         <Modal title="本专科信息数据导入" width="620px" onClose={() => setActiveModal(null)}>
@@ -262,6 +221,7 @@ export default function StudentProcessPage({
             {logs.length === 0 ? <div style={pageStyles.modalMuted}>暂无导入日志</div> : logs.map((item, index) => (
               <div key={`${item.time}_${index}`}>[{item.time}] {item.message}</div>
             ))}
+            <div ref={logEndRef} />
           </div>
           <div style={pageStyles.modalFooter}>
             <button style={pageStyles.secondaryButton} onClick={() => setActiveModal(null)}>取消</button>
@@ -332,15 +292,6 @@ export default function StudentProcessPage({
   );
 }
 
-function Stat({ label, value, tone = "#0077d4" }: { label: string; value: number; tone?: string }) {
-  return (
-    <div style={pageStyles.statCard}>
-      <div style={pageStyles.statLabel}>{label}</div>
-      <strong style={{ ...pageStyles.statValue, color: tone }}>{value}</strong>
-    </div>
-  );
-}
-
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div style={pageStyles.infoItem}>
@@ -352,13 +303,13 @@ function Info({ label, value }: { label: string; value: string }) {
 
 function Modal({ title, width = "80vw", children, onClose }: { title: string; width?: string; children: ReactNode; onClose: () => void }) {
   return (
-    <div style={pageStyles.modalBackdrop}>
-      <section style={{ ...pageStyles.modal, width }}>
-        <div style={pageStyles.modalHeader}>
+    <div className="bos-modal-backdrop">
+      <section className={`bos-modal${width === "620px" ? " bos-modal--compact" : ""}`} style={{ width }}>
+        <div className="bos-modal-header">
           <h2 style={pageStyles.modalTitle}>{title}</h2>
-          <button style={pageStyles.closeButton} onClick={onClose}>关闭</button>
+          <button onClick={onClose}>关闭</button>
         </div>
-        <div style={pageStyles.modalBody}>{children}</div>
+        <div className="bos-modal-body">{children}</div>
       </section>
     </div>
   );

@@ -3,7 +3,6 @@
 
 import { getMergeBatches, saveMergeBatch } from "./db/localMergeDb";
 import {
-  ACADEMIC_YEAR_OPTIONS,
   getBatchAcademicYear,
   getCurrentAcademicYear,
   withAcademicYear,
@@ -164,9 +163,10 @@ type AppProps = {
   fixedProcessingPanel?: "student" | "family";
   onBackToDifficulty?: () => void;
   onViewDifficultyStudents?: () => void;
+  layoutMarker?: string;
 };
 
-export default function App({ collegeMode = false, fixedProcessingPanel, onBackToDifficulty, onViewDifficultyStudents }: AppProps) {
+export default function App({ collegeMode = false, fixedProcessingPanel, onBackToDifficulty, onViewDifficultyStudents, layoutMarker }: AppProps) {
   const dataRef = useRef<HTMLInputElement>(null);
   const familyDataRef = useRef<HTMLInputElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -595,12 +595,17 @@ const askDeepSeek = async (prompt: string) => {
       }),
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
 
-    return data.text || "";
+    if (!res.ok) {
+      const detail = data?.detail || data?.error || res.statusText || "DeepSeek 接口返回错误";
+      throw new Error(String(detail));
+    }
+
+    return typeof data.text === "string" ? data.text : "";
   } catch (err) {
-    console.error(err);
-    return "AI分析失败，请检查DeepSeek接口是否可用。";
+    console.error("DeepSeek request failed:", err);
+    throw err;
   }
 };
 
@@ -631,6 +636,7 @@ const askDeepSeek = async (prompt: string) => {
       setHighlightCellMap({});
       setDisqualifiedRows([]);
       setAnalysis({});
+      setAiReport("");
       resetStudentReviewState("重新处理数据后确认状态已重置");
 
       const result = await processStudentRows({
@@ -725,42 +731,57 @@ const askDeepSeek = async (prompt: string) => {
         pushLog("error", `检测到 ${collegeMismatchCount} 行学院与当前账号不一致，已进入不通过名单。`);
       }
 
+      const finalFailRows = nextDisqualifiedRows;
+
       setProcessedData(result.processedData);
       setHighlightCellMap(nextHighlightCellMap);
-      setDisqualifiedRows(nextDisqualifiedRows);
+      setDisqualifiedRows(finalFailRows);
       setAnalysis(result.analysis);
       setStudentErrorReports(nextErrorReports);
       setStats(nextStats);
       setStatus("治理完成");
-      pushLog("success", `治理完成：通过 ${Math.max(nextStats.total - nextDisqualifiedRows.length, 0)} 条，不通过 ${nextDisqualifiedRows.length} 条，自动修复 ${nextStats.repaired} 项`);
+      pushLog("success", `治理完成：通过 ${Math.max(nextStats.total - finalFailRows.length, 0)} 条，不通过 ${finalFailRows.length} 条，自动修复 ${nextStats.repaired} 项`);
 
-      const aiText = await askDeepSeek(`
-请分析以下困难生数据治理结果：
+      try {
+        const aiText = await askDeepSeek(`
+请基于以下困难生数据治理结果生成分析报告：
 
-总人数：${nextStats.total}
-自动修复：${nextStats.repaired}
-异常人数：${nextStats.errors}
-不通过人数：${nextStats.disqualified}
+总数据行数：${nextStats.total}
+自动修复数量：${nextStats.repaired}
+异常问题数量：${nextStats.errors}
+不通过人数：${finalFailRows.length}
+缺失字段数量：${nextStats.missingFields}
+删除模板外字段数量：${result.removedHeaders.length}
 
-问题统计：
-${JSON.stringify(result.analysis)}
+字段问题统计：
+${JSON.stringify(result.analysis, null, 2)}
 
-请生成：
-1. 问题汇总
-2. 学院整改建议
-3. 数据质量评分
+不通过名单摘要：
+${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
+
+请输出：
+1. 本次数据主要问题
+2. 高频错误字段
+3. 学院整改建议
+4. 数据质量评分
 `);
-setAiReport(aiText);
+
+        setAiReport(aiText || "DeepSeek 未返回分析内容，请检查接口。");
+      } catch (error) {
+        console.error("DeepSeek 智能分析失败:", error);
+        pushLog("error", "DeepSeek 智能分析失败，请检查 Worker 地址或环境变量");
+        setAiReport("DeepSeek 智能分析失败，请检查 Worker 地址或环境变量。");
+      }
 
       window.dispatchEvent(
         new CustomEvent("bos:college-upload-result", {
           detail: {
-            errorCount: nextStats.disqualified,
+            errorCount: finalFailRows.length,
             totalCount: nextStats.total,
             fixedCount: nextStats.repaired,
             validationErrors: [
               ...toCollegeValidationErrors(nextErrorReports),
-              ...nextDisqualifiedRows.map((item) => ({
+              ...finalFailRows.map((item) => ({
                 row: item.rowNumber,
                 column: "整行",
                 field: "不通过原因",
@@ -1256,29 +1277,8 @@ setAiReport(aiText);
       {activeModule === "merge" && <MergePage />}
 
       {activeModule === "processing" && (
-        <div style={collegeMode ? { ...styles.processingWorkspace, ...styles.embeddedProcessingWorkspace } : styles.processingWorkspace}>
-          {collegeMode && (
-            <div style={styles.academicYearBar}>
-              <div>
-                <div style={styles.academicYearLabel}>当前学年：{academicYear}</div>
-                <div style={styles.academicYearTip}>本次治理和上载数据将归档到所选学年，学校端按学年独立查看。</div>
-              </div>
-              <label style={styles.academicYearSelectLabel}>
-                学年
-                <select
-                  style={styles.academicYearSelect}
-                  value={academicYear}
-                  onChange={(event) => setAcademicYear(event.target.value)}
-                >
-                  {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
+        <div className={collegeMode ? "bos-processing-frame" : undefined} style={collegeMode ? undefined : styles.processingWorkspace}>
+          {layoutMarker && <div className="bos-layout-active">{layoutMarker}</div>}
           {!fixedProcessingPanel && (
             <div style={styles.subModuleBar}>
               <button
@@ -1311,6 +1311,8 @@ setAiReport(aiText);
               onViewDifficultyStudents={onViewDifficultyStudents}
               hideSubmitAction={false}
               status={status}
+              academicYear={academicYear}
+              onAcademicYearChange={setAcademicYear}
               studentCollegeName={studentCollegeName}
               stats={stats}
               renderTable={renderTable}
@@ -1337,6 +1339,8 @@ setAiReport(aiText);
               onViewDifficultyStudents={onViewDifficultyStudents}
               hideSubmitAction={false}
               familyStatus={familyStatus}
+              academicYear={academicYear}
+              onAcademicYearChange={setAcademicYear}
               familyCollegeName={familyCollegeName}
               familyStats={familyStats}
               renderTable={renderTable}
