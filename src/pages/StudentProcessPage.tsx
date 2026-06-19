@@ -124,12 +124,12 @@ export default function StudentProcessPage({
   };
 
   return (
-    <section className="bos-table-page">
+    <section className="bos-table-page difficulty-workspace">
       <header className="bos-page-title-row">
         <div>
           <div className="bos-breadcrumb">困难生业务 / 本专科信息 / Student Information</div>
-          <h1>困难生本专科信息处理</h1>
-          <p>保留原 Excel 解析、数据治理、自动修复、名单导出、学院确认和学校端上载逻辑。</p>
+          <h1>困难生数据处理</h1>
+          <p>当前处理：本专科信息。保留原 Excel 解析、数据治理、自动修复、名单导出、学院确认和学校端上载逻辑。</p>
         </div>
         <div className="bos-status-row">
           <span className="bos-status-badge">{studentCollegeName}</span>
@@ -168,10 +168,16 @@ export default function StudentProcessPage({
             <button className={reviewConfirmed ? "is-success" : "is-warning"} disabled={!canConfirm} onClick={confirmCollegeReview}>
               {reviewConfirmed ? "学院已确认" : "学院确认审核"}
             </button>
-            <button className={hasProcessedRows && reviewConfirmed && !hasBlockingRows ? "is-success" : "is-warning"} disabled={!hasProcessedRows} onClick={addStudentResultToMergePool}>上载到学校端</button>
+            <button
+              className={hasProcessedRows && reviewConfirmed && !hasBlockingRows && !uploadedToSchool ? "is-success" : "is-warning"}
+              disabled={!hasProcessedRows || !reviewConfirmed || hasBlockingRows || uploadedToSchool}
+              onClick={addStudentResultToMergePool}
+            >
+              {uploadedToSchool ? "已上载学校端" : "上载到学校端"}
+            </button>
           </>
         )}
-        {onViewDifficultyStudents && <button onClick={onViewDifficultyStudents}>学生详情</button>}
+        {onViewDifficultyStudents && <button onClick={onViewDifficultyStudents}>查看困难生明细</button>}
       </div>
 
       <div className="bos-status-row">
@@ -182,6 +188,15 @@ export default function StudentProcessPage({
         <span className={`bos-status-badge${disqualifiedRows.length ? " is-danger" : ""}`}>不通过 {disqualifiedRows.length}</span>
         <span className="bos-status-badge">自动修复 {stats.repaired}</span>
       </div>
+
+      <section className="difficulty-processing-log" aria-label="本专科信息处理日志">
+        <strong>处理日志</strong>
+        <div>
+          {logs.length === 0
+            ? "等待导入 Excel"
+            : logs.slice(-4).map((item) => `[${item.time}] ${item.message}`).join("　｜　")}
+        </div>
+      </section>
 
       <section className="bos-table-card">
         <div className="bos-table-card-head">

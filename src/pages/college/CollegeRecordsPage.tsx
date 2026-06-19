@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import * as XLSX from "xlsx-js-style";
 import type { CollegeProcessedBatch } from "../../types/merge";
 import { getMergeBatches } from "../../db/localMergeDb";
 import { ACADEMIC_YEAR_OPTIONS, getBatchAcademicYear, getCurrentAcademicYear } from "../../utils/academicYear";
@@ -10,16 +11,22 @@ export default function CollegeRecordsPage() {
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
-  useEffect(() => {
+  const loadRows = useCallback(async () => {
     const currentAccount = getCurrentCollegeAccount();
-    getMergeBatches().then((batches) =>
-      setRows(
-        currentAccount
-          ? batches.filter((batch) => isSameSubmissionCollege(batch.collegeName, currentAccount.college_name))
-          : batches
-      )
+    const batches = await getMergeBatches();
+    setRows(
+      currentAccount
+        ? batches.filter((batch) => isSameSubmissionCollege(batch.collegeName, currentAccount.college_name))
+        : batches
     );
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadRows();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loadRows]);
 
   const filteredRows = useMemo(() => {
     const text = keyword.trim();
@@ -31,29 +38,57 @@ export default function CollegeRecordsPage() {
     });
   }, [academicYear, keyword, rows, statusFilter]);
 
+  const resetFilters = () => {
+    setKeyword("");
+    setStatusFilter("");
+  };
+
+  const exportCurrentRows = () => {
+    if (filteredRows.length === 0) {
+      alert("当前筛选条件下暂无可导出的提交记录");
+      return;
+    }
+    const exportRows = filteredRows.map((item) => ({
+      提交单位: item.collegeName,
+      学年: getBatchAcademicYear(item),
+      数据类型: item.dataType === "student" ? "本专科信息" : "家庭成员信息",
+      通过人数: item.rowCount,
+      不通过人数: 0,
+      提交状态: "已上载学校端",
+      最近提交时间: new Date(item.createdAt).toLocaleString(),
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    worksheet["!cols"] = Object.keys(exportRows[0]).map(() => ({ wch: 18 }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "学院提交记录");
+    XLSX.writeFile(workbook, `${academicYear}_学院提交记录.xlsx`);
+  };
+
   return (
-    <section style={styles.page}>
-      <div style={styles.header}>
+    <section className="bos-table-page difficulty-workspace">
+      <header className="bos-page-title-row">
         <div>
-          <h1 style={styles.title}>学部（院）提交记录</h1>
-          <p style={styles.description}>提交记录按学年归档展示，当前数据来源仍为学院端上载到学校端的通过批次。</p>
+          <div className="bos-breadcrumb">困难生业务 / 提交记录</div>
+          <h1>学部（院）提交记录</h1>
+          <p>提交记录按学年归档展示，当前数据来源为学院端上载到学校端的通过批次。</p>
         </div>
-        <div style={styles.toolbar}>
-          <label style={styles.fieldLabel}>
-            学年
-            <select style={styles.select} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
-              {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-          </label>
-          <label style={styles.fieldLabel}>
+        <label className="bos-current-year">
+          当前学年
+          <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
+            {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year}>{year}</option>)}
+          </select>
+        </label>
+      </header>
+
+      <section className="bos-filter-card">
+        <div className="difficulty-summary-filter">
+          <label className="bos-filter-field">
             搜索
-            <input style={styles.input} value={keyword} placeholder="提交单位 / 数据类型" onChange={(event) => setKeyword(event.target.value)} />
+            <input value={keyword} placeholder="提交单位 / 数据类型" onChange={(event) => setKeyword(event.target.value)} />
           </label>
-          <label style={styles.fieldLabel}>
+          <label className="bos-filter-field">
             状态
-            <select style={styles.select} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="">全部状态</option>
               <option value="未处理">未处理</option>
               <option value="已处理待确认">已处理待确认</option>
@@ -62,11 +97,24 @@ export default function CollegeRecordsPage() {
               <option value="存在不通过">存在不通过</option>
             </select>
           </label>
+          <button className="is-primary" onClick={() => void loadRows()}>查询</button>
+          <button onClick={resetFilters}>重置</button>
         </div>
+      </section>
+
+      <div className="bos-action-toolbar">
+        <button className="is-primary" onClick={() => void loadRows()}>刷新</button>
+        <button className="is-purple" onClick={exportCurrentRows}>导出当前记录</button>
       </div>
 
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
+      <section className="bos-table-card">
+        <div className="bos-table-card-head">
+          <h2>{academicYear} 学年提交记录</h2>
+          <span>{filteredRows.length} 个批次</span>
+        </div>
+        <div className="bos-table-card-body">
+          <div>
+          <table style={styles.table}>
           <thead>
             <tr>
               <th style={styles.th}>提交单位</th>
@@ -98,7 +146,13 @@ export default function CollegeRecordsPage() {
             )}
           </tbody>
         </table>
-      </div>
+          </div>
+        </div>
+        <div className="bos-table-card-foot">
+          <span>数据来源：本学院上载记录</span>
+          <span>共 {filteredRows.length} 条</span>
+        </div>
+      </section>
     </section>
   );
 }

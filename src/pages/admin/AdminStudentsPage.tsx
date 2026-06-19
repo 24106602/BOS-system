@@ -6,12 +6,14 @@ import { readWorkbook } from "../../services/templateParser";
 import type { CollegeProcessedBatch } from "../../types/merge";
 import {
   ACADEMIC_YEAR_OPTIONS,
+  getBatchAcademicYear,
   getCurrentAcademicYear,
   isBatchInAcademicYear,
 } from "../../utils/academicYear";
 import { normalizeSubmissionCollegeName } from "../../utils/collegeDetector";
 
 type MergedDifficultyRow = {
+  academicYear: string;
   collegeName: string;
   name: string;
   studentId: string;
@@ -19,6 +21,7 @@ type MergedDifficultyRow = {
   grade: string;
   gender: string;
   difficultyLevel: string;
+  status: string;
   familyMembers: string[];
   relationStatus: string;
 };
@@ -70,6 +73,7 @@ type SearchFilters = {
 };
 
 const columns = [
+  "学年",
   "学院",
   "姓名",
   "学号",
@@ -77,6 +81,7 @@ const columns = [
   "年级",
   "性别",
   "困难等级",
+  "状态",
   "家庭成员数量",
   "家庭成员1",
   "家庭成员2",
@@ -99,6 +104,15 @@ const getText = (row: Record<string, unknown>, aliases: string[]) => {
 };
 
 const normalizeIdCard = (value: string) => value.replace(/\s|-/g, "").toUpperCase();
+
+const statusText: Record<string, string> = {
+  college_submitted: "学院已提交",
+  pending_review: "待学校确认",
+  archived: "管理员归档",
+  local_uploaded: "本地已上载",
+};
+
+const displayStatus = (status: string) => statusText[status] || status || "已上载学校端";
 
 const makeStudentKey = (row: Pick<HistoricalImportRow, "id_card" | "student_id">) =>
   normalizeIdCard(row.id_card) || row.student_id.trim();
@@ -186,6 +200,7 @@ const makeMergedRows = (batches: CollegeProcessedBatch[]): MergedDifficultyRow[]
         "已关联";
 
       return {
+        academicYear: getBatchAcademicYear(batch),
         collegeName: normalizeSubmissionCollegeName(batch.collegeName),
         name: getText(row, ["name", "姓名", "学生姓名"]),
         studentId: getText(row, ["student_id", "学号", "学生学号", "学生编号"]),
@@ -193,6 +208,7 @@ const makeMergedRows = (batches: CollegeProcessedBatch[]): MergedDifficultyRow[]
         grade: getText(row, ["grade", "年级", "所在年级"]),
         gender: getText(row, ["gender", "性别"]),
         difficultyLevel: getText(row, ["difficulty_level", "困难等级", "困难认定等级", "特殊困难类型", "认定等级"]),
+        status: "已上载学校端",
         familyMembers,
         relationStatus,
       };
@@ -202,6 +218,7 @@ const makeMergedRows = (batches: CollegeProcessedBatch[]): MergedDifficultyRow[]
 
 const makeCloudMergedRows = (rows: CloudStudentRow[]): MergedDifficultyRow[] =>
   rows.map((row) => ({
+    academicYear: String(row.academic_year || ""),
     collegeName: normalizeSubmissionCollegeName(String(row.college_name || "")),
     name: String(row.name || ""),
     studentId: String(row.student_id || ""),
@@ -209,6 +226,7 @@ const makeCloudMergedRows = (rows: CloudStudentRow[]): MergedDifficultyRow[] =>
     grade: String(row.grade || ""),
     gender: String(row.gender || ""),
     difficultyLevel: String(row.difficulty_level || ""),
+    status: displayStatus(String(row.status || "")),
     familyMembers: [],
     relationStatus: row.status === "archived" ? "管理员归档" : "云端学生主信息",
   }));
@@ -372,6 +390,7 @@ export default function AdminStudentsPage() {
   const [loadError, setLoadError] = useState("");
   const [searchFilters, setSearchFilters] = useState<SearchFilters>(emptyFilters);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [selectedRow, setSelectedRow] = useState<MergedDifficultyRow | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -457,7 +476,7 @@ export default function AdminStudentsPage() {
       if (grade && row.grade !== grade && !row.grade.includes(grade)) return false;
       if (gender && row.gender !== gender) return false;
       if (difficultyLevel && !row.difficultyLevel.includes(difficultyLevel)) return false;
-      if (status && !row.relationStatus.includes(status)) return false;
+      if (status && !row.status.includes(status) && !row.relationStatus.includes(status)) return false;
       return true;
     });
   }, [mergedRows, searchFilters]);
@@ -467,13 +486,13 @@ export default function AdminStudentsPage() {
   const familyIssueCount = mergedRows.filter((item) => item.relationStatus !== "已关联").length;
 
   const exportCurrentYearDatabase = () => {
-    if (mergedRows.length === 0) {
+    if (filteredRows.length === 0) {
       alert("暂无当前学年困难生数据库可导出");
       return;
     }
 
-    const exportRows = mergedRows.map((row) => ({
-      学年: academicYear,
+    const exportRows = filteredRows.map((row) => ({
+      学年: row.academicYear || academicYear,
       学院: row.collegeName,
       姓名: row.name,
       学号: row.studentId,
@@ -481,6 +500,7 @@ export default function AdminStudentsPage() {
       年级: row.grade,
       性别: row.gender,
       困难等级: row.difficultyLevel,
+      状态: row.status,
       家庭成员数量: row.familyMembers.length,
       家庭成员1: row.familyMembers[0] || "",
       家庭成员2: row.familyMembers[1] || "",
@@ -617,8 +637,8 @@ export default function AdminStudentsPage() {
   };
 
   return (
-    <section className="bos-table-page">
-      <div className="bos-layout-active">AI Studio Layout Active - Admin Students</div>
+    <section className="bos-table-page difficulty-workspace">
+      <div className="bos-layout-active">AI Studio Layout Active - Difficulty Database</div>
 
       <header className="bos-page-title-row">
         <div>
@@ -655,6 +675,13 @@ export default function AdminStudentsPage() {
               {availableGrades.map((grade) => <option key={grade} value={grade}>{grade}</option>)}
             </select>
           </label>
+          <label className="bos-filter-field">性别
+            <select value={searchFilters.gender} onChange={(event) => setSearchFilters((current) => ({ ...current, gender: event.target.value }))}>
+              <option value="">全部</option>
+              <option value="男">男</option>
+              <option value="女">女</option>
+            </select>
+          </label>
           <button className="is-primary" onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>{isLoadingDatabase ? "查询中..." : "查询"}</button>
           <button onClick={() => setSearchFilters(emptyFilters)}>重置</button>
         </div>
@@ -663,7 +690,7 @@ export default function AdminStudentsPage() {
       <div className="bos-action-toolbar">
         <button className="is-primary" onClick={() => setShowImportModal(true)}>数据导入</button>
         <button onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>{isLoadingDatabase ? "刷新中..." : "刷新"}</button>
-        <button className="is-purple" onClick={exportCurrentYearDatabase}>导出当前学年数据库</button>
+        <button className="is-purple" onClick={exportCurrentYearDatabase}>导出当前名单</button>
       </div>
 
       <div className="bos-status-row">
@@ -692,14 +719,20 @@ export default function AdminStudentsPage() {
                   <tr><td style={styles.empty} colSpan={columns.length}>{mergedRows.length === 0 ? "暂无当前学年已合并数据" : "没有符合筛选条件的数据"}</td></tr>
                 ) : (
                   filteredRows.map((row) => (
-                    <tr key={`${row.collegeName}_${row.idCard}_${row.studentId}`}>
+                    <tr key={`${row.academicYear}_${row.collegeName}_${row.idCard}_${row.studentId}`}>
+                      <td style={styles.td}>{row.academicYear || academicYear}</td>
                       <td style={styles.td}>{row.collegeName}</td>
-                      <td style={styles.td}>{row.name || "-"}</td>
+                      <td style={styles.nameCell}>
+                        <button style={styles.linkButton} onClick={() => setSelectedRow(row)}>
+                          {row.name || "查看详情"}
+                        </button>
+                      </td>
                       <td style={styles.td}>{row.studentId || "-"}</td>
                       <td style={styles.td}>{row.idCard || "-"}</td>
                       <td style={styles.td}>{row.grade || "-"}</td>
                       <td style={styles.td}>{row.gender || "-"}</td>
                       <td style={styles.td}>{row.difficultyLevel || "-"}</td>
+                      <td style={styles.td}>{row.status}</td>
                       <td style={styles.td}>{row.familyMembers.length}</td>
                       <td style={styles.td}>{row.familyMembers[0] || "-"}</td>
                       <td style={styles.td}>{row.familyMembers[1] || "-"}</td>
@@ -774,6 +807,24 @@ export default function AdminStudentsPage() {
           </div>
         </Modal>
       )}
+
+      {selectedRow && (
+        <Modal title={`${selectedRow.name || "困难生"}详情`} onClose={() => setSelectedRow(null)}>
+          <div style={styles.detailGrid}>
+            <Detail label="学年" value={selectedRow.academicYear || academicYear} />
+            <Detail label="学院" value={selectedRow.collegeName} />
+            <Detail label="姓名" value={selectedRow.name} />
+            <Detail label="学号" value={selectedRow.studentId} />
+            <Detail label="身份证号" value={selectedRow.idCard} />
+            <Detail label="年级" value={selectedRow.grade} />
+            <Detail label="性别" value={selectedRow.gender} />
+            <Detail label="困难等级" value={selectedRow.difficultyLevel} />
+            <Detail label="状态" value={selectedRow.status} />
+            <Detail label="家庭成员" value={selectedRow.familyMembers.join("、")} />
+            <Detail label="关联状态" value={selectedRow.relationStatus} />
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }
@@ -797,6 +848,15 @@ function Modal({ title, children, onClose }: { title: string; children: ReactNod
         </div>
         <div className="bos-modal-body">{children}</div>
       </section>
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={styles.detailItem}>
+      <span>{label}</span>
+      <strong>{value || "-"}</strong>
     </div>
   );
 }
@@ -842,6 +902,8 @@ const styles: Record<string, CSSProperties> = {
   table: { width: "100%", borderCollapse: "collapse", fontSize: 12 },
   th: { position: "sticky", top: 0, zIndex: 1, background: "#edf4fa", color: "#40526a", padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" },
   td: { borderTop: "1px solid #e3ebf3", padding: "7px 8px", color: "#52647b", textAlign: "center", whiteSpace: "nowrap" },
+  nameCell: { borderTop: "1px solid #e3ebf3", padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" },
+  linkButton: { border: "none", padding: 0, color: "#1e5aa8", background: "transparent", fontWeight: 800, textDecoration: "underline", cursor: "pointer" },
   empty: { borderTop: "1px solid #e3ebf3", padding: 16, color: "#8190a4", textAlign: "center" },
   logPanel: { height: "100%", minHeight: 0, padding: 14, borderRadius: 9, background: "linear-gradient(180deg, #0b1c30 0%, #0a1426 100%)", border: "1px solid #1e3350", overflow: "hidden", display: "flex", flexDirection: "column", boxSizing: "border-box", boxShadow: "0 4px 18px rgba(8,20,40,0.16)" },
   logHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingBottom: 10, borderBottom: "1px solid rgba(148,163,184,0.2)" },
@@ -858,4 +920,6 @@ const styles: Record<string, CSSProperties> = {
   modalBody: { flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 },
   modalFooter: { position: "sticky", bottom: 0, zIndex: 2, flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: 8, padding: "11px 0 0", borderTop: "1px solid #e2e8f0", background: "#fff" },
   closeButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "7px 10px", background: "#fff", color: "#26364e", fontWeight: 800, cursor: "pointer" },
+  detailGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 },
+  detailItem: { display: "grid", gap: 5, padding: 10, border: "1px solid #d7e1ed", borderRadius: 7, background: "#f8fafc", color: "#63738a", fontSize: 12 },
 };

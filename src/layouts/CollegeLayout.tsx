@@ -40,9 +40,11 @@ const englishLabels: Record<string, string> = {
 
 const workspacePaths = new Set([
   "/college/upload",
+  "/college/difficulty",
   "/college/difficulty/student",
   "/college/difficulty/family",
   "/college/difficulty/students",
+  "/college/records",
   "/college/awards",
   "/college/awards/national",
   "/college/awards/inspirational",

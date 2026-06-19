@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import * as XLSX from "xlsx-js-style";
 import type { UserProfile } from "../../types/auth";
 import { ACADEMIC_YEAR_OPTIONS, getCurrentAcademicYear } from "../../utils/academicYear";
 import { normalizeIdCard, fetchCollegeDifficultyStudents, type DifficultyStudentRow } from "../../services/difficultyStudentService";
@@ -99,8 +100,33 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
     setStatusKeyword("");
   };
 
+  const exportCurrentRows = () => {
+    if (filteredRows.length === 0) {
+      alert("当前筛选条件下暂无可导出的困难生明细");
+      return;
+    }
+    const exportRows = filteredRows.map((row) => ({
+      学年: row.academic_year,
+      学院: row.college_name,
+      姓名: row.name,
+      学号: row.student_id,
+      身份证号: row.id_card,
+      年级: getRawDetail(row, ["grade", "年级", "所在年级"]),
+      性别: getRawDetail(row, ["gender", "性别"]),
+      困难等级: row.difficulty_level,
+      状态: displayStatus(row.status),
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    worksheet["!cols"] = Object.keys(exportRows[0]).map(() => ({ wch: 18 }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "困难生明细");
+    XLSX.writeFile(workbook, `${academicYear}_${collegeName || "学院"}_困难生明细.xlsx`);
+  };
+
   return (
-    <section className="bos-table-page">
+    <section className="bos-table-page difficulty-workspace">
+      <div className="bos-layout-active">AI Studio Layout Active - Difficulty Students</div>
+
       <header className="bos-page-title-row">
         <div>
           <div className="bos-breadcrumb">困难生业务 / 困难生明细 / Student Records</div>
@@ -131,6 +157,7 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
 
       <div className="bos-action-toolbar">
         <button className="is-primary" onClick={() => void loadRows()} disabled={isLoading}>{isLoading ? "刷新中..." : "刷新数据"}</button>
+        <button className="is-purple" onClick={exportCurrentRows}>导出当前名单</button>
       </div>
 
       <div className="bos-status-row">
@@ -159,6 +186,8 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
                   <th style={styles.th}>姓名</th>
                   <th style={styles.th}>学号</th>
                   <th style={styles.th}>身份证号</th>
+                  <th style={styles.th}>年级</th>
+                  <th style={styles.th}>性别</th>
                   <th style={styles.th}>困难等级</th>
                   <th style={styles.th}>状态</th>
                   <th style={styles.th}>操作</th>
@@ -167,11 +196,11 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td style={styles.empty} colSpan={8}>正在加载困难生明细...</td>
+                    <td style={styles.empty} colSpan={10}>正在加载困难生明细...</td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td style={styles.empty} colSpan={8}>暂无当前学年困难生明细</td>
+                    <td style={styles.empty} colSpan={10}>暂无当前学年困难生明细</td>
                   </tr>
                 ) : (
                   filteredRows.map((row, index) => (
@@ -185,6 +214,8 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
                       </td>
                       <td style={styles.td}>{row.student_id}</td>
                       <td style={styles.td}>{row.id_card}</td>
+                      <td style={styles.td}>{getRawDetail(row, ["grade", "年级", "所在年级"]) || "-"}</td>
+                      <td style={styles.td}>{getRawDetail(row, ["gender", "性别"]) || "-"}</td>
                       <td style={styles.td}>{row.difficulty_level}</td>
                       <td style={styles.td}>{displayStatus(row.status)}</td>
                       <td style={styles.td}>

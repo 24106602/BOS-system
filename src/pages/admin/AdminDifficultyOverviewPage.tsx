@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { getMergeBatches } from "../../db/localMergeDb";
 import type { CollegeProcessedBatch } from "../../types/merge";
+import { ACADEMIC_YEAR_OPTIONS, getCurrentAcademicYear, isBatchInAcademicYear } from "../../utils/academicYear";
 import { collegeAccounts, isSameSubmissionCollege } from "../../utils/collegeDetector";
 
 type AdminDifficultyOverviewPageProps = {
@@ -9,26 +10,31 @@ type AdminDifficultyOverviewPageProps = {
 
 export default function AdminDifficultyOverviewPage({ onNavigate }: AdminDifficultyOverviewPageProps) {
   const [batches, setBatches] = useState<CollegeProcessedBatch[]>([]);
+  const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear());
 
   useEffect(() => {
     getMergeBatches().then(setBatches);
   }, []);
 
-  const studentRows = batches.filter((item) => item.dataType === "student");
-  const familyRows = batches.filter((item) => item.dataType === "family");
+  const yearBatches = useMemo(
+    () => batches.filter((item) => isBatchInAcademicYear(item, academicYear)),
+    [academicYear, batches]
+  );
+  const studentRows = yearBatches.filter((item) => item.dataType === "student");
+  const familyRows = yearBatches.filter((item) => item.dataType === "family");
   const studentTotal = studentRows.reduce((sum, item) => sum + item.rowCount, 0);
   const familyTotal = familyRows.reduce((sum, item) => sum + item.rowCount, 0);
   const submittedColleges = useMemo(
     () =>
       collegeAccounts.filter((college) =>
-        batches.some((batch) => isSameSubmissionCollege(batch.collegeName, college.college_name))
+        yearBatches.some((batch) => isSameSubmissionCollege(batch.collegeName, college.college_name))
       ),
-    [batches]
+    [yearBatches]
   );
-  const recentLogs = [...batches].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6);
+  const recentLogs = [...yearBatches].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 6);
 
   const progressRows = collegeAccounts.map((college) => {
-    const collegeBatches = batches.filter((batch) => isSameSubmissionCollege(batch.collegeName, college.college_name));
+    const collegeBatches = yearBatches.filter((batch) => isSameSubmissionCollege(batch.collegeName, college.college_name));
     const studentCount = collegeBatches.filter((item) => item.dataType === "student").reduce((sum, item) => sum + item.rowCount, 0);
     const familyCount = collegeBatches.filter((item) => item.dataType === "family").reduce((sum, item) => sum + item.rowCount, 0);
     return {
@@ -42,17 +48,22 @@ export default function AdminDifficultyOverviewPage({ onNavigate }: AdminDifficu
   });
 
   return (
-    <section style={styles.page}>
-      <div style={styles.hero}>
+    <section className="bos-table-page difficulty-workspace">
+      <header className="bos-page-title-row">
         <div>
-          <div style={styles.eyebrow}>困难生业务 / 业务总览</div>
-          <h1 style={styles.title}>困难生业务工作区</h1>
-          <p style={styles.description}>集中查看困难生本专科信息、家庭成员信息、学院上载进度和系统自动合并生成的困难生数据库。</p>
+          <div className="bos-breadcrumb">困难生业务 / 业务总览</div>
+          <h1>困难生业务工作区</h1>
+          <p>集中查看困难生本专科信息、家庭成员信息、学院上载进度和系统自动合并生成的困难生数据库。</p>
         </div>
-        <span style={styles.enabledBadge}>已启用</span>
-      </div>
+        <label className="bos-current-year">
+          当前学年
+          <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
+            {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year}>{year}</option>)}
+          </select>
+        </label>
+      </header>
 
-      <div style={styles.stats}>
+      <div className="difficulty-stat-grid">
         <Stat label="全校困难生总人数" value={studentTotal} />
         <Stat label="已提交学院数" value={`${submittedColleges.length} / ${collegeAccounts.length}`} />
         <Stat label="本专科信息总数" value={studentTotal} />
@@ -61,17 +72,21 @@ export default function AdminDifficultyOverviewPage({ onNavigate }: AdminDifficu
         <Stat label="家庭成员匹配异常数" value={0} tone="#c2414d" />
       </div>
 
-      <div style={styles.quickGrid}>
-        <QuickCard title="全校数据汇总" text="查看学院提交状态、全校统计和最近上载日志。" onClick={() => onNavigate?.("/admin/summary")} />
-        <QuickCard title="本专科信息汇总" text="查看学院上载的学生本人主信息。" onClick={() => onNavigate?.("/admin/student-summary")} />
-        <QuickCard title="家庭成员信息汇总" text="查看学院上载的家庭成员信息。" onClick={() => onNavigate?.("/admin/family-summary")} />
-        <QuickCard title="困难生数据库" text="按 id_card = student_id_card 自动关联生成最终总库。" onClick={() => onNavigate?.("/admin/students")} />
+      <div className="bos-action-toolbar">
+        <button className="is-primary" onClick={() => onNavigate?.("/admin/summary")}>全校数据汇总</button>
+        <button onClick={() => onNavigate?.("/admin/student-summary")}>本专科信息汇总</button>
+        <button onClick={() => onNavigate?.("/admin/family-summary")}>家庭成员信息汇总</button>
+        <button onClick={() => onNavigate?.("/admin/students")}>困难生数据库</button>
       </div>
 
-      <div style={styles.twoColumn}>
-        <section style={styles.card}>
-          <h2 style={styles.subTitle}>12 个学院提交进度</h2>
-          <div style={styles.tableWrap}>
+      <div className="difficulty-summary-split">
+        <section className="bos-table-card">
+          <div className="bos-table-card-head">
+            <h2>12 个学院提交进度</h2>
+            <span>{academicYear}</span>
+          </div>
+          <div className="bos-table-card-body">
+            <div>
             <table style={styles.table}>
               <thead>
                 <tr>
@@ -96,12 +111,17 @@ export default function AdminDifficultyOverviewPage({ onNavigate }: AdminDifficu
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </section>
 
-        <section style={styles.card}>
-          <h2 style={styles.subTitle}>最近上载日志</h2>
-          <div style={styles.logList}>
+        <section className="bos-table-card">
+          <div className="bos-table-card-head">
+            <h2>最近上载日志</h2>
+            <span>最近 {recentLogs.length} 条</span>
+          </div>
+          <div className="bos-table-card-body">
+            <div style={styles.logList}>
             {recentLogs.length === 0 ? (
               <div style={styles.empty}>暂无上载日志</div>
             ) : (
@@ -113,6 +133,7 @@ export default function AdminDifficultyOverviewPage({ onNavigate }: AdminDifficu
                 </div>
               ))
             )}
+            </div>
           </div>
         </section>
       </div>
@@ -122,19 +143,10 @@ export default function AdminDifficultyOverviewPage({ onNavigate }: AdminDifficu
 
 function Stat({ label, value, tone = "#0077d4" }: { label: string; value: number | string; tone?: string }) {
   return (
-    <div style={styles.stat}>
-      <div style={styles.statLabel}>{label}</div>
-      <strong style={{ ...styles.statValue, color: tone }}>{value}</strong>
+    <div className="difficulty-stat-card">
+      <span>{label}</span>
+      <strong style={{ color: tone }}>{value}</strong>
     </div>
-  );
-}
-
-function QuickCard({ title, text, onClick }: { title: string; text: string; onClick?: () => void }) {
-  return (
-    <button style={styles.quickCard} onClick={onClick}>
-      <strong>{title}</strong>
-      <span>{text}</span>
-    </button>
   );
 }
 
@@ -149,8 +161,6 @@ const styles: Record<string, CSSProperties> = {
   stat: { height: 76, boxSizing: "border-box", padding: 12, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff" },
   statLabel: { color: "#63738a", marginBottom: 7, fontSize: 13 },
   statValue: { fontSize: 24 },
-  quickGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 },
-  quickCard: { display: "grid", gap: 6, textAlign: "left", padding: 13, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", color: "#172033", cursor: "pointer" },
   twoColumn: { minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1.35fr) minmax(280px, 0.65fr)", gap: 12, overflow: "hidden" },
   card: { minHeight: 0, display: "flex", flexDirection: "column", padding: 14, border: "1px solid #d7e1ed", borderRadius: 8, background: "#fff", overflow: "hidden" },
   subTitle: { margin: "0 0 12px", color: "#172033", fontSize: 17 },

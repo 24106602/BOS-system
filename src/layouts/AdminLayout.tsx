@@ -46,6 +46,10 @@ const englishLabels: Record<string, string> = {
 };
 
 const workspacePaths = new Set([
+  "/admin/difficulty",
+  "/admin/summary",
+  "/admin/student-summary",
+  "/admin/family-summary",
   "/admin/students",
   "/admin/awards",
   "/admin/awards/national",

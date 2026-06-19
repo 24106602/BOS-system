@@ -75,27 +75,22 @@ export default function AdminSummaryPage() {
   };
 
   return (
-    <section style={styles.card}>
-      <div style={styles.header}>
+    <section className="bos-table-page difficulty-workspace">
+      <header className="bos-page-title-row">
         <div>
-          <div style={styles.eyebrow}>困难生业务 / 学校端自动汇总</div>
-          <h1 style={styles.title}>全校数据汇总</h1>
-          <p style={styles.description}>查看某一学年各学院困难生数据提交和汇总情况。不同学年的数据不会混在一起展示。</p>
+          <div className="bos-breadcrumb">困难生业务 / 学校端自动汇总</div>
+          <h1>全校数据汇总</h1>
+          <p>查看某一学年各学院困难生数据提交和汇总情况。不同学年的数据不会混在一起展示。</p>
         </div>
-        <div style={styles.headerActions}>
-          <label style={styles.yearSelectLabel}>
-            当前学年
-            <select style={styles.yearSelect} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
-              {ACADEMIC_YEAR_OPTIONS.map((year) => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </select>
-          </label>
-          <button style={styles.exportButton} onClick={exportSummary}>导出当前学年汇总表</button>
-        </div>
-      </div>
+        <label className="bos-current-year">
+          当前学年
+          <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
+            {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year}>{year}</option>)}
+          </select>
+        </label>
+      </header>
 
-      <div style={styles.stats}>
+      <div className="difficulty-stat-grid">
         <Stat label="当前学年全校总人数" value={totalStudents} />
         <Stat label="当前学年已提交学院数" value={submittedCount} />
         <Stat label="当前学年未提交学院数" value={collegeAccounts.length - submittedCount} />
@@ -103,9 +98,18 @@ export default function AdminSummaryPage() {
         <Stat label="当前学年不通过人数" value={failedCount} tone="#c2414d" />
       </div>
 
-      <section style={styles.section}>
-        <h2 style={styles.subTitle}>当前学年各学院提交状态</h2>
-        <div style={styles.tableWrap}>
+      <div className="bos-action-toolbar">
+        <button className="is-primary" onClick={exportSummary}>导出当前学年汇总表</button>
+      </div>
+
+      <div className="difficulty-summary-split difficulty-summary-split--wide">
+      <section className="bos-table-card">
+        <div className="bos-table-card-head">
+          <h2>当前学年各学院提交状态</h2>
+          <span>{summaries.length} 个学院</span>
+        </div>
+        <div className="bos-table-card-body">
+          <div>
           <table style={styles.table}>
             <thead>
               <tr>
@@ -141,12 +145,17 @@ export default function AdminSummaryPage() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       </section>
 
-      <section style={styles.section}>
-        <h2 style={styles.subTitle}>当前学年最近上载日志</h2>
-        <div style={styles.tableWrap}>
+      <section className="bos-table-card">
+        <div className="bos-table-card-head">
+          <h2>当前学年最近上载日志</h2>
+          <span>{recentLogs.length} 条</span>
+        </div>
+        <div className="bos-table-card-body">
+          <div>
           <table style={styles.table}>
             <thead>
               <tr>
@@ -177,17 +186,19 @@ export default function AdminSummaryPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       </section>
+      </div>
     </section>
   );
 }
 
 function Stat({ label, value, tone = "#0077d4" }: { label: string; value: number; tone?: string }) {
   return (
-    <div style={styles.stat}>
-      <div style={styles.statLabel}>{label}</div>
-      <strong style={{ ...styles.statValue, color: tone }}>{value}</strong>
+    <div className="difficulty-stat-card">
+      <span>{label}</span>
+      <strong style={{ color: tone }}>{value}</strong>
     </div>
   );
 }
