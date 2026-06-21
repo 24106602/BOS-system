@@ -1,151 +1,380 @@
-import { useMemo, useState, type CSSProperties } from "react";
-import { exportAwardSummary, getAwardSubmissions } from "../../services/awardProcessor";
+import { useMemo, useState, type ReactNode } from "react";
+import {
+  exportAwardAdminRecords,
+  getAwardAcademicYearOptions,
+  getAwardAdminRecords,
+  getAwardSubmissions,
+  getCurrentAcademicYear,
+} from "../../services/awardProcessor";
 import { awardTypeLabels } from "../../services/awardConfig";
-import type { AwardSubmission, AwardType } from "../../types/award";
-
-type CollegeSummary = {
-  collegeName: string;
-  rowCount: number;
-  lastSubmittedAt: string;
-};
+import { normalizeHeaderName } from "../../services/awardFieldResolver";
+import type { AwardAdminRecord, AwardType } from "../../types/award";
+import "../awards/awards.css";
 
 type AdminAwardSummaryPageProps = {
   awardType: AwardType;
 };
 
+const findTemplateField = (fields: string[], aliases: string[]) => {
+  const normalizedAliases = aliases.map(normalizeHeaderName);
+  return fields.find((field) => {
+    const normalizedField = normalizeHeaderName(field);
+    return normalizedAliases.some(
+      (alias) => normalizedField === alias || normalizedField.includes(alias) || alias.includes(normalizedField)
+    );
+  });
+};
+
+const rawValue = (record: AwardAdminRecord, field?: string) =>
+  String(field ? record.rawData[field] ?? "" : "");
+
+const isFailedRecord = (record: AwardAdminRecord) => /(不通过|退回|驳回|异常)/.test(record.status);
+
 export default function AdminAwardSummaryPage({ awardType }: AdminAwardSummaryPageProps) {
   const awardName = awardTypeLabels[awardType];
-  const [submissions] = useState<AwardSubmission[]>(() => getAwardSubmissions(awardType));
+  const [records, setRecords] = useState<AwardAdminRecord[]>(() => getAwardAdminRecords(awardType));
+  const [submissions, setSubmissions] = useState(() => getAwardSubmissions(awardType));
+  const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear);
+  const [collegeFilter, setCollegeFilter] = useState("");
+  const [nameFilter, setNameFilter] = useState("");
+  const [studentIdFilter, setStudentIdFilter] = useState("");
+  const [idCardFilter, setIdCardFilter] = useState("");
+  const [majorFilter, setMajorFilter] = useState("");
+  const [classFilter, setClassFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedRecord, setSelectedRecord] = useState<AwardAdminRecord | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
 
-  const collegeSummaries = useMemo(() => {
-    const map = new Map<string, CollegeSummary>();
-    submissions.forEach((submission) => {
-      const current = map.get(submission.collegeName);
-      map.set(submission.collegeName, {
-        collegeName: submission.collegeName,
-        rowCount: (current?.rowCount || 0) + submission.rowCount,
-        lastSubmittedAt:
-          !current || submission.createdAt > current.lastSubmittedAt
-            ? submission.createdAt
-            : current.lastSubmittedAt,
+  const templateFields = useMemo(() => {
+    const orderedFields: string[] = [];
+    records.forEach((record) => {
+      Object.keys(record.rawData).forEach((field) => {
+        if (!orderedFields.includes(field)) orderedFields.push(field);
       });
     });
-    return [...map.values()].sort((a, b) => b.rowCount - a.rowCount);
-  }, [submissions]);
-
-  const awardTypeCounts = useMemo(
-    () =>
-      submissions.reduce<Record<string, number>>((counts, submission) => {
-        Object.entries(submission.awardTypeCounts).forEach(([type, count]) => {
-          counts[type] = (counts[type] || 0) + count;
-        });
-        return counts;
-      }, {}),
-    [submissions]
+    return orderedFields;
+  }, [records]);
+  const nameField = useMemo(() => findTemplateField(templateFields, ["学生姓名", "姓名"]), [templateFields]);
+  const classField = useMemo(
+    () => findTemplateField(templateFields, ["班级名称", "所在班级", "行政班", "班级"]),
+    [templateFields]
+  );
+  const displayTemplateFields = useMemo(
+    () => templateFields.filter((field) => field !== nameField),
+    [nameField, templateFields]
   );
 
-  const total = submissions.reduce((sum, submission) => sum + submission.rowCount, 0);
+  const colleges = useMemo(
+    () => [...new Set(records.map((record) => record.collegeName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN")),
+    [records]
+  );
+  const majors = useMemo(
+    () => [...new Set(records.map((record) => record.major).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN")),
+    [records]
+  );
+  const classes = useMemo(
+    () => [...new Set(records.map((record) => rawValue(record, classField)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN")),
+    [classField, records]
+  );
+  const filteredRecords = useMemo(
+    () =>
+      records.filter((record) => {
+        if (hiddenKeys.has(record.id)) return false;
+        if (academicYear && record.academicYear !== academicYear) return false;
+        if (collegeFilter && record.collegeName !== collegeFilter) return false;
+        if (nameFilter && !record.name.toLowerCase().includes(nameFilter.trim().toLowerCase())) return false;
+        if (studentIdFilter && !record.studentId.toLowerCase().includes(studentIdFilter.trim().toLowerCase())) return false;
+        if (idCardFilter && !record.idCard.toLowerCase().includes(idCardFilter.trim().toLowerCase())) return false;
+        if (majorFilter && record.major !== majorFilter) return false;
+        if (classFilter && rawValue(record, classField) !== classFilter) return false;
+        if (statusFilter === "passed" && isFailedRecord(record)) return false;
+        if (statusFilter === "failed" && !isFailedRecord(record)) return false;
+        if (statusFilter === "confirmed" && record.reviewStatus !== "confirmed") return false;
+        if (statusFilter === "submitted" && record.submitStatus !== "submitted") return false;
+        return true;
+      }),
+    [
+      academicYear,
+      classField,
+      classFilter,
+      collegeFilter,
+      hiddenKeys,
+      idCardFilter,
+      majorFilter,
+      nameFilter,
+      records,
+      statusFilter,
+      studentIdFilter,
+    ]
+  );
 
-  const exportSummary = () => {
+  const failedRecords = useMemo(() => filteredRecords.filter(isFailedRecord), [filteredRecords]);
+  const passedRecords = useMemo(() => filteredRecords.filter((record) => !isFailedRecord(record)), [filteredRecords]);
+
+  const exportRecords = (rows: AwardAdminRecord[], suffix: string) => {
     try {
-      exportAwardSummary(submissions, awardName);
+      exportAwardAdminRecords(rows, `${academicYear}学年${awardName}${suffix}`);
     } catch (error) {
-      alert(error instanceof Error ? error.message : `暂无${awardName}汇总数据`);
+      alert(error instanceof Error ? error.message : "当前名单导出失败");
     }
   };
 
+  const resetFilters = () => {
+    setCollegeFilter("");
+    setNameFilter("");
+    setStudentIdFilter("");
+    setIdCardFilter("");
+    setMajorFilter("");
+    setClassFilter("");
+    setStatusFilter("all");
+  };
+
+  const refreshRecords = () => {
+    setRecords(getAwardAdminRecords(awardType));
+    setSubmissions(getAwardSubmissions(awardType));
+    setHiddenKeys(new Set());
+    setSelectedKeys(new Set());
+  };
+
+  const deleteSelectedFromView = () => {
+    if (selectedKeys.size === 0) return;
+    if (!window.confirm(`确定从当前页面隐藏选中的 ${selectedKeys.size} 条数据吗？此操作不会删除 localStorage 或 Supabase 数据。`)) {
+      return;
+    }
+    setHiddenKeys((current) => new Set([...current, ...selectedKeys]));
+    setSelectedKeys(new Set());
+  };
+
   return (
-    <section style={styles.card}>
-      <div style={styles.header}>
+    <section className="bos-table-page award-workspace">
+      <div className="bos-page-title-row">
         <div>
-          <div style={styles.eyebrow}>三奖业务 / 学校端自动汇总</div>
-          <h1 style={styles.title}>{awardName}汇总</h1>
-          <p style={styles.description}>学院端{awardName}数据全部通过并上载后，系统自动汇总到这里。目前使用独立 localStorage 数据池保存提交记录，后续可替换为 Supabase。</p>
+          <div className="bos-breadcrumb">三大奖业务 / 学校端汇总</div>
+          <h1>{awardName}汇总</h1>
+          <p>按学年读取学院已确认并上载的数据，动态展示当前奖项模板字段，支持高级筛选与学生详情查看。</p>
         </div>
-        <button style={styles.exportButton} onClick={exportSummary}>导出{awardName}汇总</button>
       </div>
 
-      <div style={styles.stats}>
-        <Stat label="全校总人数" value={total} />
-        <Stat label="已提交学院数" value={collegeSummaries.length} />
-        <Stat label="奖项类型数" value={Object.keys(awardTypeCounts).length} />
-        <Stat label="提交批次数" value={submissions.length} />
+      <div className="award-cockpit-grid">
+        <AwardCockpitCard label="申报人数" value={filteredRecords.length} />
+        <AwardCockpitCard label="通过人数" value={passedRecords.length} tone="green" />
+        <AwardCockpitCard label="不通过人数" value={failedRecords.length} tone="red" />
+        <AwardCockpitCard label="异常问题数" value={failedRecords.length} tone="amber" />
+        <AwardCockpitCard label="当前奖项类型" value={awardName} tone="purple" compact />
       </div>
 
-      <section style={styles.section}>
-        <h2 style={styles.subTitle}>各学院提交人数</h2>
-        <div style={styles.tableWrap}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>学院名称</th>
-                <th style={styles.th}>提交人数</th>
-                <th style={styles.th}>最近上载时间</th>
-                <th style={styles.th}>状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              {collegeSummaries.length === 0 ? (
-                <tr><td style={styles.empty} colSpan={4}>暂无学院上载{awardName}数据</td></tr>
-              ) : (
-                collegeSummaries.map((item) => (
-                  <tr key={item.collegeName}>
-                    <td style={styles.nameCell}>{item.collegeName}</td>
-                    <td style={styles.td}>{item.rowCount}</td>
-                    <td style={styles.td}>{new Date(item.lastSubmittedAt).toLocaleString()}</td>
-                    <td style={styles.td}><span style={styles.submitted}>已上载</span></td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      <section className="bos-filter-card">
+        <div className="award-advanced-filter-grid">
+          <label className="bos-filter-field">
+            学年
+            <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
+              {getAwardAcademicYearOptions(submissions).map((year) => <option key={year}>{year}</option>)}
+            </select>
+          </label>
+          <label className="bos-filter-field">
+            学院
+            <select value={collegeFilter} onChange={(event) => setCollegeFilter(event.target.value)}>
+              <option value="">全部学院</option>
+              {colleges.map((college) => <option key={college}>{college}</option>)}
+            </select>
+          </label>
+          <label className="bos-filter-field">
+            姓名
+            <input value={nameFilter} onChange={(event) => setNameFilter(event.target.value)} placeholder="学生姓名" />
+          </label>
+          <label className="bos-filter-field">
+            学号
+            <input value={studentIdFilter} onChange={(event) => setStudentIdFilter(event.target.value)} placeholder="学生学号" />
+          </label>
+          <label className="bos-filter-field">
+            身份证号
+            <input value={idCardFilter} onChange={(event) => setIdCardFilter(event.target.value)} placeholder="身份证号" />
+          </label>
+          <label className="bos-filter-field">
+            专业
+            <select value={majorFilter} onChange={(event) => setMajorFilter(event.target.value)}>
+              <option value="">全部专业</option>
+              {majors.map((major) => <option key={major}>{major}</option>)}
+            </select>
+          </label>
+          <label className="bos-filter-field">
+            班级
+            <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
+              <option value="">全部班级</option>
+              {classes.map((className) => <option key={className}>{className}</option>)}
+            </select>
+          </label>
+          <label className="bos-filter-field">
+            审核状态
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="all">全部状态</option>
+              <option value="passed">通过</option>
+              <option value="failed">不通过</option>
+              <option value="confirmed">学院已确认</option>
+              <option value="submitted">已上载学校端</option>
+            </select>
+          </label>
+          <button onClick={resetFilters}>重置筛选</button>
         </div>
       </section>
 
-      <section style={styles.section}>
-        <h2 style={styles.subTitle}>各奖项类型人数</h2>
-        <div style={styles.typeGrid}>
-          {Object.keys(awardTypeCounts).length === 0 ? (
-            <div style={styles.empty}>暂无奖项类型统计</div>
-          ) : (
-            Object.entries(awardTypeCounts)
-              .sort((a, b) => b[1] - a[1])
-              .map(([type, count]) => <Stat key={type} label={type} value={count} tone="#6757c8" />)
-          )}
+      <div className="bos-action-toolbar award-toolbar">
+        <button onClick={refreshRecords}>刷新</button>
+        <button disabled title="请在学院端三奖页面导入 Excel">导入</button>
+        <button className="is-purple" disabled={passedRecords.length === 0} onClick={() => exportRecords(passedRecords, "通过名单")}>导出通过名单</button>
+        <button className="is-purple" disabled={failedRecords.length === 0} onClick={() => exportRecords(failedRecords, "不通过名单")}>导出不通过名单</button>
+        <button className="is-success" disabled title="管理员汇总页只读取学院已上载数据">上载学校端</button>
+        <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedFromView}>
+          删除{selectedKeys.size > 0 ? `（${selectedKeys.size}）` : ""}
+        </button>
+      </div>
+
+      <div className="award-admin-note">三大奖数据当前暂存本地 localStorage，项目中尚未发现 award_records Supabase 表；删除仅影响当前页面展示。</div>
+
+      <section className="bos-table-card">
+        <div className="bos-table-card-head">
+          <h2>{academicYear} 学年 {awardName}</h2>
+          <span>共 {filteredRecords.length} 条 · 点击姓名查看详情</span>
+        </div>
+        <div className="bos-table-card-body">
+          <AdminAwardRecordTable
+            records={filteredRecords}
+            templateFields={displayTemplateFields}
+            selectedKeys={selectedKeys}
+            onSelectionChange={setSelectedKeys}
+            onDetail={setSelectedRecord}
+          />
+        </div>
+        <div className="bos-table-card-foot">
+          <span>模板字段 {templateFields.length} 列</span>
+          <span>数据源：localStorage 本地暂存</span>
         </div>
       </section>
+
+      {selectedRecord && (
+        <AdminAwardModal title={`${selectedRecord.name || "学生"}详情`} onClose={() => setSelectedRecord(null)}>
+          <div className="award-detail-grid">
+            <DetailItem label="学年" value={selectedRecord.academicYear} />
+            <DetailItem label="奖项" value={awardName} />
+            <DetailItem label="学院" value={selectedRecord.collegeName} />
+            <DetailItem label="上载时间" value={new Date(selectedRecord.submittedAt).toLocaleString()} />
+            {Object.entries(selectedRecord.rawData).map(([field, value]) => <DetailItem key={field} label={field} value={value} />)}
+          </div>
+        </AdminAwardModal>
+      )}
     </section>
   );
 }
 
-function Stat({ label, value, tone = "#0077d4" }: { label: string; value: number; tone?: string }) {
+function AdminAwardRecordTable({
+  records,
+  templateFields,
+  selectedKeys,
+  onSelectionChange,
+  onDetail,
+}: {
+  records: AwardAdminRecord[];
+  templateFields: string[];
+  selectedKeys: Set<string>;
+  onSelectionChange: (keys: Set<string>) => void;
+  onDetail: (record: AwardAdminRecord) => void;
+}) {
+  if (records.length === 0) return <div className="award-empty">当前筛选条件下暂无数据</div>;
+  const recordKeys = records.map((record) => record.id);
+  const allSelected = recordKeys.every((key) => selectedKeys.has(key));
+  const toggleAll = () => {
+    const next = new Set(selectedKeys);
+    if (allSelected) recordKeys.forEach((key) => next.delete(key));
+    else recordKeys.forEach((key) => next.add(key));
+    onSelectionChange(next);
+  };
+  const toggleRow = (key: string) => {
+    const next = new Set(selectedKeys);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    onSelectionChange(next);
+  };
+
   return (
-    <div style={styles.stat}>
-      <div style={styles.statLabel}>{label}</div>
-      <strong style={{ ...styles.statValue, color: tone }}>{value}</strong>
+    <div className="award-table-scroll">
+      <table className="award-data-table">
+        <thead>
+          <tr>
+            <th className="award-checkbox-column">
+              <input type="checkbox" checked={allSelected} aria-label="全选当前名单" onChange={toggleAll} />
+            </th>
+            <th>学年</th>
+            <th>学院</th>
+            <th>姓名</th>
+            {templateFields.map((field) => <th key={field}>{field}</th>)}
+            <th>学院审核</th>
+            <th>上载状态</th>
+            <th>上载时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {records.map((record) => {
+            const selected = selectedKeys.has(record.id);
+            return (
+              <tr key={record.id} className={selected ? "is-selected" : ""}>
+                <td className="award-checkbox-column">
+                  <input type="checkbox" checked={selected} aria-label={`选择 ${record.name || "学生"}`} onChange={() => toggleRow(record.id)} />
+                </td>
+                <td>{record.academicYear}</td>
+                <td>{record.collegeName || "-"}</td>
+                <td className="award-name-cell"><button onClick={() => onDetail(record)}>{record.name || "查看详情"}</button></td>
+                {templateFields.map((field) => <td key={field}>{String(record.rawData[field] ?? "")}</td>)}
+                <td><span className="award-row-status is-passed">{record.reviewStatus === "confirmed" ? "已确认" : "待确认"}</span></td>
+                <td><span className="award-row-status is-passed">{record.submitStatus === "submitted" ? "已上载" : "待上载"}</span></td>
+                <td>{new Date(record.submittedAt).toLocaleString()}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-const styles: Record<string, CSSProperties> = {
-  card: { background: "#fff", borderRadius: 8, padding: 20, border: "1px solid #d7e1ed", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 16 },
-  eyebrow: { color: "#0077d4", fontSize: 12, fontWeight: 800, marginBottom: 5 },
-  title: { margin: 0, color: "#172033", fontSize: 24 },
-  description: { color: "#63738a", fontSize: 13, lineHeight: 1.7, margin: "8px 0 0" },
-  exportButton: { border: "none", borderRadius: 6, padding: "10px 14px", background: "#0077d4", color: "#fff", cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" },
-  stats: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12, marginBottom: 14 },
-  stat: { background: "#f8fbfe", border: "1px solid #dbe5ef", borderRadius: 6, padding: 14 },
-  statLabel: { color: "#63738a", marginBottom: 6, fontSize: 13 },
-  statValue: { fontSize: 25 },
-  section: { marginTop: 16, paddingTop: 14, borderTop: "1px solid #e3ebf3" },
-  subTitle: { margin: "0 0 10px", color: "#172033", fontSize: 17 },
-  tableWrap: { overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  th: { borderBottom: "1px solid #d7e1ed", background: "#edf4fa", color: "#40526a", padding: 9, textAlign: "center", whiteSpace: "nowrap" },
-  td: { borderTop: "1px solid #e3ebf3", padding: 9, textAlign: "center", whiteSpace: "nowrap", color: "#52647b" },
-  nameCell: { borderTop: "1px solid #e3ebf3", padding: 9, color: "#26364e", whiteSpace: "nowrap" },
-  submitted: { display: "inline-flex", padding: "3px 7px", borderRadius: 999, background: "#e8f7f1", color: "#087b5b", fontWeight: 700, fontSize: 12 },
-  typeGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 },
-  empty: { padding: 18, color: "#8190a4", textAlign: "center" },
-};
+function AwardCockpitCard({
+  label,
+  value,
+  tone = "blue",
+  compact = false,
+}: {
+  label: string;
+  value: number | string;
+  tone?: "blue" | "green" | "red" | "amber" | "purple";
+  compact?: boolean;
+}) {
+  return (
+    <div className={`award-cockpit-card is-${tone}${compact ? " is-compact" : ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function AdminAwardModal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  return (
+    <div className="bos-modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section className="bos-modal bos-modal--compact" role="dialog" aria-modal="true" onMouseDown={(event) => event.stopPropagation()}>
+        <header className="bos-modal-header">
+          <h2>{title}</h2>
+          <button onClick={onClose}>关闭</button>
+        </header>
+        <div className="bos-modal-body">{children}</div>
+      </section>
+    </div>
+  );
+}
+
+function DetailItem({ label, value }: { label: string; value: unknown }) {
+  return (
+    <div className="award-detail-item">
+      <span>{label}</span>
+      <strong>{String(value ?? "-") || "-"}</strong>
+    </div>
+  );
+}

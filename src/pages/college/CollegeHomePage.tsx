@@ -35,7 +35,7 @@ export default function CollegeHomePage({ onNavigate }: CollegeHomePageProps) {
           statusTone="enabled"
           metrics={["国家奖学金", "国家励志奖学金", "上海市奖学金"]}
           actionText="进入业务"
-          onClick={() => onNavigate?.("/college/awards/national")}
+          onClick={() => onNavigate?.("/college/awards")}
         />
       </div>
     </section>

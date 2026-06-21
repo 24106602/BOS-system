@@ -9,6 +9,10 @@ import {
   isBatchInAcademicYear,
 } from "../../utils/academicYear";
 import { normalizeSubmissionCollegeName } from "../../utils/collegeDetector";
+import {
+  DIFFICULTY_STUDENT_TEMPLATE_FIELDS,
+  getDifficultyTemplateValue,
+} from "../../constants/difficultyStudentTemplate";
 
 type DifficultyBatchSummaryPageProps = {
   dataType: "student" | "family";
@@ -35,11 +39,15 @@ export default function DifficultyBatchSummaryPage({
   const [keyword, setKeyword] = useState("");
   const [appliedKeyword, setAppliedKeyword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
 
   const loadRows = useCallback(async () => {
     setIsLoading(true);
     try {
       setBatches(await getMergeBatches());
+      setSelectedKeys(new Set());
+      setHiddenKeys(new Set());
     } finally {
       setIsLoading(false);
     }
@@ -81,18 +89,49 @@ export default function DifficultyBatchSummaryPage({
   const filteredRows = useMemo(() => {
     const normalizedKeyword = appliedKeyword.trim().toLowerCase();
     return rows.filter((row) => {
+      if (hiddenKeys.has(row.id)) return false;
       if (collegeFilter && row.collegeName !== collegeFilter) return false;
       if (!normalizedKeyword) return true;
       return Object.values(row.values).some((value) =>
         String(value ?? "").toLowerCase().includes(normalizedKeyword)
       );
     });
-  }, [appliedKeyword, collegeFilter, rows]);
+  }, [appliedKeyword, collegeFilter, hiddenKeys, rows]);
   const dataColumns = useMemo(
-    () => [...new Set(filteredRows.flatMap((row) => Object.keys(row.values)))],
-    [filteredRows]
+    () =>
+      dataType === "student"
+        ? [...DIFFICULTY_STUDENT_TEMPLATE_FIELDS]
+        : [...new Set(filteredRows.flatMap((row) => Object.keys(row.values)))],
+    [dataType, filteredRows]
   );
   const latestAt = yearBatches.map((batch) => batch.createdAt).sort().at(-1) || "";
+  const allVisibleSelected =
+    filteredRows.length > 0 && filteredRows.every((row) => selectedKeys.has(row.id));
+
+  const toggleAllRows = () => {
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) filteredRows.forEach((row) => next.delete(row.id));
+      else filteredRows.forEach((row) => next.add(row.id));
+      return next;
+    });
+  };
+
+  const toggleRow = (id: string) => {
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const deleteSelectedRows = () => {
+    if (selectedKeys.size === 0) return;
+    if (!confirm(`确认从当前页面移除已选中的 ${selectedKeys.size} 条记录？此操作不会删除 Supabase 数据。`)) return;
+    setHiddenKeys((current) => new Set([...current, ...selectedKeys]));
+    setSelectedKeys(new Set());
+  };
 
   const resetFilters = () => {
     setCollegeFilter("");
@@ -139,6 +178,7 @@ export default function DifficultyBatchSummaryPage({
         <Stat label="筛选结果" value={filteredRows.length} />
         <Stat label="提交学院数" value={new Set(rows.map((row) => row.collegeName)).size} />
         <Stat label="提交批次数" value={yearBatches.length} />
+        <Stat label="当前选中" value={selectedKeys.size} />
       </div>
 
       <section className="bos-filter-card">
@@ -168,6 +208,9 @@ export default function DifficultyBatchSummaryPage({
           {isLoading ? "刷新中..." : "刷新"}
         </button>
         <button className="is-purple" onClick={exportCurrentRows}>导出当前名单</button>
+        <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedRows}>
+          删除选中（{selectedKeys.size}）
+        </button>
       </div>
 
       <section className="bos-table-card">
@@ -180,22 +223,41 @@ export default function DifficultyBatchSummaryPage({
             <table className="difficulty-data-table">
               <thead>
                 <tr>
-                  <th>学年</th>
-                  <th>学院</th>
-                  <th>上载时间</th>
+                  <th className="difficulty-checkbox-column">
+                    <input
+                      type="checkbox"
+                      aria-label="选择当前全部数据"
+                      checked={allVisibleSelected}
+                      onChange={toggleAllRows}
+                    />
+                  </th>
                   {dataColumns.map((column) => <th key={column}>{column}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.length === 0 ? (
-                  <tr><td className="difficulty-empty-cell" colSpan={Math.max(3, dataColumns.length + 3)}>当前学年暂无数据</td></tr>
+                  <tr><td className="difficulty-empty-cell" colSpan={dataColumns.length + 1}>当前学年暂无数据</td></tr>
                 ) : (
                   filteredRows.map((row) => (
-                    <tr key={row.id}>
-                      <td>{row.academicYear}</td>
-                      <td>{row.collegeName}</td>
-                      <td>{new Date(row.submittedAt).toLocaleString()}</td>
-                      {dataColumns.map((column) => <td key={column}>{String(row.values[column] ?? "")}</td>)}
+                    <tr key={row.id} className={selectedKeys.has(row.id) ? "difficulty-row-selected" : ""}>
+                      <td className="difficulty-checkbox-column">
+                        <input
+                          type="checkbox"
+                          aria-label="选择该行"
+                          checked={selectedKeys.has(row.id)}
+                          onChange={() => toggleRow(row.id)}
+                        />
+                      </td>
+                      {dataColumns.map((column) => (
+                        <td key={column}>
+                          {dataType === "student"
+                            ? getDifficultyTemplateValue(
+                                row.values,
+                                column as (typeof DIFFICULTY_STUDENT_TEMPLATE_FIELDS)[number]
+                              ) || "-"
+                            : String(row.values[column] ?? "") || "-"}
+                        </td>
+                      ))}
                     </tr>
                   ))
                 )}

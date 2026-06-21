@@ -1,6 +1,10 @@
-import { useMemo, useState, type CSSProperties, type ChangeEventHandler, type DragEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ChangeEventHandler, type DragEvent, type ReactNode, type RefObject } from "react";
 import type { DisqualifiedRow, LogItem, ProcessingStats } from "../services/types";
 import { ACADEMIC_YEAR_OPTIONS } from "../utils/academicYear";
+import {
+  DIFFICULTY_STUDENT_TEMPLATE_FIELDS,
+  getDifficultyTemplateValue,
+} from "../constants/difficultyStudentTemplate";
 
 type StudentProcessPageProps = {
   dataRef: RefObject<HTMLInputElement | null>;
@@ -69,6 +73,8 @@ export default function StudentProcessPage({
     status: "",
   });
   const [appliedFilters, setAppliedFilters] = useState(filters);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
 
   const failedRowNumbers = useMemo(
     () => new Set(disqualifiedRows.map((row) => row.rowNumber)),
@@ -80,12 +86,28 @@ export default function StudentProcessPage({
   );
   const summaryRows = useMemo(() => {
     const terms = Object.values(appliedFilters).map((value) => value.trim()).filter(Boolean);
-    if (terms.length === 0) return processedData;
-    return processedData.filter((row) => {
+    return processedData.map((row, index) => {
+      const idCard = getDifficultyTemplateValue(row, "身份证号(*)");
+      const name = getDifficultyTemplateValue(row, "姓名(*)");
+      return {
+        row,
+        key: `${idCard || name || "row"}::${index}`,
+      };
+    }).filter(({ row, key }) => {
+      if (hiddenKeys.has(key)) return false;
+      if (terms.length === 0) return true;
       const rowText = Object.values(row).map((value) => String(value ?? "")).join(" ");
       return terms.every((term) => rowText.includes(term));
     });
-  }, [appliedFilters, processedData]);
+  }, [appliedFilters, hiddenKeys, processedData]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSelectedKeys(new Set());
+      setHiddenKeys(new Set());
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [processedData]);
 
   const hasProcessedRows = processedData.length > 0 && !isProcessing;
   const hasBlockingRows = disqualifiedRows.length > 0 || stats.errors > 0;
@@ -123,6 +145,34 @@ export default function StudentProcessPage({
     setAppliedFilters(empty);
   };
 
+  const allVisibleSelected =
+    summaryRows.length > 0 && summaryRows.every((item) => selectedKeys.has(item.key));
+
+  const toggleAllRows = () => {
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) summaryRows.forEach((item) => next.delete(item.key));
+      else summaryRows.forEach((item) => next.add(item.key));
+      return next;
+    });
+  };
+
+  const toggleRow = (key: string) => {
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const deleteSelectedRows = () => {
+    if (selectedKeys.size === 0) return;
+    if (!confirm(`确认从当前页面移除已选中的 ${selectedKeys.size} 条数据？此操作不会删除 Supabase 数据。`)) return;
+    setHiddenKeys((current) => new Set([...current, ...selectedKeys]));
+    setSelectedKeys(new Set());
+  };
+
   return (
     <section className="bos-table-page difficulty-workspace">
       <header className="bos-page-title-row">
@@ -136,6 +186,14 @@ export default function StudentProcessPage({
           {onBackToDifficulty && <button style={pageStyles.backButton} onClick={onBackToDifficulty}>返回业务首页</button>}
         </div>
       </header>
+
+      <div className="difficulty-cockpit-grid">
+        <CockpitStat label="治理数据总量" value={stats.total} tone="blue" />
+        <CockpitStat label="治理通过" value={passedRows.length} tone="green" />
+        <CockpitStat label="不通过" value={disqualifiedRows.length} tone="red" />
+        <CockpitStat label="自动修复" value={stats.repaired} tone="amber" />
+        <CockpitStat label="当前选中" value={selectedKeys.size} tone="purple" />
+      </div>
 
       <section className="bos-filter-card">
         <div className="bos-filter-grid">
@@ -163,6 +221,9 @@ export default function StudentProcessPage({
         <button onClick={() => setActiveModal("analysis")}>问题分析</button>
         <button className="is-purple" onClick={exportExcel}>导出通过名单</button>
         <button className="is-purple" onClick={exportStudentErrorReport}>导出不通过名单</button>
+        <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedRows}>
+          删除选中（{selectedKeys.size}）
+        </button>
         {!hideSubmitAction && (
           <>
             <button className={reviewConfirmed ? "is-success" : "is-warning"} disabled={!canConfirm} onClick={confirmCollegeReview}>
@@ -201,10 +262,20 @@ export default function StudentProcessPage({
       <section className="bos-table-card">
         <div className="bos-table-card-head">
           <h2>本专科困难生数据表</h2>
-          <span>显示 {summaryRows.length} / {processedData.length} 条</span>
+          <span>40 个模板字段 · 显示 {summaryRows.length} / {processedData.length} 条</span>
         </div>
         <div className="bos-table-card-body">
-          {summaryRows.length === 0 ? <div style={pageStyles.empty}>暂无处理数据，请点击“数据导入”上传 Excel。</div> : renderTable(summaryRows)}
+          {summaryRows.length === 0 ? (
+            <div style={pageStyles.empty}>暂无处理数据，请点击“数据导入”上传 Excel。</div>
+          ) : (
+            <DifficultyTemplateTable
+              rows={summaryRows}
+              selectedKeys={selectedKeys}
+              allSelected={allVisibleSelected}
+              onToggleAll={toggleAllRows}
+              onToggleRow={toggleRow}
+            />
+          )}
         </div>
         <div className="bos-table-card-foot">
           <span>第 1 页</span>
@@ -304,6 +375,76 @@ export default function StudentProcessPage({
         </Modal>
       )}
     </section>
+  );
+}
+
+function CockpitStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "blue" | "green" | "red" | "amber" | "purple";
+}) {
+  return (
+    <div className={`difficulty-cockpit-card is-${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function DifficultyTemplateTable({
+  rows,
+  selectedKeys,
+  allSelected,
+  onToggleAll,
+  onToggleRow,
+}: {
+  rows: Array<{ row: Record<string, unknown>; key: string }>;
+  selectedKeys: Set<string>;
+  allSelected: boolean;
+  onToggleAll: () => void;
+  onToggleRow: (key: string) => void;
+}) {
+  return (
+    <div className="difficulty-template-table-scroll">
+      <table className="difficulty-template-table">
+        <thead>
+          <tr>
+            <th className="difficulty-checkbox-column">
+              <input
+                type="checkbox"
+                aria-label="选择当前全部数据"
+                checked={allSelected}
+                onChange={onToggleAll}
+              />
+            </th>
+            {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => <th key={field}>{field}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(({ row, key }) => (
+            <tr key={key} className={selectedKeys.has(key) ? "is-selected" : ""}>
+              <td className="difficulty-checkbox-column">
+                <input
+                  type="checkbox"
+                  aria-label={`选择${getDifficultyTemplateValue(row, "姓名(*)", "该学生")}`}
+                  checked={selectedKeys.has(key)}
+                  onChange={() => onToggleRow(key)}
+                />
+              </td>
+              {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
+                <td key={field} title={getDifficultyTemplateValue(row, field)}>
+                  {getDifficultyTemplateValue(row, field) || "-"}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

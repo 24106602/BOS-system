@@ -20,7 +20,15 @@ export default function MergePanel() {
   };
 
   useEffect(() => {
-    load();
+    let cancelled = false;
+
+    getMergeBatches().then((data) => {
+      if (!cancelled) setBatches(data);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const studentBatches = batches.filter((item) => item.dataType === "student");

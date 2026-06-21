@@ -64,15 +64,22 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
   const [submitted, setSubmitted] = useState(false);
   const [modal, setModal] = useState<ModalName>(null);
   const [selectedRow, setSelectedRow] = useState<AwardProcessedRow | null>(null);
-  const [keyword, setKeyword] = useState("");
+  const [collegeFilter, setCollegeFilter] = useState("");
+  const [nameFilter, setNameFilter] = useState("");
+  const [studentIdFilter, setStudentIdFilter] = useState("");
+  const [idCardFilter, setIdCardFilter] = useState("");
   const [majorFilter, setMajorFilter] = useState("");
+  const [classFilter, setClassFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedKeys, setSelectedKeys] = useState<Set<number>>(new Set());
+  const [hiddenKeys, setHiddenKeys] = useState<Set<number>>(new Set());
 
   const fields = useMemo(() => template?.fields || [], [template]);
   const nameField = useMemo(() => findField(fields, ["学生姓名", "姓名"]), [fields]);
   const studentIdField = useMemo(() => findField(fields, ["学生学号", "学号"]), [fields]);
   const idCardField = useMemo(() => findField(fields, ["身份证号", "身份证件号", "证件号"]), [fields]);
   const majorField = useMemo(() => findField(fields, ["专业名称", "所在专业", "专业"]), [fields]);
+  const classField = useMemo(() => findField(fields, ["班级名称", "所在班级", "行政班", "班级"]), [fields]);
 
   const failedRowIndexes = useMemo(
     () => new Set((result?.failedRows || []).map((row) => row.sourceRowIndex)),
@@ -85,36 +92,68 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
         : [],
     [result]
   );
+  const visibleProcessedRows = useMemo(
+    () => allProcessedRows.filter((row) => !hiddenKeys.has(row.sourceRowIndex)),
+    [allProcessedRows, hiddenKeys]
+  );
   const majors = useMemo(
     () =>
-      [...new Set(allProcessedRows.map((row) => rowValue(row, majorField)).filter(Boolean))].sort((a, b) =>
+      [...new Set(visibleProcessedRows.map((row) => rowValue(row, majorField)).filter(Boolean))].sort((a, b) =>
         a.localeCompare(b, "zh-CN")
       ),
-    [allProcessedRows, majorField]
+    [majorField, visibleProcessedRows]
+  );
+  const classes = useMemo(
+    () =>
+      [...new Set(visibleProcessedRows.map((row) => rowValue(row, classField)).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b, "zh-CN")
+      ),
+    [classField, visibleProcessedRows]
   );
   const filteredRows = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase();
-    return allProcessedRows.filter((row) => {
+    const matches = (value: string, filter: string) =>
+      !filter.trim() || value.toLowerCase().includes(filter.trim().toLowerCase());
+    return visibleProcessedRows.filter((row) => {
       const failed = failedRowIndexes.has(row.sourceRowIndex);
       if (statusFilter === "passed" && failed) return false;
       if (statusFilter === "failed" && !failed) return false;
+      if (collegeFilter && collegeName !== collegeFilter) return false;
+      if (!matches(rowValue(row, nameField), nameFilter)) return false;
+      if (!matches(rowValue(row, studentIdField), studentIdFilter)) return false;
+      if (!matches(rowValue(row, idCardField), idCardFilter)) return false;
       if (majorFilter && rowValue(row, majorField) !== majorFilter) return false;
-      if (!normalizedKeyword) return true;
-      return [nameField, studentIdField, idCardField, majorField].some((field) =>
-        rowValue(row, field).toLowerCase().includes(normalizedKeyword)
-      );
+      if (classFilter && rowValue(row, classField) !== classFilter) return false;
+      return true;
     });
   }, [
-    allProcessedRows,
+    classField,
+    classFilter,
+    collegeFilter,
+    collegeName,
     failedRowIndexes,
     idCardField,
-    keyword,
+    idCardFilter,
     majorField,
     majorFilter,
     nameField,
+    nameFilter,
     statusFilter,
     studentIdField,
+    studentIdFilter,
+    visibleProcessedRows,
   ]);
+  const visiblePassedRows = useMemo(
+    () => (result?.passedRows || []).filter((row) => !hiddenKeys.has(row.sourceRowIndex)),
+    [hiddenKeys, result]
+  );
+  const visibleFailedRows = useMemo(
+    () => (result?.failedRows || []).filter((row) => !hiddenKeys.has(row.sourceRowIndex)),
+    [hiddenKeys, result]
+  );
+  const visibleIssues = useMemo(
+    () => (result?.issues || []).filter((issue) => !hiddenKeys.has(issue.rowIndex)),
+    [hiddenKeys, result]
+  );
 
   const issuesByRow = useMemo(() => {
     const map = new Map<number, AwardIssue[]>();
@@ -151,6 +190,8 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
     setFileName(file.name);
     setConfirmed(false);
     setSubmitted(false);
+    setSelectedKeys(new Set());
+    setHiddenKeys(new Set());
     setImportLogs([{ tone: "info", message: `正在读取 ${file.name}` }]);
 
     let workbookData: Awaited<ReturnType<typeof readWorkbook>> | null = null;
@@ -283,6 +324,32 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
     }
   };
 
+  const resetFilters = () => {
+    setCollegeFilter("");
+    setNameFilter("");
+    setStudentIdFilter("");
+    setIdCardFilter("");
+    setMajorFilter("");
+    setClassFilter("");
+    setStatusFilter("all");
+  };
+
+  const refreshCurrentView = () => {
+    resetFilters();
+    setSelectedKeys(new Set());
+    setStatusMessage(result ? "当前三奖治理结果视图已刷新。" : "请先导入 Excel，系统将自动识别模板、Sheet 并治理数据。");
+  };
+
+  const deleteSelectedFromView = () => {
+    if (selectedKeys.size === 0) return;
+    if (!window.confirm(`确定从当前页面隐藏选中的 ${selectedKeys.size} 条数据吗？此操作不会删除 localStorage 或 Supabase 数据。`)) {
+      return;
+    }
+    setHiddenKeys((current) => new Set([...current, ...selectedKeys]));
+    setStatusMessage(`已从当前页面隐藏 ${selectedKeys.size} 条数据，底层三奖数据未删除。`);
+    setSelectedKeys(new Set());
+  };
+
   const openDetail = (row: AwardProcessedRow) => {
     setSelectedRow(row);
     setModal("detail");
@@ -295,6 +362,8 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
     !isProcessing &&
     !confirmed;
   const canSubmit = canConfirm === false && Boolean(result?.passedRows.length) && confirmed && !submitted;
+  const availableColleges =
+    collegeName && collegeName !== "待识别学院" && !collegeError ? [collegeName] : [];
 
   return (
     <section className="bos-processing-frame award-workspace">
@@ -304,14 +373,6 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
           <h1>{awardName}数据处理</h1>
           <p>识别官方模板与 Sheet，执行现有治理规则，并按“治理 → 学院确认 → 上载学校端”完成业务闭环。</p>
         </div>
-        <label className="bos-current-year">
-          当前学年
-          <select value={academicYear} onChange={(event) => changeAcademicYear(event.target.value)}>
-            {getAwardAcademicYearOptions().map((year) => (
-              <option key={year}>{year}</option>
-            ))}
-          </select>
-        </label>
       </div>
 
       <div className="award-switcher" aria-label="三大奖类型选择">
@@ -322,14 +383,51 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
         ))}
       </div>
 
+      <div className="award-cockpit-grid">
+        <AwardCockpitCard label="申报人数" value={visibleProcessedRows.length} />
+        <AwardCockpitCard label="通过人数" value={visiblePassedRows.length} tone="green" />
+        <AwardCockpitCard label="不通过人数" value={visibleFailedRows.length} tone="red" />
+        <AwardCockpitCard label="异常问题数" value={visibleIssues.length} tone="amber" />
+        <AwardCockpitCard label="当前奖项类型" value={awardName} tone="purple" compact />
+      </div>
+
       <section className="bos-filter-card">
-        <div className="award-filter-grid">
+        <div className="award-advanced-filter-grid">
           <label className="bos-filter-field">
-            关键词
+            学年
+            <select value={academicYear} onChange={(event) => changeAcademicYear(event.target.value)}>
+              {getAwardAcademicYearOptions().map((year) => <option key={year}>{year}</option>)}
+            </select>
+          </label>
+          <label className="bos-filter-field">
+            学院
+            <select value={collegeFilter} onChange={(event) => setCollegeFilter(event.target.value)}>
+              <option value="">全部学院</option>
+              {availableColleges.map((college) => <option key={college}>{college}</option>)}
+            </select>
+          </label>
+          <label className="bos-filter-field">
+            姓名
             <input
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              placeholder="姓名 / 学号 / 身份证 / 专业"
+              value={nameFilter}
+              onChange={(event) => setNameFilter(event.target.value)}
+              placeholder="学生姓名"
+            />
+          </label>
+          <label className="bos-filter-field">
+            学号
+            <input
+              value={studentIdFilter}
+              onChange={(event) => setStudentIdFilter(event.target.value)}
+              placeholder="学生学号"
+            />
+          </label>
+          <label className="bos-filter-field">
+            身份证号
+            <input
+              value={idCardFilter}
+              onChange={(event) => setIdCardFilter(event.target.value)}
+              placeholder="身份证号"
             />
           </label>
           <label className="bos-filter-field">
@@ -342,38 +440,41 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
             </select>
           </label>
           <label className="bos-filter-field">
-            治理状态
+            班级
+            <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
+              <option value="">全部班级</option>
+              {classes.map((className) => <option key={className}>{className}</option>)}
+            </select>
+          </label>
+          <label className="bos-filter-field">
+            审核状态
             <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="all">全部状态</option>
               <option value="passed">通过</option>
               <option value="failed">不通过</option>
             </select>
           </label>
-          <button
-            onClick={() => {
-              setKeyword("");
-              setMajorFilter("");
-              setStatusFilter("all");
-            }}
-          >
-            重置筛选
-          </button>
+          <button onClick={resetFilters}>重置筛选</button>
         </div>
       </section>
 
       <div className="bos-action-toolbar award-toolbar">
-        <button className="is-primary" onClick={openImport}>数据导入</button>
-        <button disabled={!result} onClick={() => setModal("passed")}>通过数据（{result?.passedRows.length || 0}）</button>
-        <button disabled={!result} onClick={() => setModal("failed")}>不通过数据（{result?.failedRows.length || 0}）</button>
-        <button disabled={!result} onClick={() => setModal("issues")}>问题分析（{result?.issues.length || 0}）</button>
+        <button onClick={refreshCurrentView}>刷新</button>
+        <button className="is-primary" onClick={openImport}>导入</button>
         <button className="is-purple" disabled={!result?.passedRows.length} onClick={exportPassed}>导出通过名单</button>
         <button className="is-purple" disabled={!result?.failedRows.length} onClick={exportFailed}>导出不通过名单</button>
+        <button className="is-success" disabled={!canSubmit} onClick={uploadToSchool}>
+          {submitted ? "已上载学校端" : "上载学校端"}
+        </button>
+        <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedFromView}>
+          删除{selectedKeys.size > 0 ? `（${selectedKeys.size}）` : ""}
+        </button>
+        <button disabled={!result} onClick={() => setModal("passed")}>通过数据（{visiblePassedRows.length}）</button>
+        <button disabled={!result} onClick={() => setModal("failed")}>不通过数据（{visibleFailedRows.length}）</button>
+        <button disabled={!result} onClick={() => setModal("issues")}>问题分析（{visibleIssues.length}）</button>
         <button className="is-purple" disabled={!result?.issues.length} onClick={exportIssues}>导出问题说明</button>
         <button className="is-warning" disabled={!canConfirm} onClick={confirmReview}>
           {confirmed ? "学院已确认" : "学院确认审核"}
-        </button>
-        <button className="is-success" disabled={!canSubmit} onClick={uploadToSchool}>
-          {submitted ? "已上载学校端" : "上载学校端"}
         </button>
       </div>
 
@@ -404,6 +505,8 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
             issuesByRow={issuesByRow}
             nameField={nameField}
             onDetail={openDetail}
+            selectedKeys={selectedKeys}
+            onSelectionChange={setSelectedKeys}
           />
         </div>
         <div className="bos-table-card-foot">
@@ -439,34 +542,38 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
       )}
 
       {modal === "passed" && (
-        <AwardModal title={`通过数据（${result?.passedRows.length || 0}）`} onClose={() => setModal(null)}>
+        <AwardModal title={`通过数据（${visiblePassedRows.length}）`} onClose={() => setModal(null)}>
           <AwardDataTable
             fields={fields}
-            rows={result?.passedRows || []}
+            rows={visiblePassedRows}
             failedRowIndexes={new Set()}
             issuesByRow={new Map()}
             nameField={nameField}
             onDetail={openDetail}
+            selectedKeys={selectedKeys}
+            onSelectionChange={setSelectedKeys}
           />
         </AwardModal>
       )}
 
       {modal === "failed" && (
-        <AwardModal title={`不通过数据（${result?.failedRows.length || 0}）`} onClose={() => setModal(null)}>
+        <AwardModal title={`不通过数据（${visibleFailedRows.length}）`} onClose={() => setModal(null)}>
           <AwardDataTable
             fields={fields}
-            rows={result?.failedRows || []}
+            rows={visibleFailedRows}
             failedRowIndexes={failedRowIndexes}
             issuesByRow={issuesByRow}
             nameField={nameField}
             onDetail={openDetail}
+            selectedKeys={selectedKeys}
+            onSelectionChange={setSelectedKeys}
           />
         </AwardModal>
       )}
 
       {modal === "issues" && (
-        <AwardModal title={`问题分析（${result?.issues.length || 0}）`} onClose={() => setModal(null)}>
-          <IssueTable issues={result?.issues || []} />
+        <AwardModal title={`问题分析（${visibleIssues.length}）`} onClose={() => setModal(null)}>
+          <IssueTable issues={visibleIssues} />
         </AwardModal>
       )}
 
@@ -520,6 +627,8 @@ function AwardDataTable({
   issuesByRow,
   nameField,
   onDetail,
+  selectedKeys,
+  onSelectionChange,
 }: {
   fields: string[];
   rows: AwardProcessedRow[];
@@ -527,13 +636,40 @@ function AwardDataTable({
   issuesByRow: Map<number, AwardIssue[]>;
   nameField?: string;
   onDetail: (row: AwardProcessedRow) => void;
+  selectedKeys: Set<number>;
+  onSelectionChange: (keys: Set<number>) => void;
 }) {
   if (rows.length === 0) return <div className="award-empty">暂无数据</div>;
+  const rowKeys = rows.map((row) => row.sourceRowIndex);
+  const allSelected = rowKeys.length > 0 && rowKeys.every((key) => selectedKeys.has(key));
+  const toggleAll = () => {
+    const next = new Set(selectedKeys);
+    if (allSelected) {
+      rowKeys.forEach((key) => next.delete(key));
+    } else {
+      rowKeys.forEach((key) => next.add(key));
+    }
+    onSelectionChange(next);
+  };
+  const toggleRow = (key: number) => {
+    const next = new Set(selectedKeys);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    onSelectionChange(next);
+  };
   return (
     <div className="award-table-scroll">
       <table className="award-data-table">
         <thead>
           <tr>
+            <th className="award-checkbox-column">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                aria-label="全选当前数据"
+                onChange={toggleAll}
+              />
+            </th>
             <th>Excel 行号</th>
             <th>治理状态</th>
             <th>问题数</th>
@@ -543,8 +679,17 @@ function AwardDataTable({
         <tbody>
           {rows.map((row) => {
             const failed = failedRowIndexes.has(row.sourceRowIndex);
+            const selected = selectedKeys.has(row.sourceRowIndex);
             return (
-              <tr key={row.sourceRowIndex}>
+              <tr key={row.sourceRowIndex} className={selected ? "is-selected" : ""}>
+                <td className="award-checkbox-column">
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    aria-label={`选择 Excel 第 ${row.excelRowNumber} 行`}
+                    onChange={() => toggleRow(row.sourceRowIndex)}
+                  />
+                </td>
                 <td>{row.excelRowNumber}</td>
                 <td><span className={`award-row-status ${failed ? "is-failed" : "is-passed"}`}>{failed ? "不通过" : "通过"}</span></td>
                 <td>{issuesByRow.get(row.sourceRowIndex)?.length || 0}</td>
@@ -562,6 +707,25 @@ function AwardDataTable({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function AwardCockpitCard({
+  label,
+  value,
+  tone = "blue",
+  compact = false,
+}: {
+  label: string;
+  value: number | string;
+  tone?: "blue" | "green" | "red" | "amber" | "purple";
+  compact?: boolean;
+}) {
+  return (
+    <div className={`award-cockpit-card is-${tone}${compact ? " is-compact" : ""}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }

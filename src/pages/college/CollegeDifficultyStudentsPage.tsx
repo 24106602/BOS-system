@@ -4,6 +4,12 @@ import type { UserProfile } from "../../types/auth";
 import { ACADEMIC_YEAR_OPTIONS, getCurrentAcademicYear } from "../../utils/academicYear";
 import { normalizeIdCard, fetchCollegeDifficultyStudents, type DifficultyStudentRow } from "../../services/difficultyStudentService";
 import { normalizeSubmissionCollegeName } from "../../utils/collegeDetector";
+import {
+  DIFFICULTY_STUDENT_TEMPLATE_FIELDS,
+  getDifficultyTemplateValue,
+  makeDifficultyRowKey,
+  type DifficultyStudentTemplateField,
+} from "../../constants/difficultyStudentTemplate";
 
 type CollegeDifficultyStudentsPageProps = {
   profile: UserProfile;
@@ -45,17 +51,31 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
   const [statusKeyword, setStatusKeyword] = useState("");
   const [rows, setRows] = useState<DifficultyStudentRow[]>([]);
   const [selectedRow, setSelectedRow] = useState<DifficultyStudentRow | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [loadMessage, setLoadMessage] = useState("");
   const [dataSource, setDataSource] = useState<"supabase" | "local">("supabase");
 
   const collegeName = normalizeSubmissionCollegeName(profile.college_name || profile.display_name || "");
 
+  const getRowKey = (row: DifficultyStudentRow) =>
+    makeDifficultyRowKey(row.academic_year, row.college_name, row.id_card, row.student_id, 0);
+
+  const getTemplateCell = (row: DifficultyStudentRow, field: DifficultyStudentTemplateField) => {
+    if (field === "姓名(*)") return getDifficultyTemplateValue(row.raw_data, field, row.name);
+    if (field === "身份证号(*)") return getDifficultyTemplateValue(row.raw_data, field, row.id_card);
+    if (field === "特殊困难类型(*)" || field === "推荐档次(*)") {
+      return getDifficultyTemplateValue(row.raw_data, field, row.difficulty_level);
+    }
+    return getDifficultyTemplateValue(row.raw_data, field);
+  };
+
   const loadRows = useCallback(async () => {
     setIsLoading(true);
     try {
       const result = await fetchCollegeDifficultyStudents(academicYear, collegeName);
       setRows(result.rows);
+      setSelectedKeys(new Set());
       setDataSource(result.source);
       setLoadMessage(result.error || `已加载 ${result.rows.length} 条困难生明细`);
     } catch (error) {
@@ -100,6 +120,35 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
     setStatusKeyword("");
   };
 
+  const allVisibleSelected =
+    filteredRows.length > 0 && filteredRows.every((row) => selectedKeys.has(getRowKey(row)));
+
+  const toggleAllRows = () => {
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) filteredRows.forEach((row) => next.delete(getRowKey(row)));
+      else filteredRows.forEach((row) => next.add(getRowKey(row)));
+      return next;
+    });
+  };
+
+  const toggleRow = (row: DifficultyStudentRow) => {
+    const key = getRowKey(row);
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const deleteSelectedRows = () => {
+    if (selectedKeys.size === 0) return;
+    if (!confirm(`确认从当前页面移除已选中的 ${selectedKeys.size} 条记录？此操作不会删除 Supabase 数据。`)) return;
+    setRows((current) => current.filter((row) => !selectedKeys.has(getRowKey(row))));
+    setSelectedKeys(new Set());
+  };
+
   const exportCurrentRows = () => {
     if (filteredRows.length === 0) {
       alert("当前筛选条件下暂无可导出的困难生明细");
@@ -141,6 +190,18 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
         </label>
       </header>
 
+      <div className="difficulty-cockpit-grid">
+        <CockpitStat label="本学院困难生" value={rows.length} tone="blue" />
+        <CockpitStat label="当前筛选结果" value={filteredRows.length} tone="green" />
+        <CockpitStat
+          label="特殊困难"
+          value={rows.filter((row) => /特别|特殊|低保|孤儿|残疾|烈士/.test(row.difficulty_level)).length}
+          tone="amber"
+        />
+        <CockpitStat label="当前选中" value={selectedKeys.size} tone="purple" />
+        <CockpitStat label="云端记录" value={dataSource === "supabase" ? rows.length : 0} tone="cyan" />
+      </div>
+
       <section className="bos-filter-card">
         <div className="bos-filter-grid">
           <label className="bos-filter-field">学院/学部<input value={collegeName || "学院账号"} readOnly /></label>
@@ -158,6 +219,9 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
       <div className="bos-action-toolbar">
         <button className="is-primary" onClick={() => void loadRows()} disabled={isLoading}>{isLoading ? "刷新中..." : "刷新数据"}</button>
         <button className="is-purple" onClick={exportCurrentRows}>导出当前名单</button>
+        <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedRows}>
+          删除选中（{selectedKeys.size}）
+        </button>
       </div>
 
       <div className="bos-status-row">
@@ -171,8 +235,8 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
       <section className="bos-table-card">
         <div className="bos-table-card-head">
           <div>
-            <h2>学院困难生数据表</h2>
-            <span>点击姓名或“查看详情”打开学生详情弹窗</span>
+            <h2>困难生申请档案数据表</h2>
+            <span>严格按申请档案模板 40 列展示，横向滚动查看全部字段</span>
           </div>
           <span>显示 {filteredRows.length} / {rows.length} 条</span>
         </div>
@@ -181,46 +245,53 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
             <table style={styles.table}>
               <thead>
                 <tr>
-                  <th style={styles.th}>学年</th>
-                  <th style={styles.th}>学院</th>
-                  <th style={styles.th}>姓名</th>
-                  <th style={styles.th}>学号</th>
-                  <th style={styles.th}>身份证号</th>
-                  <th style={styles.th}>年级</th>
-                  <th style={styles.th}>性别</th>
-                  <th style={styles.th}>困难等级</th>
-                  <th style={styles.th}>状态</th>
-                  <th style={styles.th}>操作</th>
+                  <th style={{ ...styles.th, ...styles.checkboxColumn }}>
+                    <input
+                      type="checkbox"
+                      aria-label="选择当前全部数据"
+                      checked={allVisibleSelected}
+                      onChange={toggleAllRows}
+                    />
+                  </th>
+                  {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
+                    <th key={field} style={styles.th}>{field}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td style={styles.empty} colSpan={10}>正在加载困难生明细...</td>
+                    <td style={styles.empty} colSpan={41}>正在加载困难生明细...</td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td style={styles.empty} colSpan={10}>暂无当前学年困难生明细</td>
+                    <td style={styles.empty} colSpan={41}>暂无当前学年困难生明细</td>
                   </tr>
                 ) : (
                   filteredRows.map((row, index) => (
-                    <tr key={`${row.academic_year}_${row.id_card || row.student_id}_${index}`}>
-                      <td style={styles.td}>{row.academic_year}</td>
-                      <td style={styles.td}>{row.college_name}</td>
-                      <td style={styles.nameCell}>
-                        <button style={styles.linkButton} onClick={() => setSelectedRow(row)}>
-                          {row.name || "未填写姓名"}
-                        </button>
+                    <tr
+                      key={`${getRowKey(row)}_${index}`}
+                      className={selectedKeys.has(getRowKey(row)) ? "difficulty-row-selected" : ""}
+                    >
+                      <td style={{ ...styles.td, ...styles.checkboxColumn }}>
+                        <input
+                          type="checkbox"
+                          aria-label={`选择${row.name || "该学生"}`}
+                          checked={selectedKeys.has(getRowKey(row))}
+                          onChange={() => toggleRow(row)}
+                        />
                       </td>
-                      <td style={styles.td}>{row.student_id}</td>
-                      <td style={styles.td}>{row.id_card}</td>
-                      <td style={styles.td}>{getRawDetail(row, ["grade", "年级", "所在年级"]) || "-"}</td>
-                      <td style={styles.td}>{getRawDetail(row, ["gender", "性别"]) || "-"}</td>
-                      <td style={styles.td}>{row.difficulty_level}</td>
-                      <td style={styles.td}>{displayStatus(row.status)}</td>
-                      <td style={styles.td}>
-                        <button style={styles.smallButton} onClick={() => setSelectedRow(row)}>查看详情</button>
-                      </td>
+                      {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
+                        <td key={field} style={field === "姓名(*)" ? styles.nameCell : styles.td}>
+                          {field === "姓名(*)" ? (
+                            <button style={styles.linkButton} onClick={() => setSelectedRow(row)}>
+                              {getTemplateCell(row, field) || "未填写姓名"}
+                            </button>
+                          ) : (
+                            getTemplateCell(row, field) || "-"
+                          )}
+                        </td>
+                      ))}
                     </tr>
                   ))
                 )}
@@ -243,21 +314,32 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
             </div>
             <div className="bos-modal-body">
               <div style={styles.detailGrid}>
-                <Detail label="学年" value={selectedRow.academic_year} />
-                <Detail label="学院" value={selectedRow.college_name} />
-                <Detail label="姓名" value={selectedRow.name} />
-                <Detail label="学号" value={selectedRow.student_id} />
-                <Detail label="身份证号" value={selectedRow.id_card} />
-                <Detail label="年级" value={getRawDetail(selectedRow, ["grade", "年级", "所在年级"])} />
-                <Detail label="性别" value={getRawDetail(selectedRow, ["gender", "性别"])} />
-                <Detail label="困难等级" value={selectedRow.difficulty_level} />
-                <Detail label="状态" value={displayStatus(selectedRow.status)} />
+                {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
+                  <Detail key={field} label={field} value={getTemplateCell(selectedRow, field)} />
+                ))}
               </div>
             </div>
           </section>
         </div>
       )}
     </section>
+  );
+}
+
+function CockpitStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "blue" | "green" | "amber" | "purple" | "cyan";
+}) {
+  return (
+    <div className={`difficulty-cockpit-card is-${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
 
@@ -298,13 +380,14 @@ const styles: Record<string, CSSProperties> = {
   tableHint: { margin: 0, color: "#8290a6", fontSize: 11 },
   resultBadge: { padding: "4px 8px", borderRadius: 999, background: "#eff4ff", color: "#1e5aa8", border: "1px solid #cbd9ee", fontSize: 10, fontWeight: 800 },
   tableWrap: { flex: 1, height: "100%", minHeight: 0, overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+  table: { width: "max-content", minWidth: "100%", borderCollapse: "collapse", fontSize: 12 },
   th: { position: "sticky", top: 0, zIndex: 1, border: "1px solid #d7e1ed", background: "#edf4fa", padding: "9px 10px", whiteSpace: "nowrap", textAlign: "center" },
   td: { border: "1px solid #cbd5e1", padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" },
   nameCell: { border: "1px solid #cbd5e1", padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap", fontWeight: 800 },
   empty: { padding: 18, color: "#8190a4", textAlign: "center" },
   linkButton: { border: "none", background: "transparent", color: "#1e5aa8", fontWeight: 800, cursor: "pointer" },
   smallButton: { border: "1px solid #bcd9f5", borderRadius: 6, padding: "6px 9px", background: "#f3f9ff", color: "#0879c5", fontWeight: 800, cursor: "pointer" },
+  checkboxColumn: { minWidth: 46, width: 46, position: "sticky", left: 0, zIndex: 4 },
   logPanel: { height: "100%", minHeight: 0, padding: 14, borderRadius: 9, background: "linear-gradient(180deg, #0b1c30 0%, #0a1426 100%)", border: "1px solid #1e3350", overflow: "hidden", display: "flex", flexDirection: "column", boxSizing: "border-box", boxShadow: "0 4px 18px rgba(8,20,40,0.16)" },
   logHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingBottom: 10, borderBottom: "1px solid rgba(148,163,184,0.2)" },
   logTitle: { color: "#e5efff", fontSize: 15, margin: 0 },

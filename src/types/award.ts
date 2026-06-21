@@ -1,6 +1,8 @@
 import type { WorkbookData } from "../services/types";
 
 export type AwardType = "national" | "inspirational" | "shanghai";
+export type AwardReviewStatus = "draft" | "confirmed";
+export type AwardSubmitStatus = "pending" | "submitted";
 
 export type AwardRuleKind =
   | "text"
@@ -71,9 +73,33 @@ export type AwardTemplate = {
 export type AwardSubmission = {
   id: string;
   awardType: AwardType;
+  academicYear: string;
   collegeName: string;
   createdAt: string;
+  confirmedAt: string;
+  reviewStatus: AwardReviewStatus;
+  submitStatus: AwardSubmitStatus;
   rowCount: number;
   awardTypeCounts: Record<string, number>;
+  fields: string[];
   rows: Record<string, unknown>[];
+};
+
+export type AwardAdminRecord = {
+  id: string;
+  submissionId: string;
+  academicYear: string;
+  awardType: AwardType;
+  collegeName: string;
+  studentId: string;
+  name: string;
+  idCard: string;
+  major: string;
+  grade: string;
+  gender: string;
+  status: string;
+  reviewStatus: AwardReviewStatus;
+  submitStatus: AwardSubmitStatus;
+  submittedAt: string;
+  rawData: Record<string, unknown>;
 };

@@ -102,7 +102,21 @@ export default function StudentDatabasePanel() {
   };
 
   useEffect(() => {
-    refreshDatabaseInfo().catch(() => setMessage("本地数据库读取失败"));
+    let cancelled = false;
+
+    Promise.all([getStudentCount(), getAllStudents()])
+      .then(([total, students]) => {
+        if (cancelled) return;
+        setCount(total);
+        setPreview(students.slice(-8).reverse());
+      })
+      .catch(() => {
+        if (!cancelled) setMessage("本地数据库读取失败");
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const uploadDatabase = async (event: ChangeEvent<HTMLInputElement>) => {
