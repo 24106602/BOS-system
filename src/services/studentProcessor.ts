@@ -10,7 +10,12 @@ import type {
   ProcessingStats,
   WorkbookData,
 } from "./types";
-import { buildColumnMap, findHeaderRowIndex, parseRuleOptions } from "./templateParser";
+import {
+  buildColumnMap,
+  findHeaderRowIndex,
+  normalizeDifficultyHeader,
+  parseRuleOptions,
+} from "./templateParser";
 import { applyHighlightStyle, cloneWorksheet } from "./excelExport";
 import { supabase } from '../utils/supabaseClient';
 import {
@@ -33,7 +38,6 @@ import {
   isZeroLikeText,
   normalizeText,
   parseAmountToNumber,
-  parseIntegerValue,
   shouldBeNumber,
   SMART_FIX,
   specialDifficultyList,
@@ -127,6 +131,307 @@ const addErrorReport = (
 const isRequiredField = (field: string, index: number, firstRow: unknown[]) => {
   const ruleText = String(firstRow[index] ?? "");
   return isRequiredByRule(field, ruleText);
+};
+
+const STRICT_AUTO_REPAIR_FIELDS = [
+  "姓名",
+  "家庭人口数",
+  "劳动力人口数",
+  "赡养人口数",
+  "特殊困难类型",
+];
+
+const POPULATION_FIELDS = new Set(["家庭人口数", "劳动力人口数", "赡养人口数"]);
+
+const displayOriginalValue = (value: unknown) => {
+  const text = String(value ?? "").trim();
+  return text || "空";
+};
+
+const cleanStudentName = (value: unknown) =>
+  String(value ?? "")
+    .replace(/（[^）]*）|\([^)]*\)/g, "")
+    .replace(/[\s\u00a0\u200b-\u200d\u2060\ufeff\u3000]/g, "")
+    .replace(/^[：:、,，.。;；"'“”‘’!?！？\-—_]+|[：:、,，.。;；"'“”‘’!?！？\-—_]+$/g, "");
+
+const checkStudentName = (originalValue: unknown): CheckResult => {
+  const raw = String(originalValue ?? "");
+  const fixed = cleanStudentName(raw);
+
+  if (!fixed) {
+    return {
+      value: "",
+      valid: false,
+      repaired: false,
+      reason: "姓名为空，无法自动生成真实姓名",
+      highlight: true,
+      highlightColor: "yellow",
+    };
+  }
+
+  return {
+    value: fixed,
+    valid: true,
+    repaired: fixed !== raw,
+    reason: fixed !== raw ? "姓名中的空格、不可见字符、括号备注或边界符号已自动清理" : "姓名有效",
+    highlight: false,
+  };
+};
+
+const chineseDigitMap: Record<string, number> = {
+  零: 0,
+  〇: 0,
+  一: 1,
+  二: 2,
+  两: 2,
+  三: 3,
+  四: 4,
+  五: 5,
+  六: 6,
+  七: 7,
+  八: 8,
+  九: 9,
+};
+
+const parseChineseInteger = (value: string) => {
+  let total = 0;
+  let current = 0;
+
+  for (const character of value) {
+    if (character in chineseDigitMap) {
+      current = chineseDigitMap[character];
+      continue;
+    }
+
+    const unit = character === "十" ? 10 : character === "百" ? 100 : 0;
+    if (!unit) return null;
+    total += (current || 1) * unit;
+    current = 0;
+  }
+
+  return total + current;
+};
+
+export const parsePopulationValue = (value: unknown): number | null => {
+  const text = String(value ?? "")
+    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0))
+    .trim();
+
+  if (!text) return null;
+  if (/(?:^|[^\d])-\s*\d|负数|负一|负二|负三|负四|负五|负六|负七|负八|负九/.test(text)) return null;
+
+  const numberMatch = text.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+  if (numberMatch) {
+    const number = Number(numberMatch[0]);
+    return Number.isFinite(number) && number >= 0 ? Math.floor(number) : null;
+  }
+
+  const normalized = normalizeText(text);
+  if (["无", "没有", "暂无", "空", "零", "无劳动能力人口"].some((item) => normalized.includes(normalizeText(item)))) {
+    return 0;
+  }
+
+  const chineseMatch = text.match(/[零〇一二两三四五六七八九十百]+/);
+  return chineseMatch ? parseChineseInteger(chineseMatch[0]) : null;
+};
+
+const isPopulationEmptyLike = (value: unknown) => {
+  const normalized = normalizeText(value);
+  return !normalized || ["无", "没有", "暂无", "空", "零", "无劳动能力人口"].some(
+    (item) => normalized.includes(normalizeText(item))
+  );
+};
+
+const specialDifficultyKeywordMap: Array<[string, string[]]> = [
+  ["脱贫不稳定家庭学生", ["脱贫不稳定", "不稳定脱贫", "返贫风险"]],
+  ["边缘易致贫家庭学生", ["边缘易致贫", "易致贫", "边缘户"]],
+  ["突发严重困难家庭学生", ["突发严重困难", "突发困难", "重大变故", "重大意外"]],
+  ["低保边缘家庭学生", ["低保边缘", "边缘低保"]],
+  ["特困救助供养学生", ["特困救助供养", "特困供养", "五保", "特困"]],
+  ["刚性支出困难家庭学生", ["刚性支出"]],
+  ["其他低收入家庭学生", ["其他低收入", "低收入"]],
+  ["事实无人抚养儿童", ["事实无人抚养", "无人抚养"]],
+  ["残疾学生", ["残疾学生", "本人残疾"]],
+  ["残疾人子女", ["残疾人子女", "父母残疾"]],
+  ["烈士子女", ["烈士子女", "烈士"]],
+  ["脱贫家庭学生", ["原建档立卡", "建档立卡", "脱贫户", "脱贫家庭", "已脱贫"]],
+  ["低保家庭学生", ["低保户", "低保家庭", "低保"]],
+  ["孤儿", ["孤儿"]],
+];
+
+const matchSpecialDifficultyType = (value: unknown) => {
+  const normalized = normalizeText(value);
+  if (!normalized) return "";
+
+  const exact = specialDifficultyList.find((item) => normalizeText(item) === normalized);
+  if (exact) return exact;
+
+  if (["无", "没有", "否", "暂无"].some((item) => normalized === normalizeText(item))) return "无";
+
+  return specialDifficultyKeywordMap.find(([, keywords]) =>
+    keywords.some((keyword) => normalized.includes(normalizeText(keyword)))
+  )?.[0] || "";
+};
+
+const getSpecialDifficultyInferenceText = (row: Record<string, unknown>) =>
+  Object.entries(row)
+    .filter(([field]) => {
+      const normalized = normalizeDifficultyHeader(field);
+      return [
+        "申请理由",
+        "陈述理由",
+        "突发事件描述",
+        "突发意外事件",
+        "其它重大信息",
+        "其他重大信息",
+        "其它影响家庭经济信息",
+        "其他影响家庭经济信息",
+        "其他情况",
+        "家庭欠债原因",
+        "家庭欠债情况",
+        "欠债原因",
+      ].some((keyword) => normalized.includes(normalizeDifficultyHeader(keyword)));
+    })
+    .map(([, value]) => String(value ?? ""))
+    .join(" ");
+
+const isEspeciallyDifficult = (row: Record<string, unknown>) =>
+  Object.entries(row).some(([field, value]) => {
+    const normalizedField = normalizeDifficultyHeader(field);
+    return (
+      (normalizedField.includes("推荐档次") || normalizedField.includes("困难等级")) &&
+      normalizeText(value) === normalizeText("C.家庭经济特别困难")
+    );
+  });
+
+export const normalizeSpecialDifficultyType = (
+  value: unknown,
+  row: Record<string, unknown>
+) => {
+  const direct = matchSpecialDifficultyType(value);
+  if (direct) return direct;
+
+  const inferred = matchSpecialDifficultyType(getSpecialDifficultyInferenceText(row));
+  if (inferred && inferred !== "无") return inferred;
+
+  return isEspeciallyDifficult(row) ? "其他低收入家庭学生" : "无";
+};
+
+type PopulationColumn = {
+  templateField: string;
+  templateIndex: number;
+  sourceIndex: number;
+};
+
+type DeferredRepairResult = {
+  field: string;
+  colIndex: number;
+  originalValue: unknown;
+  value: unknown;
+  repaired: boolean;
+  valid: boolean;
+  reason: string;
+};
+
+const inferAssociatedFamilyMemberCount = (headers: string[], sourceRow: unknown[]) => {
+  const explicitIndex = headers.findIndex((header) => {
+    const normalized = normalizeDifficultyHeader(header);
+    return ["家庭成员人数", "关联家庭成员人数", "家庭成员数量"].includes(normalized);
+  });
+  if (explicitIndex >= 0) return parsePopulationValue(sourceRow[explicitIndex]);
+
+  const memberNameIndexes = headers
+    .map((header, index) => ({ index, normalized: normalizeDifficultyHeader(header) }))
+    .filter(({ normalized }) => /家庭成员\d*(?:姓名)?$/.test(normalized))
+    .map(({ index }) => index);
+  if (memberNameIndexes.length === 0) return null;
+
+  return memberNameIndexes.filter((index) => String(sourceRow[index] ?? "").trim() !== "").length;
+};
+
+const repairPopulationValues = (
+  sourceRow: unknown[],
+  headers: string[],
+  columns: {
+    family?: PopulationColumn;
+    labor?: PopulationColumn;
+    dependent?: PopulationColumn;
+  }
+): DeferredRepairResult[] => {
+  const available = (column?: PopulationColumn) => Boolean(column && column.sourceIndex >= 0);
+  const read = (column?: PopulationColumn) => available(column) ? sourceRow[column!.sourceIndex] : "";
+  const familyRaw = read(columns.family);
+  const laborRaw = read(columns.labor);
+  const dependentRaw = read(columns.dependent);
+
+  let family = available(columns.family) ? parsePopulationValue(familyRaw) : null;
+  let labor = available(columns.labor) ? parsePopulationValue(laborRaw) : null;
+  let dependent = available(columns.dependent) ? parsePopulationValue(dependentRaw) : null;
+  const laborInvalid = available(columns.labor) && labor === null && !isPopulationEmptyLike(laborRaw);
+  const dependentInvalid =
+    available(columns.dependent) && dependent === null && !isPopulationEmptyLike(dependentRaw);
+
+  if (available(columns.labor) && labor === null && !laborInvalid) labor = 0;
+  if (available(columns.dependent) && dependent === null && !dependentInvalid) dependent = 0;
+
+  if (available(columns.family) && (family === null || family < 1)) {
+    const associatedCount = inferAssociatedFamilyMemberCount(headers, sourceRow);
+    family = Math.max(1, labor ?? 0, dependent ?? 0, associatedCount === null ? 0 : associatedCount + 1);
+  }
+
+  if (labor !== null && dependent !== null && labor < dependent) labor = dependent;
+  if (family !== null && labor !== null && family < labor) family = labor;
+  if (family !== null && dependent !== null && family < dependent) family = dependent;
+
+  const makeResult = (
+    column: PopulationColumn | undefined,
+    originalValue: unknown,
+    value: number | null,
+    valid: boolean,
+    invalidReason: string
+  ): DeferredRepairResult | null => {
+    if (!column || column.sourceIndex < 0) return null;
+    if (!valid || value === null) {
+      return {
+        field: column.templateField,
+        colIndex: column.templateIndex,
+        originalValue,
+        value: originalValue,
+        repaired: false,
+        valid: false,
+        reason: invalidReason,
+      };
+    }
+
+    const fixed = String(value);
+    return {
+      field: column.templateField,
+      colIndex: column.templateIndex,
+      originalValue,
+      value: fixed,
+      repaired: fixed !== String(originalValue ?? "").trim(),
+      valid: true,
+      reason: `${normalizeDifficultyHeader(column.templateField)}已按人口关系规则自动修复`,
+    };
+  };
+
+  return [
+    makeResult(columns.family, familyRaw, family, true, ""),
+    makeResult(
+      columns.labor,
+      laborRaw,
+      labor,
+      !laborInvalid,
+      "劳动力人口数完全无法判断，不能在缺少依据时自动生成"
+    ),
+    makeResult(
+      columns.dependent,
+      dependentRaw,
+      dependent,
+      !dependentInvalid,
+      "赡养人口数完全无法判断，不能在缺少依据时自动生成"
+    ),
+  ].filter((item): item is DeferredRepairResult => item !== null);
 };
 
 const getColumnValidList = (
@@ -376,6 +681,19 @@ const checkAndFixCellByColumnRule = (
   const ruleText = String(firstRow[columnIndex] ?? "");
   const required = isRequiredField(field, columnIndex, firstRow);
   let value = String(originalRawValue ?? "").trim();
+  const normalizedField = normalizeDifficultyHeader(field);
+
+  if (normalizedField === "姓名") return checkStudentName(originalRawValue);
+
+  if (POPULATION_FIELDS.has(normalizedField)) {
+    return {
+      value,
+      valid: true,
+      repaired: false,
+      reason: "人口字段将在行级规则中统一修复",
+      highlight: false,
+    };
+  }
 
   if (columnIndex === 14) {
     const fixed = fixYesNo(value);
@@ -495,19 +813,6 @@ const checkAndFixCellByColumnRule = (
 
   if (columnIndex === 11 || cleanFieldName(field).includes("家庭年均收入")) return checkFamilyIncomeLColumn(value);
 
-  if (cleanFieldName(field).includes("特殊困难类型")) {
-    const fixed = fixSpecialDifficulty(value);
-    const valid = specialDifficultyList.includes(fixed);
-    return {
-      value: fixed,
-      valid,
-      repaired: fixed !== value,
-      reason: valid ? "特殊困难类型已按最接近字典值修正" : "特殊困难类型不在允许字典中",
-      highlight: !valid,
-      highlightColor: "yellow",
-    };
-  }
-
   if (columnIndex === 30 || field.includes("户籍性质")) {
     const fixed = SMART_FIX[value] || value;
     const finalValue = fixed.includes("城") || fixed.includes("非农")
@@ -622,39 +927,17 @@ const checkCrossColumnRules = (
   errorReports: ErrorReportItem[]
 ) => {
   let marked = 0;
-  const D = 3;
   const K = 10;
   const V = 21;
   const Z = 25;
   const AC = 28;
-  const AF = 31;
-  const AH = 33;
 
-  const dField = templateFields[D];
   const kField = templateFields[K];
   const vField = templateFields[V];
   const zField = templateFields[Z];
   const acField = templateFields[AC];
-  const afField = templateFields[AF];
-  const ahField = templateFields[AH];
 
   result.forEach((row, rowIndex) => {
-    const dValue = parseIntegerValue(row[dField]);
-    const afValue = parseIntegerValue(row[afField]);
-    const ahValue = parseIntegerValue(row[ahField]);
-
-    if (dValue !== null && afValue !== null && ahValue !== null && !(dValue >= afValue && afValue >= ahValue)) {
-      const reason = `人口关系不符合：D家庭人口数(${dValue}) >= AF劳动人口数(${afValue}) >= AH赡养人口数(${ahValue})`;
-      [D, AF, AH].forEach((colIndex) => {
-        const key = `${rowIndex}_${colIndex}`;
-        if (!highlightMap[key]) marked++;
-        addMark(highlightMap, rowIndex, colIndex, "purple", reason);
-      });
-      fieldErrors[dField] = (fieldErrors[dField] || 0) + 1;
-      fieldErrors[afField] = (fieldErrors[afField] || 0) + 1;
-      fieldErrors[ahField] = (fieldErrors[ahField] || 0) + 1;
-    }
-
     const vValue = String(row[vField] ?? "").trim();
     const zValue = String(row[zField] ?? "").trim();
     const acValue = String(row[acField] ?? "").trim();
@@ -822,7 +1105,16 @@ export const processStudentRows = async ({
     .slice(headerIndex + 1)
     .filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""));
 
-  const { columnMap, removedHeaders } = buildColumnMap(headers, templateFields);
+  const { columnMap, removedHeaders } = buildColumnMap(
+    headers,
+    templateFields,
+    STRICT_AUTO_REPAIR_FIELDS
+  );
+  const populationColumns = {
+    family: columnMap.find((item) => normalizeDifficultyHeader(item.templateField) === "家庭人口数"),
+    labor: columnMap.find((item) => normalizeDifficultyHeader(item.templateField) === "劳动力人口数"),
+    dependent: columnMap.find((item) => normalizeDifficultyHeader(item.templateField) === "赡养人口数"),
+  };
   const targetApplicationDay = mostFrequentApplicationDay(sourceDataRows, columnMap);
 
   onLog?.({
@@ -856,6 +1148,16 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
   for (let i = 0; i < sourceDataRows.length; i++) {
     const sourceRow = sourceDataRows[i];
     const outputRow: Record<string, unknown> = {};
+    const sourceRowContext: Record<string, unknown> = {};
+
+    headers.forEach((header, index) => {
+      if (header) sourceRowContext[header] = sourceRow[index] ?? "";
+    });
+    columnMap.forEach((item) => {
+      if (item.sourceIndex >= 0) {
+        sourceRowContext[item.templateField] = sourceRow[item.sourceIndex] ?? "";
+      }
+    });
 
     for (const mapItem of columnMap) {
       const field = mapItem.templateField;
@@ -878,27 +1180,47 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
       }
 
       const originalValue = sourceRow[mapItem.sourceIndex];
-      const checked = checkAndFixCellByColumnRule(
-        field,
-        colIndex,
-        originalValue,
-        targetApplicationDay,
-        templateFirstRow,
-        dictionaryMap,
-        fieldDictMap
-      );
+      const normalizedField = normalizeDifficultyHeader(field);
+      const checked: CheckResult = normalizedField === "特殊困难类型"
+        ? (() => {
+            const raw = String(originalValue ?? "").trim();
+            const fixed = normalizeSpecialDifficultyType(originalValue, sourceRowContext);
+            return {
+              value: fixed,
+              valid: true,
+              repaired: fixed !== raw,
+              reason: fixed !== raw
+                ? "特殊困难类型已按字段内容、相关描述和困难等级自动修复"
+                : "特殊困难类型符合允许值",
+              highlight: false,
+            } satisfies CheckResult;
+          })()
+        : checkAndFixCellByColumnRule(
+            field,
+            colIndex,
+            originalValue,
+            targetApplicationDay,
+            templateFirstRow,
+            dictionaryMap,
+            fieldDictMap
+          );
 
       outputRow[field] = checked.value;
 
       if (checked.repaired) {
         repairedCount++;
         addErrorReport(errorReports, i, field, originalValue, checked.value, "自动修复", checked.reason);
-        onLog?.({
-          type: "success",
-          message: `第 ${i + 1} 行 第 ${colIndex + 1} 列 ${field}
+        const logMessage = normalizedField === "特殊困难类型"
+          ? `第 ${i + 1} 行：特殊困难类型“${displayOriginalValue(originalValue)}”已自动修复为“${checked.value}”`
+          : normalizedField === "姓名"
+          ? `第 ${i + 1} 行：姓名“${displayOriginalValue(originalValue)}”已自动清洗为“${checked.value}”`
+          : `第 ${i + 1} 行 第 ${colIndex + 1} 列 ${field}
 原值：${String(originalValue ?? "").trim()}
 修复后：${checked.value}
-依据：${checked.reason}`,
+依据：${checked.reason}`;
+        onLog?.({
+          type: "success",
+          message: logMessage,
         });
       }
 
@@ -948,6 +1270,68 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
         });
       }
     }
+
+    const populationResults = repairPopulationValues(
+      sourceRow,
+      headers,
+      populationColumns
+    );
+    populationResults.forEach((populationResult) => {
+      outputRow[populationResult.field] = populationResult.value;
+
+      if (populationResult.repaired) {
+        repairedCount++;
+        addErrorReport(
+          errorReports,
+          i,
+          populationResult.field,
+          populationResult.originalValue,
+          populationResult.value,
+          "自动修复",
+          populationResult.reason
+        );
+        onLog?.({
+          type: "success",
+          message: `第 ${i + 1} 行：${normalizeDifficultyHeader(populationResult.field)}“${displayOriginalValue(
+            populationResult.originalValue
+          )}”已自动修复为 ${populationResult.value}`,
+        });
+      }
+
+      if (!populationResult.valid) {
+        errorCount++;
+        fieldErrors[populationResult.field] = (fieldErrors[populationResult.field] || 0) + 1;
+        addMark(
+          highlightMap,
+          i,
+          populationResult.colIndex,
+          "yellow",
+          populationResult.reason
+        );
+        addErrorReport(
+          errorReports,
+          i,
+          populationResult.field,
+          populationResult.originalValue,
+          populationResult.value,
+          "数据格式错误",
+          populationResult.reason
+        );
+        addErrorReport(
+          errorReports,
+          i,
+          populationResult.field,
+          populationResult.originalValue,
+          populationResult.value,
+          "标黄",
+          populationResult.reason
+        );
+        onLog?.({
+          type: "error",
+          message: `第 ${i + 1} 行：${populationResult.reason}`,
+        });
+      }
+    });
 
     result.push(outputRow);
     onProgress?.(

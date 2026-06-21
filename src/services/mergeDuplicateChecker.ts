@@ -45,8 +45,8 @@ function collectDuplicate(
 }
 
 export function checkMergeDuplicates(batches: CollegeProcessedBatch[]): MergeDuplicateIssue[] {
-  const rows = batches.flatMap((batch) =>
-    batch.rows.map((row) => ({
+  const rows: Record<string, unknown>[] = batches.flatMap((batch) =>
+    batch.rows.map((row): Record<string, unknown> => ({
       来源学院: batch.collegeName,
       数据类型: batch.dataType,
       批次时间: batch.createdAt,

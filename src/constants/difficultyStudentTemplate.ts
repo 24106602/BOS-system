@@ -45,26 +45,40 @@ export type DifficultyStudentTemplateField =
   (typeof DIFFICULTY_STUDENT_TEMPLATE_FIELDS)[number];
 
 const FIELD_ALIASES: Partial<Record<DifficultyStudentTemplateField, string[]>> = {
-  "姓名(*)": ["姓名", "学生姓名", "name"],
+  "姓名(*)": ["姓名", "学生姓名", "姓名（*）", "姓名 *", "name"],
+  "家庭人口数(*)": ["家庭人口数", "家庭人口", "家庭人数", "人口数"],
   "身份证号(*)": ["身份证号", "身份证件号", "学生身份证号", "id_card"],
-  "特殊困难类型(*)": ["特殊困难类型", "困难类型", "difficulty_level"],
+  "特殊困难类型(*)": ["特殊困难类型", "特殊困难类型（*）", "困难类型", "difficulty_level"],
   "推荐档次(*)": ["推荐档次", "困难等级", "困难认定等级", "认定等级"],
   "家庭人均年收入(*)": ["家庭人均年收入", "家庭年均收入", "家庭年收入"],
   "家庭欠债金额(*)": ["家庭欠债金额", "欠债金额", "负债金额"],
   "家庭欠债情况（60字）(*)": ["家庭欠债情况", "学生家庭欠债原因", "欠债原因"],
   "陈述理由（60字）(*)": ["陈述理由", "申请理由", "困难陈述"],
   "户籍性质（*）": ["户籍性质", "户口性质"],
-  "劳动力人口数（*）": ["劳动力人口数", "劳动人口数"],
-  "赡养人口数（*）": ["赡养人口数"],
+  "劳动力人口数（*）": ["劳动力人口数", "劳动力人口", "劳动人口数", "劳动人口"],
+  "赡养人口数（*）": ["赡养人口数", "赡养人口"],
   "残疾类别（*）": ["残疾类别", "残疾类型"],
   "收入来源(*)": ["收入来源", "家庭收入来源"],
 };
 
-export const normalizeDifficultyField = (value: string) =>
-  String(value ?? "")
-    .replace(/\s|\*|（.*?）|\(.*?\)/g, "")
-    .replace(/[，,。；;：:]/g, "")
+export const normalizeDifficultyField = (value: string) => {
+  const normalized = String(value ?? "")
+    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0))
+    .replace(/（[^）]*）|\([^)]*\)/g, "")
+    .replace(/[\s\u00a0\u200b-\u200d\u2060\ufeff\u3000]/g, "")
+    .replace(/[*＊()（）:：，,。；;]/g, "")
     .toLowerCase();
+
+  if (/^(?:学生)?姓名$/.test(normalized)) return "姓名";
+  if (/^(?:家庭人口|家庭人口数|家庭人数|人口数|家庭人口总数)$/.test(normalized)) return "家庭人口数";
+  if (/^(?:劳动力人口|劳动力人口数|劳动人口|劳动人口数|劳动人数)$/.test(normalized)) {
+    return "劳动力人口数";
+  }
+  if (/^(?:赡养人口|赡养人口数|赡养人数|被赡养人口数)$/.test(normalized)) return "赡养人口数";
+  if (/^(?:特殊困难类型|困难类型)$/.test(normalized)) return "特殊困难类型";
+
+  return normalized;
+};
 
 export const getDifficultyTemplateValue = (
   rawData: Record<string, unknown> | null | undefined,

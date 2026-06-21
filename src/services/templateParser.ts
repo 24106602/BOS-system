@@ -146,10 +146,28 @@ const FAMILY_HEADER_KEYWORDS = [
   "健康",
 ];
 
-const normalizeHeaderText = (value: unknown) =>
-  String(value ?? "")
-    .replace(/\s|\*|（.*?）|\(.*?\)/g, "")
-    .trim();
+const toHalfWidthDigits = (value: string) =>
+  value.replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0));
+
+export const normalizeDifficultyHeader = (value: unknown) => {
+  const normalized = toHalfWidthDigits(String(value ?? ""))
+    .replace(/（[^）]*）|\([^)]*\)/g, "")
+    .replace(/[\s\u00a0\u200b-\u200d\u2060\ufeff\u3000]/g, "")
+    .replace(/[*＊()（）:：]/g, "")
+    .toLowerCase();
+
+  if (/^(?:学生)?姓名$/.test(normalized)) return "姓名";
+  if (/^(?:家庭人口|家庭人口数|家庭人数|人口数|家庭人口总数)$/.test(normalized)) return "家庭人口数";
+  if (/^(?:劳动力人口|劳动力人口数|劳动人口|劳动人口数|劳动人数)$/.test(normalized)) {
+    return "劳动力人口数";
+  }
+  if (/^(?:赡养人口|赡养人口数|赡养人数|被赡养人口数)$/.test(normalized)) return "赡养人口数";
+  if (/^(?:特殊困难类型|困难类型)$/.test(normalized)) return "特殊困难类型";
+
+  return normalized;
+};
+
+const normalizeHeaderText = (value: unknown) => normalizeDifficultyHeader(value);
 
 const rowHasMeaningfulCells = (row: unknown[]) =>
   row.some((cell) => String(cell ?? "").trim() !== "");
@@ -196,17 +214,17 @@ const pickTemplateHeaderRows = (rows: unknown[][], type: "student" | "family") =
 };
 
 export const FIELD_ALIASES: Record<string, string[]> = {
-  "姓名(*)": ["姓名", "学生姓名", "姓名(*)"],
+  "姓名(*)": ["姓名", "学生姓名", "姓名(*)", "姓名（*）", "姓名 *"],
   "籍贯(*)": ["籍贯", "生源地", "户籍地", "籍贯(*)"],
   "身份证号(*)": ["身份证号", "身份证件号", "证件号", "学生身份证号", "身份证号(*)"],
-  "家庭人口数(*)": ["家庭人口数", "人口数", "家庭人数", "家庭人口数(*)"],
+  "家庭人口数(*)": ["家庭人口数", "家庭人口", "人口数", "家庭人数", "家庭人口数(*)", "家庭人口数（*）"],
   "手机号码(*)": ["手机号码", "手机号", "联系电话", "学生联系电话", "手机号码(*)"],
   "辅导员姓名": ["辅导员姓名", "辅导员"],
   "申请日期(*)": ["申请日期", "日期", "申请日期(*)"],
   "家庭地址(*)": ["家庭地址", "家庭住址", "通讯地址", "家庭地址(*)"],
   "邮政编码(*)": ["邮政编码", "邮编", "邮政编码(*)"],
   "家长手机号码(*)": ["家长手机号码", "家长手机号", "监护人电话", "联系电话"],
-  "特殊困难类型(*)": ["特殊困难类型", "困难类型", "特殊困难类型(*)"],
+  "特殊困难类型(*)": ["特殊困难类型", "困难类型", "特殊困难类型(*)", "特殊困难类型（*）"],
   "家庭年均收入(*)": ["家庭年均收入", "家庭年收入", "年收入", "收入"],
   "突发意外事件具体描述(*)": ["突发意外事件具体描述", "突发事件描述", "意外事件描述", "突发事件"],
   "家庭欠债金额(*)": ["家庭欠债金额", "欠债金额", "负债金额", "债务金额"],
@@ -215,8 +233,10 @@ export const FIELD_ALIASES: Record<string, string[]> = {
   "陈述理由(*)": ["陈述理由", "申请理由", "困难陈述", "理由"],
   "收入来源(*)": ["收入来源", "家庭收入来源", "收入来源(*)"],
   "户籍性质(*)": ["户籍性质", "户口性质", "户籍性质(*)"],
-  "劳动人口数(*)": ["劳动人口数", "劳动人数", "劳动力人口数"],
-  "赡养人口数(*)": ["赡养人口数", "赡养人数", "被赡养人口数"],
+  "劳动人口数(*)": ["劳动人口", "劳动人口数", "劳动人数", "劳动力人口", "劳动力人口数"],
+  "劳动力人口数（*）": ["劳动人口", "劳动人口数", "劳动人数", "劳动力人口", "劳动力人口数"],
+  "赡养人口数(*)": ["赡养人口", "赡养人口数", "赡养人数", "被赡养人口数"],
+  "赡养人口数（*）": ["赡养人口", "赡养人口数", "赡养人数", "被赡养人口数"],
   "残疾类别(*)": ["残疾类别", "残疾类型", "残疾情况"],
   "性别(*)": ["性别", "性别(*)"],
   "证件类型(*)": ["证件类型", "证件类别", "身份证件类型", "证件类型(*)"],
@@ -232,20 +252,21 @@ export const FIELD_ALIASES: Record<string, string[]> = {
   "健康状况*": ["健康状况", "健康情况", "身体状况"],
 };
 
-export const headerMatchScore = (templateField: string, sourceHeader: string) => {
-  const target = cleanFieldName(templateField);
-  const source = cleanFieldName(sourceHeader);
+export const headerMatchScore = (templateField: string, sourceHeader: string, strict = false) => {
+  const target = normalizeDifficultyHeader(templateField);
+  const source = normalizeDifficultyHeader(sourceHeader);
 
   if (!target || !source) return 0;
   if (target === source) return 100;
-  if (target.includes(source) || source.includes(target)) return 85;
 
-  const aliases = FIELD_ALIASES[templateField] || FIELD_ALIASES[target] || [];
+  const aliases = FIELD_ALIASES[templateField] || FIELD_ALIASES[cleanFieldName(templateField)] || [];
   for (const alias of aliases) {
-    const a = cleanFieldName(alias);
-    if (a === source || source.includes(a) || a.includes(source)) return 95;
+    const a = normalizeDifficultyHeader(alias);
+    if (a === source) return 95;
+    if (!strict && (source.includes(a) || a.includes(source))) return 90;
   }
 
+  if (!strict && (target.includes(source) || source.includes(target))) return 85;
   return 0;
 };
 
@@ -271,17 +292,19 @@ export const findHeaderRowIndex = (rows: unknown[][], fields: string[]) => {
   return bestIndex;
 };
 
-export const buildColumnMap = (headers: string[], fields: string[]) => {
+export const buildColumnMap = (headers: string[], fields: string[], strictFields: string[] = []) => {
   const result: ColumnMapItem[] = [];
   const usedSourceIndexes = new Set<number>();
+  const strictFieldSet = new Set(strictFields.map(normalizeDifficultyHeader));
 
   fields.forEach((field, templateIndex) => {
     let bestIndex = -1;
     let bestScore = 0;
     let bestHeader = "";
+    const strict = strictFieldSet.has(normalizeDifficultyHeader(field));
 
     headers.forEach((header, index) => {
-      const score = headerMatchScore(field, header);
+      const score = headerMatchScore(field, header, strict);
       if (score > bestScore) {
         bestScore = score;
         bestIndex = index;
@@ -298,7 +321,7 @@ export const buildColumnMap = (headers: string[], fields: string[]) => {
         sourceHeader: bestHeader,
         mode: "字段匹配",
       });
-    } else if (templateIndex < headers.length) {
+    } else if (!strict && templateIndex < headers.length) {
       usedSourceIndexes.add(templateIndex);
       result.push({
         templateField: field,
