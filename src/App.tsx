@@ -71,9 +71,13 @@ const toCollegeValidationErrors = (items: ErrorReportItem[]): CollegeValidationE
     .map((item) => {
     const reasonText = String(item.issueType || "");
     const actionText = String(item.action || "");
+    const displayReason = ["人工核实", "标黄", "标红"].includes(reasonText)
+      ? actionText || reasonText
+      : reasonText || actionText;
     const hardError =
       reasonText.includes("错误") ||
       reasonText.includes("不通过") ||
+      reasonText.includes("人工核实") ||
       actionText.includes("标红") ||
       actionText.includes("不通过");
 
@@ -82,7 +86,7 @@ const toCollegeValidationErrors = (items: ErrorReportItem[]): CollegeValidationE
       column: item.fieldName,
       field: item.fieldName,
       value: String(item.originalValue ?? ""),
-      reason: reasonText || actionText || "数据异常",
+      reason: displayReason || "数据异常",
       level: hardError ? "error" : "warning",
     };
     });
@@ -131,11 +135,25 @@ const formatRecognizedFields = (fields: string[]) => {
   return fields.length > 12 ? `${text} 等 ${fields.length} 个字段` : text || "未识别";
 };
 
+const normalizeCollegeHeader = (value: unknown) =>
+  String(value ?? "")
+    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0))
+    .replace(/（[^）]*）|\([^)]*\)/g, "")
+    .replace(/[\s\u00a0\u200b-\u200d\u2060\ufeff\u3000]/g, "")
+    .replace(/[*＊()（）:：]/g, "");
+
+const isCollegeIdentityField = (field: unknown) => {
+  const normalized = normalizeCollegeHeader(field);
+  if (!normalized) return false;
+  if (/推荐|认定|意见|结果|困难|档次|等级/.test(normalized)) return false;
+  return /^(学院|学院名称|院系|院系名称|学部|学部名称|所属学院|所属院系|提交学院|提交单位)$/.test(normalized);
+};
+
 const detectCollegeFromTableRows = (rows: unknown[][], fields: string[]) => {
   if (rows.length === 0 || fields.length === 0) return "";
   const headerIndex = findHeaderRowIndex(rows, fields);
   const headers = (rows[headerIndex] || []).map((item) => String(item ?? "").trim());
-  const collegeIndex = headers.findIndex((header) => /学院|学部|院系|学院名称|院系名称|提交单位/.test(header));
+  const collegeIndex = headers.findIndex(isCollegeIdentityField);
   if (collegeIndex < 0) return "";
 
   const matched = rows
@@ -653,8 +671,8 @@ const askDeepSeek = async (prompt: string) => {
         },
       });
 
-      const collegeFieldIndex = activeTemplateFields.findIndex((field) => /学院|学部|院系/.test(field));
-      const collegeField = collegeFieldIndex >= 0 ? activeTemplateFields[collegeFieldIndex] : activeTemplateFields[1] || "学院/学部/院系";
+      const collegeFieldIndex = activeTemplateFields.findIndex(isCollegeIdentityField);
+      const collegeField = collegeFieldIndex >= 0 ? activeTemplateFields[collegeFieldIndex] : "";
       const currentCollege = normalizeSubmissionCollegeName(activeCollegeName);
       const nextHighlightCellMap = { ...result.highlightCellMap };
       const nextDisqualifiedRows = [...result.disqualifiedRows];
@@ -662,11 +680,13 @@ const askDeepSeek = async (prompt: string) => {
       const failedRowNumbers = new Set(nextDisqualifiedRows.map((row) => row.rowNumber));
       let collegeMismatchCount = 0;
 
-      if (!currentCollege || currentCollege === "未知学院") {
+      if (collegeFieldIndex < 0) {
+        pushLog("info", "未检测到学院/学部/院系归属字段，已跳过逐行学院归属校验。");
+      } else if (!currentCollege || currentCollege === "未知学院") {
         pushLog("error", "当前账号学院识别失败，系统已继续治理，所有数据需进入不通过名单核对。");
         result.processedData.forEach((row, index) => {
           collegeMismatchCount += 1;
-          nextHighlightCellMap[`${index}_${collegeFieldIndex >= 0 ? collegeFieldIndex : 0}`] = {
+          nextHighlightCellMap[`${index}_${collegeFieldIndex}`] = {
             color: "yellow",
             reason: "当前账号学院识别失败，无法确认该行是否属于本学院",
           };
@@ -689,13 +709,13 @@ const askDeepSeek = async (prompt: string) => {
             });
           }
         });
-      } else if (collegeField) {
+      } else {
         result.processedData.forEach((row, index) => {
           const rowCollege = String(row[collegeField] ?? "").trim();
           if (!rowCollege || isSameSubmissionCollege(rowCollege, currentCollege)) return;
 
           collegeMismatchCount += 1;
-          nextHighlightCellMap[`${index}_${collegeFieldIndex >= 0 ? collegeFieldIndex : 1}`] = {
+          nextHighlightCellMap[`${index}_${collegeFieldIndex}`] = {
             color: "yellow",
             reason: `当前登录学院为 ${currentCollege}，该行学院为 ${rowCollege}`,
           };
@@ -732,6 +752,7 @@ const askDeepSeek = async (prompt: string) => {
       }
 
       const finalFailRows = nextDisqualifiedRows;
+      const unresolvedIssues = nextErrorReports.filter((item) => item.issueType !== "自动修复");
 
       setProcessedData(result.processedData);
       setHighlightCellMap(nextHighlightCellMap);
@@ -744,17 +765,25 @@ const askDeepSeek = async (prompt: string) => {
 
       try {
         const aiText = await askDeepSeek(`
-请基于以下困难生数据治理结果生成分析报告：
+请基于系统最终未通过问题生成困难生数据治理分析报告。只能分析“最终未通过问题”和“不通过名单摘要”，不要把自动修复日志当成未通过问题。
 
 总数据行数：${nextStats.total}
-自动修复数量：${nextStats.repaired}
-异常问题数量：${nextStats.errors}
+自动修复数量：${nextStats.repaired}（仅作为处理量背景，不作为未通过问题）
+最终未通过问题数量：${unresolvedIssues.length}
 不通过人数：${finalFailRows.length}
 缺失字段数量：${nextStats.missingFields}
 删除模板外字段数量：${result.removedHeaders.length}
 
-字段问题统计：
-${JSON.stringify(result.analysis, null, 2)}
+硬性约束：
+1. 困难等级只依据用户填写的推荐档次、院系推荐档次、学校推荐档次、院系认定结果或学校认定结果，不得根据家庭情况反推。
+2. 如果推荐档次为 C.家庭经济特别困难 且特殊困难类型为无/空，这是系统明确发现的人工问题。
+3. 如果推荐档次为 A.家庭经济一般困难 且特殊困难类型为无，不是问题。
+4. 不得编造“该学生应该是特别困难/一般困难”的结论。
+5. 不得根据收入、欠债、申请理由、院系意见、学校意见、突发事件、自然灾害、单亲、大病、残疾、父母劳动能力等内容重新判定困难等级。
+6. 不得输出不存在的学院归属错误；只有最终未通过问题中明确出现学院识别失败或学院不匹配时，才能提学院归属问题。
+
+最终未通过问题：
+${JSON.stringify(unresolvedIssues.slice(0, 80), null, 2)}
 
 不通过名单摘要：
 ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}

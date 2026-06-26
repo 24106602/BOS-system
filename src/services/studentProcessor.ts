@@ -27,7 +27,6 @@ import {
   fixDisabilityCategory,
   fixIncomeSource,
   fixProvince,
-  fixSpecialDifficulty,
   fixYesNo,
   formatIncomeNumber,
   incomeSourceList,
@@ -143,6 +142,15 @@ const STRICT_AUTO_REPAIR_FIELDS = [
 
 const POPULATION_FIELDS = new Set(["家庭人口数", "劳动力人口数", "赡养人口数"]);
 
+const GENERAL_DIFFICULTY_LEVEL = "A.家庭经济一般困难";
+const SPECIAL_DIFFICULTY_LEVEL = "C.家庭经济特别困难";
+const DIFFICULTY_LEVEL_ERROR_REASON =
+  "推荐档次必须选择 A.家庭经济一般困难 或 C.家庭经济特别困难，系统不根据其他信息自动判断困难等级。";
+const SPECIAL_TYPE_REQUIRED_FOR_C_REASON =
+  "已选择 C.家庭经济特别困难，特殊困难类型不能为空或为‘无’，请人工核实并选择对应特殊群体类型。";
+const SPECIAL_TYPE_REQUIRED_FOR_C_SUGGESTION =
+  "请根据学生实际情况选择脱贫家庭学生、低保家庭学生、孤儿、残疾学生、其他低收入家庭学生等合法类型；如没有特殊群体依据，请将推荐档次改为 A.家庭经济一般困难。";
+
 const displayOriginalValue = (value: unknown) => {
   const text = String(value ?? "").trim();
   return text || "空";
@@ -242,79 +250,133 @@ const isPopulationEmptyLike = (value: unknown) => {
   );
 };
 
+const noneSpecialDifficultyTexts = ["", "无", "没有", "否", "暂无", "无特殊困难类型"];
+
 const specialDifficultyKeywordMap: Array<[string, string[]]> = [
-  ["脱贫不稳定家庭学生", ["脱贫不稳定", "不稳定脱贫", "返贫风险"]],
-  ["边缘易致贫家庭学生", ["边缘易致贫", "易致贫", "边缘户"]],
-  ["突发严重困难家庭学生", ["突发严重困难", "突发困难", "重大变故", "重大意外"]],
-  ["低保边缘家庭学生", ["低保边缘", "边缘低保"]],
+  ["脱贫不稳定家庭学生", ["脱贫不稳定", "不稳定脱贫"]],
+  ["边缘易致贫家庭学生", ["边缘易致贫"]],
+  ["突发严重困难家庭学生", ["突发严重困难"]],
+  ["低保边缘家庭学生", ["低保边缘"]],
   ["特困救助供养学生", ["特困救助供养", "特困供养", "五保", "特困"]],
   ["刚性支出困难家庭学生", ["刚性支出"]],
   ["其他低收入家庭学生", ["其他低收入", "低收入"]],
   ["事实无人抚养儿童", ["事实无人抚养", "无人抚养"]],
-  ["残疾学生", ["残疾学生", "本人残疾"]],
   ["残疾人子女", ["残疾人子女", "父母残疾"]],
+  ["残疾学生", ["残疾学生", "本人残疾"]],
   ["烈士子女", ["烈士子女", "烈士"]],
   ["脱贫家庭学生", ["原建档立卡", "建档立卡", "脱贫户", "脱贫家庭", "已脱贫"]],
   ["低保家庭学生", ["低保户", "低保家庭", "低保"]],
   ["孤儿", ["孤儿"]],
 ];
 
+const isNoneSpecialDifficulty = (value: unknown) => {
+  const normalized = normalizeText(value);
+  return noneSpecialDifficultyTexts.some((item) => normalized === normalizeText(item));
+};
+
+const normalizeDifficultyLevelValue = (value: unknown) => {
+  const normalized = normalizeText(value).replace(/[.。．]/g, "");
+  if (["a", "a家庭经济一般困难", "一般困难", "家庭经济一般困难"].includes(normalized)) {
+    return GENERAL_DIFFICULTY_LEVEL;
+  }
+  if (["c", "c家庭经济特别困难", "特别困难", "家庭经济特别困难"].includes(normalized)) {
+    return SPECIAL_DIFFICULTY_LEVEL;
+  }
+  return "";
+};
+
+const isDifficultyLevelField = (field: string) => {
+  const normalized = normalizeDifficultyHeader(field);
+  if (normalized.includes("特殊困难")) return false;
+  return [
+    "推荐档次",
+    "院系推荐档次",
+    "学校推荐档次",
+    "院系认定结果",
+    "学校认定结果",
+    "困难等级",
+    "困难认定等级",
+    "认定等级",
+  ].some((keyword) => normalized === keyword || normalized.includes(keyword));
+};
+
+const hasSpecialDifficultyLevel = (row: Record<string, unknown>) =>
+  Object.entries(row).some(([field, value]) => (
+    isDifficultyLevelField(field) && normalizeDifficultyLevelValue(value) === SPECIAL_DIFFICULTY_LEVEL
+  ));
+
+const getDifficultyLevelColumns = (templateFields: string[]) =>
+  templateFields
+    .map((field, index) => ({ field, index }))
+    .filter(({ field }) => isDifficultyLevelField(field));
+
+const checkDifficultyLevel = (originalRawValue: unknown): CheckResult => {
+  const raw = String(originalRawValue ?? "").trim();
+  const fixed = normalizeDifficultyLevelValue(raw);
+
+  if (!fixed) {
+    return {
+      value: raw,
+      valid: false,
+      repaired: false,
+      reason: DIFFICULTY_LEVEL_ERROR_REASON,
+      highlight: true,
+      highlightColor: "yellow",
+    };
+  }
+
+  return {
+    value: fixed,
+    valid: true,
+    repaired: fixed !== raw,
+    reason: fixed !== raw ? "推荐档次已规范为允许值" : "推荐档次符合允许值",
+    highlight: false,
+  };
+};
+
 const matchSpecialDifficultyType = (value: unknown) => {
   const normalized = normalizeText(value);
-  if (!normalized) return "";
+  if (!normalized) return "无";
 
   const exact = specialDifficultyList.find((item) => normalizeText(item) === normalized);
   if (exact) return exact;
 
-  if (["无", "没有", "否", "暂无"].some((item) => normalized === normalizeText(item))) return "无";
+  if (isNoneSpecialDifficulty(value)) return "无";
 
   return specialDifficultyKeywordMap.find(([, keywords]) =>
     keywords.some((keyword) => normalized.includes(normalizeText(keyword)))
   )?.[0] || "";
 };
 
-const getSpecialDifficultyInferenceText = (row: Record<string, unknown>) =>
-  Object.entries(row)
-    .filter(([field]) => {
-      const normalized = normalizeDifficultyHeader(field);
-      return [
-        "申请理由",
-        "陈述理由",
-        "突发事件描述",
-        "突发意外事件",
-        "其它重大信息",
-        "其他重大信息",
-        "其它影响家庭经济信息",
-        "其他影响家庭经济信息",
-        "其他情况",
-        "家庭欠债原因",
-        "家庭欠债情况",
-        "欠债原因",
-      ].some((keyword) => normalized.includes(normalizeDifficultyHeader(keyword)));
-    })
-    .map(([, value]) => String(value ?? ""))
-    .join(" ");
+export const normalizeSpecialDifficultyType = (value: unknown) => {
+  return matchSpecialDifficultyType(value);
+};
 
-const isEspeciallyDifficult = (row: Record<string, unknown>) =>
-  Object.entries(row).some(([field, value]) => {
-    const normalizedField = normalizeDifficultyHeader(field);
-    return (
-      (normalizedField.includes("推荐档次") || normalizedField.includes("困难等级")) &&
-      normalizeText(value) === normalizeText("C.家庭经济特别困难")
-    );
-  });
-
-export const normalizeSpecialDifficultyType = (
-  value: unknown,
+const checkSpecialDifficultyType = (
+  originalRawValue: unknown,
   row: Record<string, unknown>
-) => {
-  const direct = matchSpecialDifficultyType(value);
-  if (direct) return direct;
+): CheckResult => {
+  const raw = String(originalRawValue ?? "").trim();
+  const fixed = normalizeSpecialDifficultyType(originalRawValue);
 
-  const inferred = matchSpecialDifficultyType(getSpecialDifficultyInferenceText(row));
-  if (inferred && inferred !== "无") return inferred;
+  if (!fixed) {
+    return {
+      value: raw,
+      valid: false,
+      repaired: false,
+      reason: `特殊困难类型必须为：${specialDifficultyList.join("、")}`,
+      highlight: true,
+      highlightColor: "yellow",
+    };
+  }
 
-  return isEspeciallyDifficult(row) ? "其他低收入家庭学生" : "无";
+  return {
+    value: fixed,
+    valid: true,
+    repaired: fixed !== raw && !(hasSpecialDifficultyLevel(row) && isNoneSpecialDifficulty(raw)),
+    reason: fixed !== raw ? "特殊困难类型已按字段值标准化" : "特殊困难类型符合允许值",
+    highlight: false,
+  };
 };
 
 type PopulationColumn = {
@@ -695,6 +757,8 @@ const checkAndFixCellByColumnRule = (
     };
   }
 
+  if (isDifficultyLevelField(field)) return checkDifficultyLevel(originalRawValue);
+
   if (columnIndex === 14) {
     const fixed = fixYesNo(value);
     return { value: fixed, valid: true, repaired: fixed !== value, reason: "O列已统一为是/否", highlight: false };
@@ -927,78 +991,63 @@ const checkCrossColumnRules = (
   errorReports: ErrorReportItem[]
 ) => {
   let marked = 0;
-  const K = 10;
-  const V = 21;
-  const Z = 25;
-  const AC = 28;
-
-  const kField = templateFields[K];
-  const vField = templateFields[V];
-  const zField = templateFields[Z];
-  const acField = templateFields[AC];
+  const specialTypeIndex = templateFields.findIndex((field) => normalizeDifficultyHeader(field) === "特殊困难类型");
+  const specialTypeField = specialTypeIndex >= 0 ? templateFields[specialTypeIndex] : "";
+  const difficultyLevelColumns = getDifficultyLevelColumns(templateFields);
 
   result.forEach((row, rowIndex) => {
-    const vValue = String(row[vField] ?? "").trim();
-    const zValue = String(row[zField] ?? "").trim();
-    const acValue = String(row[acField] ?? "").trim();
-    const kValue = String(row[kField] ?? "").trim();
+    const cLevelColumns = difficultyLevelColumns.filter(({ field }) =>
+      normalizeDifficultyLevelValue(row[field]) === SPECIAL_DIFFICULTY_LEVEL
+    );
+    if (cLevelColumns.length === 0) return;
 
-    if (zValue || acValue) {
-      if (normalizeText(zValue) !== normalizeText(acValue)) {
-        const reason = `Z列和AC列不一致：Z=${zValue || "空"}，AC=${acValue || "空"}`;
-        [Z, AC].forEach((colIndex) => {
-          const key = `${rowIndex}_${colIndex}`;
-          if (!highlightMap[key]) marked++;
-          addMark(highlightMap, rowIndex, colIndex, "purple", reason);
-        });
-        fieldErrors[zField] = (fieldErrors[zField] || 0) + 1;
-        fieldErrors[acField] = (fieldErrors[acField] || 0) + 1;
+    const specialTypeValue = specialTypeField ? row[specialTypeField] : "";
+    const validSpecialType =
+      !isNoneSpecialDifficulty(specialTypeValue) &&
+      specialDifficultyRequiredList.some((item) => normalizeText(item) === normalizeText(specialTypeValue));
+
+    if (validSpecialType) return;
+
+    const columnsToMark = [
+      ...(specialTypeIndex >= 0 ? [specialTypeIndex] : []),
+      ...cLevelColumns.map(({ index }) => index),
+    ];
+
+    columnsToMark.forEach((colIndex) => {
+      const key = `${rowIndex}_${colIndex}`;
+      if (!highlightMap[key]) marked++;
+      addMark(highlightMap, rowIndex, colIndex, "yellow", SPECIAL_TYPE_REQUIRED_FOR_C_REASON);
+    });
+
+    if (specialTypeField) {
+      fieldErrors[specialTypeField] = (fieldErrors[specialTypeField] || 0) + 1;
+      addErrorReport(
+        errorReports,
+        rowIndex,
+        specialTypeField,
+        specialTypeValue,
+        specialTypeValue,
+        "人工核实",
+        `${SPECIAL_TYPE_REQUIRED_FOR_C_REASON} ${SPECIAL_TYPE_REQUIRED_FOR_C_SUGGESTION}`
+      );
+    }
+    cLevelColumns.forEach(({ field, index }) => {
+      fieldErrors[field] = (fieldErrors[field] || 0) + 1;
+      addErrorReport(
+        errorReports,
+        rowIndex,
+        field,
+        row[field],
+        row[field],
+        "人工核实",
+        SPECIAL_TYPE_REQUIRED_FOR_C_REASON
+      );
+      const key = `${rowIndex}_${index}`;
+      if (!highlightMap[key]) {
+        marked++;
+        addMark(highlightMap, rowIndex, index, "yellow", SPECIAL_TYPE_REQUIRED_FOR_C_REASON);
       }
-    }
-
-    const isSpecialHardZAC =
-      normalizeText(zValue) === normalizeText("C.家庭经济特别困难") &&
-      normalizeText(acValue) === normalizeText("C.家庭经济特别困难");
-
-    if (isSpecialHardZAC) {
-      const fixedK = fixSpecialDifficulty(kValue);
-      const kValid =
-        fixedK !== "无" &&
-        specialDifficultyRequiredList.some((item) => normalizeText(item) === normalizeText(fixedK));
-
-      if (kValid && fixedK !== kValue) row[kField] = fixedK;
-
-      if (!kValid) {
-        const reason = "Z和AC均为C.家庭经济特别困难时，K列必须填写有效特殊困难类型，且不能为无";
-        [K, Z, AC].forEach((colIndex) => {
-          const key = `${rowIndex}_${colIndex}`;
-          if (!highlightMap[key]) marked++;
-          addMark(highlightMap, rowIndex, colIndex, "purple", reason);
-        });
-        fieldErrors[kField] = (fieldErrors[kField] || 0) + 1;
-        fieldErrors[zField] = (fieldErrors[zField] || 0) + 1;
-        fieldErrors[acField] = (fieldErrors[acField] || 0) + 1;
-      }
-    }
-
-    const isVZSpecialHard =
-      normalizeText(vValue) === normalizeText(zValue) &&
-      normalizeText(zValue) === normalizeText("C.家庭经济特别困难");
-    const kIsNone = normalizeText(kValue) === normalizeText("无");
-
-    if (isVZSpecialHard && kIsNone) {
-      const reason = "V列和Z列均为C.家庭经济特别困难，但K列特殊群体类型为“无”";
-      [K, V, Z].forEach((colIndex) => {
-        const key = `${rowIndex}_${colIndex}`;
-        const fieldName = templateFields[colIndex] || `第${colIndex + 1}列`;
-        if (!highlightMap[key]) marked++;
-        addMark(highlightMap, rowIndex, colIndex, "red", reason);
-        addErrorReport(errorReports, rowIndex, fieldName, row[fieldName], row[fieldName], "标红", reason);
-      });
-      fieldErrors[kField] = (fieldErrors[kField] || 0) + 1;
-      fieldErrors[vField] = (fieldErrors[vField] || 0) + 1;
-      fieldErrors[zField] = (fieldErrors[zField] || 0) + 1;
-    }
+    });
   });
 
   return marked;
@@ -1020,7 +1069,8 @@ const finalRequiredEmptyCellValidation = (
       const required = isRequiredField(field, colIndex, templateFirstRow);
       if (!required || value !== "") return;
       const key = `${rowIndex}_${colIndex}`;
-      if (!highlightMap[key]) marked++;
+      if (highlightMap[key]) return;
+      marked++;
       addMark(highlightMap, rowIndex, colIndex, "yellow", "最终复检：必填项处理后仍为空，需要人工复核");
       addErrorReport(errorReports, rowIndex, field, value, value, "必填缺失", "最终复检：必填项处理后仍为空，需要人工复核");
       addErrorReport(errorReports, rowIndex, field, value, value, "标黄", "最终复检：必填项处理后仍为空，需要人工复核");
@@ -1182,19 +1232,7 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
       const originalValue = sourceRow[mapItem.sourceIndex];
       const normalizedField = normalizeDifficultyHeader(field);
       const checked: CheckResult = normalizedField === "特殊困难类型"
-        ? (() => {
-            const raw = String(originalValue ?? "").trim();
-            const fixed = normalizeSpecialDifficultyType(originalValue, sourceRowContext);
-            return {
-              value: fixed,
-              valid: true,
-              repaired: fixed !== raw,
-              reason: fixed !== raw
-                ? "特殊困难类型已按字段内容、相关描述和困难等级自动修复"
-                : "特殊困难类型符合允许值",
-              highlight: false,
-            } satisfies CheckResult;
-          })()
+        ? checkSpecialDifficultyType(originalValue, sourceRowContext)
         : checkAndFixCellByColumnRule(
             field,
             colIndex,
@@ -1211,7 +1249,9 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
         repairedCount++;
         addErrorReport(errorReports, i, field, originalValue, checked.value, "自动修复", checked.reason);
         const logMessage = normalizedField === "特殊困难类型"
-          ? `第 ${i + 1} 行：特殊困难类型“${displayOriginalValue(originalValue)}”已自动修复为“${checked.value}”`
+          ? `第 ${i + 1} 行：特殊困难类型“${displayOriginalValue(originalValue)}”已自动标准化为“${checked.value}”`
+          : isDifficultyLevelField(field)
+          ? `第 ${i + 1} 行：${normalizeDifficultyHeader(field)}“${displayOriginalValue(originalValue)}”已自动规范为“${checked.value}”`
           : normalizedField === "姓名"
           ? `第 ${i + 1} 行：姓名“${displayOriginalValue(originalValue)}”已自动清洗为“${checked.value}”`
           : `第 ${i + 1} 行 第 ${colIndex + 1} 列 ${field}
@@ -1566,6 +1606,11 @@ const shouldWriteNumberCell = (field: string, columnIndex: number, firstRow: unk
   return shouldBeNumber(field, ruleText) || columnIndex === 11 || columnIndex === 18;
 };
 
+const getIssueSuggestion = (reason: string) =>
+  reason.includes(SPECIAL_TYPE_REQUIRED_FOR_C_REASON)
+    ? SPECIAL_TYPE_REQUIRED_FOR_C_SUGGESTION
+    : "请按错误原因核对并修改该字段";
+
 export const exportStudentExcel = ({
   processedData,
   templateWorkbook,
@@ -1669,7 +1714,7 @@ export const exportStudentExcel = ({
       String(row[fieldName] ?? ""),
       info.reason,
       info.color === "red" ? "error" : "warning",
-      "请按错误原因核对并修改该字段",
+      getIssueSuggestion(info.reason),
     ];
   });
 

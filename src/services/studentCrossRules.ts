@@ -2,12 +2,55 @@
 
 import type { HighlightInfo } from "./types";
 import {
-  fixSpecialDifficulty,
   isRequiredByRule,
   normalizeText,
-  parseIntegerValue,
   specialDifficultyRequiredList,
 } from "../utils/validators";
+
+const SPECIAL_DIFFICULTY_LEVEL = "C.家庭经济特别困难";
+const SPECIAL_TYPE_REQUIRED_FOR_C_REASON =
+  "已选择 C.家庭经济特别困难，特殊困难类型不能为空或为‘无’，请人工核实并选择对应特殊群体类型。";
+
+const normalizeHeader = (value: unknown) =>
+  String(value ?? "")
+    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0))
+    .replace(/（[^）]*）|\([^)]*\)/g, "")
+    .replace(/[\s\u00a0\u200b-\u200d\u2060\ufeff\u3000]/g, "")
+    .replace(/[*＊()（）:：]/g, "")
+    .toLowerCase();
+
+const normalizeDifficultyLevelValue = (value: unknown) => {
+  const normalized = normalizeText(value).replace(/[.。．]/g, "");
+  if (["c", "c家庭经济特别困难", "特别困难", "家庭经济特别困难"].includes(normalized)) {
+    return SPECIAL_DIFFICULTY_LEVEL;
+  }
+  return "";
+};
+
+const isDifficultyLevelField = (field: string) => {
+  const normalized = normalizeHeader(field);
+  if (normalized.includes("特殊困难")) return false;
+  return [
+    "推荐档次",
+    "院系推荐档次",
+    "学校推荐档次",
+    "院系认定结果",
+    "学校认定结果",
+    "困难等级",
+    "困难认定等级",
+    "认定等级",
+  ].some((keyword) => normalized === keyword || normalized.includes(keyword));
+};
+
+const isSpecialTypeField = (field: string) => {
+  const normalized = normalizeHeader(field);
+  return ["特殊困难类型", "特殊群体类型", "特殊困难群体类型", "困难类型"].includes(normalized);
+};
+
+const isNoneSpecialDifficulty = (value: unknown) => {
+  const normalized = normalizeText(value);
+  return ["", "无", "没有", "否", "暂无", "无特殊困难类型"].some((item) => normalized === normalizeText(item));
+};
 
 const addMark = (
   highlightMap: Record<string, HighlightInfo>,
@@ -31,98 +74,37 @@ export const checkCrossColumnRules = (
   templateFields: string[]
 ) => {
   let marked = 0;
-  const D = 3;
-  const K = 10;
-  const V = 21;
-  const Z = 25;
-  const AC = 28;
-  const AF = 31;
-  const AH = 33;
-
-  const dField = templateFields[D];
-  const kField = templateFields[K];
-  const vField = templateFields[V];
-  const zField = templateFields[Z];
-  const acField = templateFields[AC];
-  const afField = templateFields[AF];
-  const ahField = templateFields[AH];
+  const specialTypeIndex = templateFields.findIndex(isSpecialTypeField);
+  const specialTypeField = specialTypeIndex >= 0 ? templateFields[specialTypeIndex] : "";
+  const difficultyLevelColumns = templateFields
+    .map((field, index) => ({ field, index }))
+    .filter(({ field }) => isDifficultyLevelField(field));
 
   result.forEach((row, rowIndex) => {
-    const dValue = parseIntegerValue(row[dField]);
-    const afValue = parseIntegerValue(row[afField]);
-    const ahValue = parseIntegerValue(row[ahField]);
+    const cLevelColumns = difficultyLevelColumns.filter(({ field }) =>
+      normalizeDifficultyLevelValue(row[field]) === SPECIAL_DIFFICULTY_LEVEL
+    );
+    if (cLevelColumns.length === 0) return;
 
-    if (dValue !== null && afValue !== null && ahValue !== null && !(dValue >= afValue && afValue >= ahValue)) {
-      const reason = `人口关系不符合：D家庭人口数(${dValue}) >= AF劳动人口数(${afValue}) >= AH赡养人口数(${ahValue})`;
-      [D, AF, AH].forEach((colIndex) => {
-        const key = `${rowIndex}_${colIndex}`;
-        if (!highlightMap[key]) marked++;
-        addMark(highlightMap, rowIndex, colIndex, "purple", reason);
-      });
-      fieldErrors[dField] = (fieldErrors[dField] || 0) + 1;
-      fieldErrors[afField] = (fieldErrors[afField] || 0) + 1;
-      fieldErrors[ahField] = (fieldErrors[ahField] || 0) + 1;
-    }
+    const specialTypeValue = specialTypeField ? row[specialTypeField] : "";
+    const validSpecialType =
+      !isNoneSpecialDifficulty(specialTypeValue) &&
+      specialDifficultyRequiredList.some((item) => normalizeText(item) === normalizeText(specialTypeValue));
+    if (validSpecialType) return;
 
-    const vValue = String(row[vField] ?? "").trim();
-    const zValue = String(row[zField] ?? "").trim();
-    const acValue = String(row[acField] ?? "").trim();
-    const kValue = String(row[kField] ?? "").trim();
+    [
+      ...(specialTypeIndex >= 0 ? [specialTypeIndex] : []),
+      ...cLevelColumns.map(({ index }) => index),
+    ].forEach((colIndex) => {
+      const key = `${rowIndex}_${colIndex}`;
+      if (!highlightMap[key]) marked++;
+      addMark(highlightMap, rowIndex, colIndex, "yellow", SPECIAL_TYPE_REQUIRED_FOR_C_REASON);
+    });
 
-    if (zValue || acValue) {
-      if (normalizeText(zValue) !== normalizeText(acValue)) {
-        const reason = `Z列和AC列不一致：Z=${zValue || "空"}，AC=${acValue || "空"}`;
-        [Z, AC].forEach((colIndex) => {
-          const key = `${rowIndex}_${colIndex}`;
-          if (!highlightMap[key]) marked++;
-          addMark(highlightMap, rowIndex, colIndex, "purple", reason);
-        });
-        fieldErrors[zField] = (fieldErrors[zField] || 0) + 1;
-        fieldErrors[acField] = (fieldErrors[acField] || 0) + 1;
-      }
-    }
-
-    const isSpecialHardZAC =
-      normalizeText(zValue) === normalizeText("C.家庭经济特别困难") &&
-      normalizeText(acValue) === normalizeText("C.家庭经济特别困难");
-
-    if (isSpecialHardZAC) {
-      const fixedK = fixSpecialDifficulty(kValue);
-      const kValid =
-        fixedK !== "无" &&
-        specialDifficultyRequiredList.some((item) => normalizeText(item) === normalizeText(fixedK));
-
-      if (kValid && fixedK !== kValue) row[kField] = fixedK;
-
-      if (!kValid) {
-        const reason = "Z和AC均为C.家庭经济特别困难时，K列必须填写有效特殊困难类型，且不能为无";
-        [K, Z, AC].forEach((colIndex) => {
-          const key = `${rowIndex}_${colIndex}`;
-          if (!highlightMap[key]) marked++;
-          addMark(highlightMap, rowIndex, colIndex, "purple", reason);
-        });
-        fieldErrors[kField] = (fieldErrors[kField] || 0) + 1;
-        fieldErrors[zField] = (fieldErrors[zField] || 0) + 1;
-        fieldErrors[acField] = (fieldErrors[acField] || 0) + 1;
-      }
-    }
-
-    const isVZSpecialHard =
-      normalizeText(vValue) === normalizeText(zValue) &&
-      normalizeText(zValue) === normalizeText("C.家庭经济特别困难");
-    const kIsNone = normalizeText(kValue) === normalizeText("无");
-
-    if (isVZSpecialHard && kIsNone) {
-      const reason = "V列和Z列均为C.家庭经济特别困难，但K列特殊群体类型为“无”";
-      [K, V, Z].forEach((colIndex) => {
-        const key = `${rowIndex}_${colIndex}`;
-        if (!highlightMap[key]) marked++;
-        addMark(highlightMap, rowIndex, colIndex, "red", reason);
-      });
-      fieldErrors[kField] = (fieldErrors[kField] || 0) + 1;
-      fieldErrors[vField] = (fieldErrors[vField] || 0) + 1;
-      fieldErrors[zField] = (fieldErrors[zField] || 0) + 1;
-    }
+    if (specialTypeField) fieldErrors[specialTypeField] = (fieldErrors[specialTypeField] || 0) + 1;
+    cLevelColumns.forEach(({ field }) => {
+      fieldErrors[field] = (fieldErrors[field] || 0) + 1;
+    });
   });
 
   return marked;
@@ -143,6 +125,7 @@ export const finalRequiredEmptyCellValidation = (
       const required = isRequiredField(field, colIndex, templateFirstRow);
       if (!required || value !== "") return;
       const key = `${rowIndex}_${colIndex}`;
+      if (highlightMap[key]) return;
       if (!highlightMap[key]) marked++;
       addMark(highlightMap, rowIndex, colIndex, "yellow", "最终复检：必填项处理后仍为空，需要人工复核");
       fieldErrors[field] = (fieldErrors[field] || 0) + 1;
