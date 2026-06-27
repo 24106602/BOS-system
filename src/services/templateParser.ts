@@ -2,6 +2,10 @@
 import * as XLSX from "xlsx-js-style";
 import type { ColumnMapItem, TemplateParseResult, WorkbookData } from "./types";
 import { cleanFieldName, normalizeText, parseRuleOptions } from "../utils/validators";
+import {
+  getDifficultyFieldAliases,
+  resolveDifficultyFieldBinding,
+} from "../constants/difficultyStudentTemplate";
 
 export const readWorkbook = (file: File): Promise<WorkbookData> => {
   return new Promise((resolve, reject) => {
@@ -264,7 +268,10 @@ export const headerMatchScore = (templateField: string, sourceHeader: string, st
   if (!target || !source) return 0;
   if (target === source) return 100;
 
-  const aliases = FIELD_ALIASES[templateField] || FIELD_ALIASES[cleanFieldName(templateField)] || [];
+  const bindingAliases = getDifficultyFieldAliases(templateField);
+  const aliases = bindingAliases.length > 0
+    ? bindingAliases
+    : FIELD_ALIASES[templateField] || FIELD_ALIASES[cleanFieldName(templateField)] || [];
   for (const alias of aliases) {
     const a = normalizeDifficultyHeader(alias);
     if (a === source) return 95;
@@ -306,9 +313,11 @@ export const buildColumnMap = (headers: string[], fields: string[], strictFields
     let bestIndex = -1;
     let bestScore = 0;
     let bestHeader = "";
-    const strict = strictFieldSet.has(normalizeDifficultyHeader(field));
+    const binding = resolveDifficultyFieldBinding(field);
+    const strict = Boolean(binding) || strictFieldSet.has(normalizeDifficultyHeader(field));
 
     headers.forEach((header, index) => {
+      if (usedSourceIndexes.has(index)) return;
       const score = headerMatchScore(field, header, strict);
       if (score > bestScore) {
         bestScore = score;
@@ -325,8 +334,10 @@ export const buildColumnMap = (headers: string[], fields: string[], strictFields
         sourceIndex: bestIndex,
         sourceHeader: bestHeader,
         mode: "字段匹配",
+        canonicalKey: binding?.canonicalKey,
+        validatorKey: binding?.validatorKey,
       });
-    } else if (!strict && templateIndex < headers.length) {
+    } else if (!strict && templateIndex < headers.length && !usedSourceIndexes.has(templateIndex)) {
       usedSourceIndexes.add(templateIndex);
       result.push({
         templateField: field,
@@ -334,6 +345,8 @@ export const buildColumnMap = (headers: string[], fields: string[], strictFields
         sourceIndex: templateIndex,
         sourceHeader: headers[templateIndex] || `第${templateIndex + 1}列`,
         mode: "同列兜底",
+        canonicalKey: binding?.canonicalKey,
+        validatorKey: binding?.validatorKey,
       });
     } else {
       result.push({
@@ -342,6 +355,8 @@ export const buildColumnMap = (headers: string[], fields: string[], strictFields
         sourceIndex: -1,
         sourceHeader: "",
         mode: "未匹配",
+        canonicalKey: binding?.canonicalKey,
+        validatorKey: binding?.validatorKey,
       });
     }
   });

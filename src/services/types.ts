@@ -1,5 +1,9 @@
 // 业务服务共享类型：供模板解析、数据处理和页面状态共同使用。
 import type * as XLSX from "xlsx-js-style";
+import type {
+  DifficultyStudentCanonicalKey,
+  DifficultyStudentValidatorKey,
+} from "../constants/difficultyStudentTemplate";
 
 export type LogType = "info" | "success" | "error";
 export type MarkColor = "yellow" | "red" | "purple";
@@ -19,6 +23,8 @@ export type ColumnMapItem = {
   sourceIndex: number;
   sourceHeader: string;
   mode: "字段匹配" | "同列兜底" | "未匹配";
+  canonicalKey?: DifficultyStudentCanonicalKey;
+  validatorKey?: DifficultyStudentValidatorKey;
 };
 
 export type HighlightInfo = { color: MarkColor; reason: string };
