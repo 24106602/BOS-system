@@ -740,39 +740,68 @@ const askDeepSeek = async (prompt: string) => {
         });
       }
 
-      const nextStats = {
-        ...result.stats,
-        errors: result.stats.errors + collegeMismatchCount,
-        highlighted: Object.keys(nextHighlightCellMap).length,
-        disqualified: nextDisqualifiedRows.length,
-      };
-
       if (collegeMismatchCount > 0) {
         pushLog("error", `检测到 ${collegeMismatchCount} 行学院与当前账号不一致，已进入不通过名单。`);
       }
 
       const finalFailRows = nextDisqualifiedRows;
-      const unresolvedIssues = nextErrorReports.filter((item) => item.issueType !== "自动修复");
+      const repairLogs = nextErrorReports.filter((item) => item.issueType === "自动修复");
+      const unresolvedIssueMap = new Map<string, (typeof nextErrorReports)[number]>();
+      nextErrorReports.forEach((item) => {
+        if (item.issueType === "自动修复" || item.action === "该学生所在行存在问题，详见不通过名单") return;
+        const key = `${item.rowIndex}|${item.fieldName}|${item.action}`;
+        if (!unresolvedIssueMap.has(key)) unresolvedIssueMap.set(key, item);
+      });
+      const unresolvedIssues = Array.from(unresolvedIssueMap.values());
+      const unresolvedAnalysis = unresolvedIssues.reduce<Record<string, number>>((summary, item) => {
+        summary[item.fieldName] = (summary[item.fieldName] || 0) + 1;
+        return summary;
+      }, {});
+      const repairFieldCounts = repairLogs.reduce<Record<string, number>>((summary, item) => {
+        summary[item.fieldName] = (summary[item.fieldName] || 0) + 1;
+        return summary;
+      }, {});
+      const repairSummary = {
+        count: repairLogs.length,
+        fields: repairFieldCounts,
+        examples: repairLogs.slice(0, 12),
+      };
+      const nextStats = {
+        ...result.stats,
+        errors: unresolvedIssues.length,
+        highlighted: Object.keys(nextHighlightCellMap).length,
+        disqualified: finalFailRows.length,
+      };
 
       setProcessedData(result.processedData);
       setHighlightCellMap(nextHighlightCellMap);
       setDisqualifiedRows(finalFailRows);
-      setAnalysis(result.analysis);
+      setAnalysis(unresolvedAnalysis);
       setStudentErrorReports(nextErrorReports);
       setStats(nextStats);
       setStatus("治理完成");
       pushLog("success", `治理完成：通过 ${Math.max(nextStats.total - finalFailRows.length, 0)} 条，不通过 ${finalFailRows.length} 条，自动修复 ${nextStats.repaired} 项`);
 
-      try {
-        const aiText = await askDeepSeek(`
+      if (unresolvedIssues.length === 0) {
+        setAiReport(`本次数据无人工处理问题，可导出通过名单并上载到学校端。
+
+系统已自动完成格式治理，不影响上载。
+
+自动修复数量：${repairSummary.count}
+自动修复字段：${Object.keys(repairSummary.fields).join("、") || "无"}`);
+      } else {
+        try {
+          const aiText = await askDeepSeek(`
 请基于系统最终未通过问题生成困难生数据治理分析报告。只能分析“最终未通过问题”和“不通过名单摘要”，不要把自动修复日志当成未通过问题。
 
 总数据行数：${nextStats.total}
-自动修复数量：${nextStats.repaired}（仅作为处理量背景，不作为未通过问题）
 最终未通过问题数量：${unresolvedIssues.length}
 不通过人数：${finalFailRows.length}
 缺失字段数量：${nextStats.missingFields}
 删除模板外字段数量：${result.removedHeaders.length}
+
+系统已自动修复摘要（只用于说明已完成的治理，不得视为未通过问题）：
+${JSON.stringify(repairSummary, null, 2)}
 
 硬性约束：
 1. 困难等级只依据用户填写的推荐档次、院系推荐档次、学校推荐档次、院系认定结果或学校认定结果，不得根据家庭情况反推。
@@ -781,6 +810,9 @@ const askDeepSeek = async (prompt: string) => {
 4. 不得编造“该学生应该是特别困难/一般困难”的结论。
 5. 不得根据收入、欠债、申请理由、院系意见、学校意见、突发事件、自然灾害、单亲、大病、残疾、父母劳动能力等内容重新判定困难等级。
 6. 不得输出不存在的学院归属错误；只有最终未通过问题中明确出现学院识别失败或学院不匹配时，才能提学院归属问题。
+7. 自动修复记录不能计入未通过问题，不能据此得出“全部未通过”或“数据质量为0分”等结论。
+8. 不得把家庭地址写成邮政编码错误，也不得把邮政编码写成手机号码错误；字段名称必须以最终未通过问题为准。
+9. 不得根据原始 Excel 自行推断、补充或编造系统未发现的新错误。
 
 最终未通过问题：
 ${JSON.stringify(unresolvedIssues.slice(0, 80), null, 2)}
@@ -795,11 +827,12 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
 4. 数据质量评分
 `);
 
-        setAiReport(aiText || "DeepSeek 未返回分析内容，请检查接口。");
-      } catch (error) {
-        console.error("DeepSeek 智能分析失败:", error);
-        pushLog("error", "DeepSeek 智能分析失败，请检查 Worker 地址或环境变量");
-        setAiReport("DeepSeek 智能分析失败，请检查 Worker 地址或环境变量。");
+          setAiReport(aiText || "DeepSeek 未返回分析内容，请检查接口。");
+        } catch (error) {
+          console.error("DeepSeek 智能分析失败:", error);
+          pushLog("error", "DeepSeek 智能分析失败，请检查 Worker 地址或环境变量");
+          setAiReport("DeepSeek 智能分析失败，请检查 Worker 地址或环境变量。");
+        }
       }
 
       window.dispatchEvent(
@@ -809,7 +842,7 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
             totalCount: nextStats.total,
             fixedCount: nextStats.repaired,
             validationErrors: [
-              ...toCollegeValidationErrors(nextErrorReports),
+              ...toCollegeValidationErrors(unresolvedIssues),
               ...finalFailRows.map((item) => ({
                 row: item.rowNumber,
                 column: "整行",

@@ -32,6 +32,9 @@ export const isValidPostcode = (value: string) => /^\d{6}$/.test(value);
 
 export const digitsOnly = (value: unknown) => String(value ?? "").replace(/\D/g, "");
 
+const toHalfWidthDigits = (value: string) =>
+  value.replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0));
+
 export const isZeroLikeText = (value: string) => {
   const text = normalizeText(value);
   return ["", "无", "没有", "否", "零", "0", "0.0", "0.00", "暂无"].includes(text);
@@ -100,7 +103,10 @@ const provinceAliasMap: Record<string, string> = {
 };
 
 export const fixProvince = (value: string) => {
-  const text = String(value ?? "").trim();
+  const text = toHalfWidthDigits(String(value ?? ""))
+    .trim()
+    .replace(/[\s\u00a0\u200b-\u200d\u2060\ufeff\u3000]/g, "")
+    .replace(/[：:，,。；;、]/g, "");
   const exact = provinceNames.find((p) => text === p);
   if (exact) return exact;
 
@@ -307,15 +313,17 @@ export const formatIncomeNumber = (num: number) => {
 };
 
 export const parseAmountToNumber = (raw: string) => {
-  const text = String(raw ?? "")
+  const text = toHalfWidthDigits(String(raw ?? ""))
     .trim()
     .replace(/,/g, "")
     .replace(/￥/g, "")
+    .replace(/¥/g, "")
+    .replace(/人民币/g, "")
     .replace(/元/g, "")
     .replace(/\s+/g, "");
 
   if (!text) return null;
-  if (["无", "没有", "零", "0", "0.0", "0.00", "无欠债", "没有欠债"].includes(text)) return 0;
+  if (["无", "没有", "暂无", "零", "0", "0.0", "0.00", "无欠债", "没有欠债"].includes(text)) return 0;
 
   const wanMatch = text.match(/(\d+(\.\d+)?)万/);
   if (wanMatch) return Number(wanMatch[1]) * 10000;

@@ -22,18 +22,13 @@ import {
   cleanFieldName,
   compressText,
   disabilityCategoryList,
-  digitsOnly,
   extractMaxLength,
   fixDisabilityCategory,
   fixIncomeSource,
   fixProvince,
-  fixYesNo,
   formatIncomeNumber,
   incomeSourceList,
   isRequiredByRule,
-  isValidIdCard,
-  isValidPhone,
-  isValidPostcode,
   isZeroLikeText,
   normalizeText,
   parseAmountToNumber,
@@ -134,10 +129,19 @@ const isRequiredField = (field: string, index: number, firstRow: unknown[]) => {
 
 const STRICT_AUTO_REPAIR_FIELDS = [
   "姓名",
+  "籍贯",
+  "身份证号",
   "家庭人口数",
+  "手机号码",
+  "家庭地址",
+  "邮政编码",
+  "家长手机号码",
   "劳动力人口数",
   "赡养人口数",
   "特殊困难类型",
+  "推荐档次",
+  "院系推荐档次",
+  "学校推荐档次",
 ];
 
 const POPULATION_FIELDS = new Set(["家庭人口数", "劳动力人口数", "赡养人口数"]);
@@ -154,6 +158,247 @@ const SPECIAL_TYPE_REQUIRED_FOR_C_SUGGESTION =
 const displayOriginalValue = (value: unknown) => {
   const text = String(value ?? "").trim();
   return text || "空";
+};
+
+const toHalfWidthText = (value: unknown) =>
+  String(value ?? "")
+    .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0))
+    .replace(/[Ａ-Ｚａ-ｚ]/g, (letter) => String.fromCharCode(letter.charCodeAt(0) - 0xfee0));
+
+const stripInvisibleText = (value: unknown) =>
+  toHalfWidthText(value).replace(/[\s\u00a0\u200b-\u200d\u2060\ufeff\u3000]/g, "");
+
+const normalizeGeneralCellText = (value: unknown) =>
+  toHalfWidthText(value)
+    .replace(/[\s\u00a0\u200b-\u200d\u2060\ufeff\u3000]/g, "")
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/，/g, ",")
+    .replace(/：/g, ":")
+    .replace(/；/g, ";")
+    .replace(/！/g, "!")
+    .replace(/？/g, "?")
+    .trim();
+
+const expandScientificNotation = (value: string) => {
+  const text = String(value ?? "").trim();
+  const match = text.match(/^([+-]?\d+)(?:\.(\d+))?[eE]\+?(\d+)$/);
+  if (!match) return text;
+
+  const sign = match[1].startsWith("-") ? "-" : "";
+  const integerPart = match[1].replace(/^[+-]/, "");
+  const decimalPart = match[2] || "";
+  const exponent = Number(match[3]);
+  const digits = `${integerPart}${decimalPart}`;
+  const decimalPlaces = decimalPart.length;
+  const zeroCount = exponent - decimalPlaces;
+  if (zeroCount >= 0) return `${sign}${digits}${"0".repeat(zeroCount)}`;
+
+  const splitIndex = digits.length + zeroCount;
+  return `${sign}${digits.slice(0, splitIndex)}.${digits.slice(splitIndex)}`;
+};
+
+const normalizeIdCard = (value: unknown) => {
+  const raw = toHalfWidthText(value);
+  const expanded = expandScientificNotation(raw);
+  const fixed = expanded
+    .replace(/[：:，,、。.\-—_\s\u00a0\u200b-\u200d\u2060\ufeff\u3000]/g, "")
+    .replace(/[^0-9Xx]/g, "")
+    .toUpperCase();
+  const valid = /^[1-9]\d{16}[\dX]$/.test(fixed);
+
+  return {
+    value: fixed,
+    valid,
+    repaired: fixed !== raw,
+    reason: valid
+      ? "身份证号已清洗为18位规范格式"
+      : `身份证号清洗后必须为18位，目前为 ${fixed.length} 位，请人工核对是否缺位或多位。`,
+  };
+};
+
+const normalizePhone = (value: unknown) => {
+  const raw = toHalfWidthText(value);
+  const withoutCountryCode = raw.replace(/^\s*(?:0086|\+?86)[\s()-]*/, "");
+  const digits = withoutCountryCode.replace(/\D/g, "");
+  const firstMobileMatch = withoutCountryCode.match(/1(?:\D*\d){10}/);
+  const trailingText = firstMobileMatch
+    ? withoutCountryCode.slice((firstMobileMatch.index || 0) + firstMobileMatch[0].length)
+    : "";
+  const hasSeparatedFollowingValue = firstMobileMatch && /^\D/.test(trailingText);
+  const firstMobile = hasSeparatedFollowingValue ? firstMobileMatch[0].replace(/\D/g, "") : "";
+  const fixed = firstMobile || digits;
+  const valid = /^\d{11}$/.test(fixed);
+
+  return {
+    value: fixed,
+    valid,
+    repaired: fixed !== raw,
+    reason: valid
+      ? "手机号码已清洗为11位数字"
+      : `手机号码清洗后必须为11位，目前为 ${fixed.length} 位，请人工核对是否缺位或多位。`,
+  };
+};
+
+const normalizePostcode = (value: unknown) => {
+  const raw = toHalfWidthText(value);
+  const digits = raw.replace(/\D/g, "");
+  const fixed = digits.length === 5 ? digits.padStart(6, "0") : digits;
+  const valid = /^\d{6}$/.test(fixed);
+
+  return {
+    value: fixed,
+    valid,
+    repaired: fixed !== raw,
+    reason: valid
+      ? "邮政编码已清洗为6位数字"
+      : `邮政编码清洗后必须为6位，目前为 ${fixed.length} 位，请人工核对是否缺位或多位。`,
+  };
+};
+
+const normalizeYesNo = (value: unknown) => {
+  const source = String(value ?? "");
+  const raw = source.trim();
+  const normalized = normalizeText(raw)
+    .replace(/[✓✔]/g, "√")
+    .replace(/[✕✖]/g, "×")
+    .replace(/[，,。.!！；;：:、"'“”‘’]/g, "");
+
+  const yesWords = ["是", "有", "有的", "存在", "确认", "同意", "是的", "√", "1", "true", "yes"];
+  const noWords = ["否", "无", "没有", "暂无", "不存在", "不是", "无此情况", "×", "0", "false", "no"];
+
+  if (yesWords.some((word) => normalized === normalizeText(word))) {
+    return { value: "是", valid: true, repaired: source !== "是", reason: "是/否字段已规范为“是”" };
+  }
+  if (noWords.some((word) => normalized === normalizeText(word))) {
+    return { value: "否", valid: true, repaired: source !== "否", reason: "是/否字段已规范为“否”" };
+  }
+
+  return { value: raw, valid: false, repaired: false, reason: "该字段只能填写是/否，且当前值无法识别" };
+};
+
+const normalizeAgreement = (value: unknown) => {
+  const source = String(value ?? "");
+  const raw = source.trim();
+  const normalized = normalizeText(raw);
+  const negative = ["不同意", "不通过", "驳回", "否"].some((word) =>
+    word === "否" ? normalized === normalizeText(word) : normalized.includes(normalizeText(word))
+  );
+  const recognizable =
+    !negative &&
+    (["同意", "通过", "予以同意"].some((word) => normalized === normalizeText(word)) ||
+      normalized.includes(normalizeText("同意")) ||
+      normalized.includes(normalizeText("通过")) ||
+      raw.length > 0);
+
+  return {
+    value: recognizable ? "同意" : raw,
+    valid: recognizable,
+    repaired: recognizable && source !== "同意",
+    reason: recognizable ? "意见/同意字段已规范为“同意”" : "意见字段为空，无法自动生成意见",
+  };
+};
+
+const normalizeNoneText = (value: unknown) => {
+  const raw = String(value ?? "").trim();
+  const normalized = normalizeText(raw).replace(/[，,。.!！；;：:、"'“”‘’]/g, "");
+  const noneWords = ["", "无", "没有", "暂无", "无其他情况", "无其它情况"];
+  if (noneWords.some((word) => normalized === normalizeText(word))) return "无";
+  return normalizeGeneralCellText(raw);
+};
+
+const isIdCardField = (field: string) => {
+  const normalized = normalizeDifficultyHeader(field);
+  return (normalized.includes("身份证号") || normalized.includes("身份证号码") || normalized.includes("证件号码")) &&
+    !normalized.includes("类型");
+};
+
+const isPhoneField = (field: string, columnIndex: number) => {
+  const normalized = normalizeDifficultyHeader(field);
+  return columnIndex === 4 ||
+    columnIndex === 9 ||
+    normalized.includes("手机号码") ||
+    normalized.includes("手机号") ||
+    normalized.includes("联系电话") ||
+    normalized.includes("联系方式");
+};
+
+const isPostcodeField = (field: string, columnIndex: number) => {
+  const normalized = normalizeDifficultyHeader(field);
+  return columnIndex === 8 || normalized.includes("邮政编码") || normalized.includes("邮编");
+};
+
+const isAddressField = (field: string) => {
+  const normalized = normalizeDifficultyHeader(field);
+  return ["家庭地址", "家庭住址", "通讯地址", "详细地址"].some((keyword) => normalized.includes(keyword));
+};
+
+const isYesNoField = (field: string) => {
+  const normalized = normalizeDifficultyHeader(field);
+  if (normalized === "院系意见" || normalized === "学校意见") return false;
+  return normalized.includes("是否") ||
+    normalized.includes("大病患者") ||
+    normalized.includes("单亲") ||
+    normalized.includes("孤残") ||
+    normalized.includes("烈士子女") ||
+    normalized.includes("五保户") ||
+    normalized.includes("残疾");
+};
+
+const isAgreementField = (field: string, columnIndex: number) => {
+  const normalized = normalizeDifficultyHeader(field);
+  return [26, 29].includes(columnIndex) ||
+    normalized === "院系意见" ||
+    normalized === "学校意见";
+};
+
+const isStatementReasonField = (field: string) => {
+  const normalized = normalizeDifficultyHeader(field);
+  return normalized.includes("陈述理由") || normalized.includes("申请理由") || normalized.includes("困难陈述");
+};
+
+const isOtherSituationField = (field: string, columnIndex: number) => {
+  const normalized = normalizeDifficultyHeader(field);
+  return columnIndex === 20 ||
+    normalized.includes("其他情况") ||
+    normalized.includes("其它重大信息") ||
+    normalized.includes("其他说明");
+};
+
+const isDateField = (field: string, columnIndex: number) => {
+  const normalized = normalizeDifficultyHeader(field);
+  return columnIndex === 6 || normalized.includes("日期") || normalized.includes("时间");
+};
+
+const isPostcodeLike = (value: unknown) => {
+  const digits = stripInvisibleText(value).replace(/\D/g, "");
+  return /^\d{5,7}$/.test(digits);
+};
+
+const isAddressLike = (value: unknown) => {
+  const text = stripInvisibleText(value);
+  return /[省市区县镇乡村路街道号弄室]/.test(text) && /[\u4e00-\u9fa5]/.test(text) && text.length >= 4;
+};
+
+const isProvinceLevelValue = (value: unknown) =>
+  /^(北京市|天津市|上海市|重庆市|香港特别行政区|澳门特别行政区|[\u4e00-\u9fa5]+省|[\u4e00-\u9fa5]+自治区)$/.test(
+    String(value ?? "")
+  );
+
+const checkNativePlace = (originalRawValue: unknown): CheckResult => {
+  const source = String(originalRawValue ?? "");
+  const raw = source.trim();
+  const fixed = fixProvince(raw);
+  const valid = isProvinceLevelValue(fixed);
+
+  return {
+    value: fixed,
+    valid,
+    repaired: valid && fixed !== source,
+    reason: valid ? "籍贯已归一到省级行政区" : "籍贯无法识别到省级行政区，请人工核对",
+    highlight: !valid,
+    highlightColor: "yellow",
+  };
 };
 
 const cleanStudentName = (value: unknown) =>
@@ -515,6 +760,51 @@ const getColumnValidList = (
   return Array.from(new Set([...dictValues, ...ruleOptions].filter(Boolean)));
 };
 
+const formatDateDigits = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+};
+
+const parseDateToYYYYMMDD = (value: unknown) => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return formatDateDigits(value);
+
+  const raw = toHalfWidthText(value).trim();
+  if (!raw) return "";
+
+  const serial = Number(raw);
+  if (/^\d+(\.\d+)?$/.test(raw) && Number.isFinite(serial) && serial > 20000 && serial < 80000) {
+    const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
+    if (!Number.isNaN(date.getTime())) return formatDateDigits(date);
+  }
+
+  const normalized = raw.replace(/[年月./-]/g, "-").replace(/日/g, "");
+  const match = normalized.match(/(20\d{2})-(\d{1,2})-(\d{1,2})/);
+  if (match) {
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(year, month - 1, day);
+    if (
+      date.getFullYear() === year &&
+      date.getMonth() === month - 1 &&
+      date.getDate() === day
+    ) {
+      return formatDateDigits(date);
+    }
+  }
+
+  const digits = raw.replace(/\D/g, "");
+  if (/^20\d{6}$/.test(digits)) return digits;
+  return "";
+};
+
+const getDateDay = (value: unknown) => {
+  const dateText = parseDateToYYYYMMDD(value);
+  return dateText ? dateText.slice(-2) : "";
+};
+
 const mostFrequentApplicationDay = (rows: unknown[][], columnMap: { templateIndex: number; sourceIndex: number }[]) => {
   const dateMapItem = columnMap.find((item) => item.templateIndex === 6);
   if (!dateMapItem || dateMapItem.sourceIndex < 0) return "01";
@@ -522,12 +812,7 @@ const mostFrequentApplicationDay = (rows: unknown[][], columnMap: { templateInde
   const dayCount: Record<string, number> = {};
 
   rows.forEach((row) => {
-    const value = String(row[dateMapItem.sourceIndex] ?? "").trim();
-    const digits = value.replace(/\D/g, "");
-    let day = "";
-
-    if (digits.length >= 8) day = digits.slice(-2);
-    else if (digits.length >= 2) day = digits.slice(-2);
+    const day = getDateDay(row[dateMapItem.sourceIndex]);
 
     if (/^(0[1-9]|[12]\d|3[01])$/.test(day)) {
       dayCount[day] = (dayCount[day] || 0) + 1;
@@ -540,6 +825,26 @@ const mostFrequentApplicationDay = (rows: unknown[][], columnMap: { templateInde
 const fixApplicationDate = (targetDay: string) => {
   const year = new Date().getFullYear();
   return `${year}09${targetDay}`;
+};
+
+const detectAddressPostcodeColumnIssue = (
+  rows: unknown[][],
+  columnMap: { templateField: string; sourceIndex: number }[]
+) => {
+  const addressColumn = columnMap.find((item) => isAddressField(item.templateField));
+  const postcodeColumn = columnMap.find((item) => isPostcodeField(item.templateField, -1));
+  if (!addressColumn || !postcodeColumn || addressColumn.sourceIndex < 0 || postcodeColumn.sourceIndex < 0) {
+    return false;
+  }
+
+  const visibleRows = rows.filter((row) => row.some((cell) => String(cell ?? "").trim() !== ""));
+  if (visibleRows.length === 0) return false;
+
+  const addressLooksPostcode = visibleRows.filter((row) => isPostcodeLike(row[addressColumn.sourceIndex])).length;
+  const postcodeLooksAddress = visibleRows.filter((row) => isAddressLike(row[postcodeColumn.sourceIndex])).length;
+  const threshold = Math.max(1, Math.ceil(visibleRows.length * 0.5));
+
+  return addressLooksPostcode >= threshold || postcodeLooksAddress >= threshold;
 };
 
 const checkFamilyIncomeLColumn = (originalRawValue: unknown): CheckResult => {
@@ -677,39 +982,40 @@ const checkDebtReasonTColumn = (originalRawValue: unknown): CheckResult => {
   };
 };
 
-const checkOtherEconomicInfoUColumn = (originalRawValue: unknown): CheckResult => {
-  const raw = String(originalRawValue ?? "").trim();
+const checkStatementReasonColumn = (originalRawValue: unknown): CheckResult => {
+  const source = String(originalRawValue ?? "");
+  const raw = source.trim();
+  const normalized = normalizeText(raw).replace(/[，,。.!！；;：:、"'“”‘’]/g, "");
 
-  if (raw === "") {
+  if (!raw) {
     return {
-      value: "无",
-      valid: true,
-      repaired: true,
-      reason: "U列其它影响家庭经济信息为空，已填写无",
-      highlight: false,
+      value: "",
+      valid: false,
+      repaired: false,
+      reason: "陈述理由需填写学生家庭经济困难情况，不能为空",
+      highlight: true,
+      highlightColor: "yellow",
     };
   }
 
-  const fixed = compressText(raw, 100);
+  if (["同意", "通过", "予以同意"].some((word) => normalized === normalizeText(word))) {
+    return {
+      value: raw,
+      valid: false,
+      repaired: false,
+      reason: "陈述理由需填写学生家庭经济困难情况，不能仅填写“同意”。",
+      highlight: true,
+      highlightColor: "yellow",
+    };
+  }
 
-  return {
-    value: fixed,
-    valid: true,
-    repaired: fixed !== raw,
-    reason: fixed !== raw ? "U列其它影响家庭经济信息超过100字符，已自动缩减" : "U列符合100字符要求",
-    highlight: false,
-  };
-};
-
-const checkWColumnOnlyLength = (originalRawValue: unknown): CheckResult => {
-  const raw = String(originalRawValue ?? "").trim();
   const fixed = compressText(raw, 60);
 
   return {
     value: fixed,
     valid: true,
-    repaired: fixed !== raw,
-    reason: fixed !== raw ? "W列超过60字，已自动精简，不标黄" : "W列未超过60字",
+    repaired: fixed !== source,
+    reason: fixed !== raw ? "陈述理由超过60字，已自动精简" : "陈述理由符合要求",
     highlight: false,
   };
 };
@@ -742,7 +1048,7 @@ const checkAndFixCellByColumnRule = (
 ): CheckResult => {
   const ruleText = String(firstRow[columnIndex] ?? "");
   const required = isRequiredField(field, columnIndex, firstRow);
-  let value = String(originalRawValue ?? "").trim();
+  let value = normalizeGeneralCellText(originalRawValue);
   const normalizedField = normalizeDifficultyHeader(field);
 
   if (normalizedField === "姓名") return checkStudentName(originalRawValue);
@@ -759,26 +1065,121 @@ const checkAndFixCellByColumnRule = (
 
   if (isDifficultyLevelField(field)) return checkDifficultyLevel(originalRawValue);
 
-  if (columnIndex === 14) {
-    const fixed = fixYesNo(value);
-    return { value: fixed, valid: true, repaired: fixed !== value, reason: "O列已统一为是/否", highlight: false };
+  if (isStatementReasonField(field)) return checkStatementReasonColumn(originalRawValue);
+
+  if (isAgreementField(field, columnIndex)) {
+    const fixed = normalizeAgreement(originalRawValue);
+    return {
+      value: fixed.value,
+      valid: fixed.valid,
+      repaired: fixed.repaired,
+      reason: fixed.reason,
+      highlight: !fixed.valid,
+      highlightColor: "yellow",
+    };
+  }
+
+  if (isYesNoField(field)) {
+    const fixed = normalizeYesNo(originalRawValue);
+    return {
+      value: fixed.value,
+      valid: fixed.valid,
+      repaired: fixed.repaired,
+      reason: fixed.reason,
+      highlight: !fixed.valid,
+      highlightColor: "yellow",
+    };
+  }
+
+  if (isIdCardField(field) || columnIndex === 2) {
+    const fixed = normalizeIdCard(originalRawValue);
+    return {
+      value: fixed.value,
+      valid: fixed.valid,
+      repaired: fixed.repaired,
+      reason: fixed.reason,
+      highlight: !fixed.valid,
+      highlightColor: "yellow",
+    };
+  }
+
+  if (isPhoneField(field, columnIndex)) {
+    const fixed = normalizePhone(originalRawValue);
+    return {
+      value: fixed.value,
+      valid: fixed.valid,
+      repaired: fixed.repaired,
+      reason: fixed.reason,
+      highlight: !fixed.valid,
+      highlightColor: "yellow",
+    };
+  }
+
+  if (isPostcodeField(field, columnIndex)) {
+    const fixed = normalizePostcode(originalRawValue);
+    return {
+      value: fixed.value,
+      valid: fixed.valid,
+      repaired: fixed.repaired,
+      reason: fixed.reason,
+      highlight: !fixed.valid,
+      highlightColor: "yellow",
+    };
+  }
+
+  if (normalizeDifficultyHeader(field) === "籍贯" || columnIndex === 1) return checkNativePlace(originalRawValue);
+
+  if (isOtherSituationField(field, columnIndex)) {
+    const fixed = normalizeNoneText(originalRawValue);
+    const maxLength = extractMaxLength(ruleText) || (columnIndex === 20 ? 100 : null);
+    const finalValue = maxLength && fixed.length > maxLength ? fixed.slice(0, maxLength) : fixed;
+    return {
+      value: finalValue,
+      valid: true,
+      repaired: finalValue !== String(originalRawValue ?? ""),
+      reason: finalValue !== fixed ? `其他情况超过${maxLength}字，已自动截断` : "其他情况已规范处理",
+      highlight: false,
+    };
+  }
+
+  if (isDateField(field, columnIndex)) {
+    const fixed = columnIndex === 6 ? fixApplicationDate(targetApplicationDay) : parseDateToYYYYMMDD(originalRawValue);
+    if (!fixed) {
+      return {
+        value,
+        valid: false,
+        repaired: false,
+        reason: "日期格式无法解析，请人工核对",
+        highlight: true,
+        highlightColor: "yellow",
+      };
+    }
+    return {
+      value: fixed,
+      valid: true,
+      repaired: fixed !== String(originalRawValue ?? ""),
+      reason: columnIndex === 6 ? `G列申请日期统一为当前年份9月${targetApplicationDay}日` : "日期已统一为YYYYMMDD格式",
+      highlight: false,
+    };
+  }
+
+  if (isAddressField(field)) {
+    const raw = String(originalRawValue ?? "");
+    const fixed = toHalfWidthText(raw)
+      .replace(/[\s\u00a0\u200b-\u200d\u2060\ufeff\u3000]/g, "")
+      .trim();
+    return {
+      value: fixed,
+      valid: true,
+      repaired: fixed !== raw,
+      reason: fixed !== raw ? "家庭地址中的空格、换行或不可见字符已清理" : "家庭地址按文本保留",
+      highlight: false,
+    };
   }
 
   if (columnIndex === 15 || cleanFieldName(field).includes("突发意外事件具体描述")) return checkUnexpectedEventPColumn(value);
   if (columnIndex === 18 || cleanFieldName(field).includes("家庭欠债金额")) return checkDebtAmountSColumn(value);
   if (columnIndex === 19 || cleanFieldName(field).includes("欠债原因")) return checkDebtReasonTColumn(value);
-  if (columnIndex === 20) return checkOtherEconomicInfoUColumn(value);
-  if (columnIndex === 22) return checkWColumnOnlyLength(value);
-
-  if ([26, 27, 29].includes(columnIndex)) {
-    return {
-      value: "同意",
-      valid: true,
-      repaired: value !== "同意",
-      reason: `${["AA", "AB", "AD"][[26, 27, 29].indexOf(columnIndex)]}列已统一填写为同意`,
-      highlight: false,
-    };
-  }
 
   if (columnIndex === 36 || cleanFieldName(field).includes("残疾类别")) return checkDisabilityCategoryAKColumn(value);
 
@@ -810,68 +1211,6 @@ const checkAndFixCellByColumnRule = (
       reason: required ? "必填项为空" : "非必填项为空，允许为空",
       highlight: required,
       highlightColor: "yellow",
-    };
-  }
-
-  if (columnIndex === 2 || field.includes("身份证号")) {
-    const fixed = value.replace(/\s+/g, "").toUpperCase();
-    const valid = isValidIdCard(fixed);
-
-    return {
-      value: fixed,
-      valid,
-      repaired: fixed !== value,
-      reason: valid ? "身份证号符合18位规则" : "身份证号必须为18位，最后一位允许X",
-      highlight: !valid,
-      highlightColor: "yellow",
-    };
-  }
-
-  if (columnIndex === 4) {
-    const digits = digitsOnly(value);
-    return {
-      value: digits,
-      valid: isValidPhone(digits),
-      repaired: digits !== value,
-      reason: isValidPhone(digits) ? "E列手机号码符合11位规则" : "E列手机号码必须为11位",
-      highlight: !isValidPhone(digits),
-      highlightColor: "yellow",
-    };
-  }
-
-  if (columnIndex === 8) {
-    const digits = digitsOnly(value);
-    const valid = isValidPostcode(digits);
-    return {
-      value: digits,
-      valid,
-      repaired: digits !== value,
-      reason: valid ? "I列邮政编码符合6位规则" : "I列邮政编码必须为6位",
-      highlight: !valid,
-      highlightColor: "yellow",
-    };
-  }
-
-  if (columnIndex === 9) {
-    const digits = digitsOnly(value);
-    return {
-      value: digits,
-      valid: isValidPhone(digits),
-      repaired: digits !== value,
-      reason: isValidPhone(digits) ? "J列家长手机号码符合11位规则" : "J列家长手机号码必须为11位",
-      highlight: !isValidPhone(digits),
-      highlightColor: "yellow",
-    };
-  }
-
-  if (columnIndex === 6) {
-    const fixed = fixApplicationDate(targetApplicationDay);
-    return {
-      value: fixed,
-      valid: true,
-      repaired: fixed !== value,
-      reason: `G列申请日期统一为当前年份9月${targetApplicationDay}日`,
-      highlight: false,
     };
   }
 
@@ -911,7 +1250,6 @@ const checkAndFixCellByColumnRule = (
     };
   }
 
-  if (field.includes("籍贯") || columnIndex === 1) value = fixProvince(value);
   if (SMART_FIX[value]) value = SMART_FIX[value];
 
   if (shouldBeNumber(field, ruleText)) {
@@ -977,8 +1315,8 @@ const checkAndFixCellByColumnRule = (
   return {
     value,
     valid: true,
-    repaired: value !== String(originalRawValue ?? "").trim(),
-    reason: value !== String(originalRawValue ?? "").trim() ? "按该列格式规则修复" : "符合该列规则",
+    repaired: value !== String(originalRawValue ?? ""),
+    reason: value !== String(originalRawValue ?? "") ? "按该列格式规则修复" : "符合该列规则",
     highlight: false,
   };
 };
@@ -1081,6 +1419,51 @@ const finalRequiredEmptyCellValidation = (
   return marked;
 };
 
+const markAddressPostcodeColumnIssue = (
+  result: Record<string, unknown>[],
+  highlightMap: Record<string, HighlightInfo>,
+  fieldErrors: Record<string, number>,
+  templateFields: string[],
+  errorReports: ErrorReportItem[]
+) => {
+  const addressIndex = templateFields.findIndex(isAddressField);
+  const postcodeIndex = templateFields.findIndex((field) => isPostcodeField(field, -1));
+  if (addressIndex < 0 && postcodeIndex < 0) return 0;
+
+  const reason = "疑似列错位：家庭地址列内容像邮编，或邮政编码列内容像地址，请人工核对表头与列顺序。";
+  let rowsMarked = 0;
+
+  result.forEach((row, rowIndex) => {
+    const rowLooksMisaligned =
+      (addressIndex >= 0 && isPostcodeLike(row[templateFields[addressIndex]])) ||
+      (postcodeIndex >= 0 && isAddressLike(row[templateFields[postcodeIndex]]));
+    if (!rowLooksMisaligned) return;
+
+    rowsMarked++;
+    [addressIndex, postcodeIndex]
+      .filter((index) => index >= 0)
+      .forEach((colIndex) => {
+        const key = `${rowIndex}_${colIndex}`;
+        if (!highlightMap[key]) addMark(highlightMap, rowIndex, colIndex, "yellow", reason);
+      });
+    fieldErrors["家庭地址/邮政编码"] = (fieldErrors["家庭地址/邮政编码"] || 0) + 1;
+    addErrorReport(
+      errorReports,
+      rowIndex,
+      "家庭地址/邮政编码",
+      [
+        addressIndex >= 0 ? row[templateFields[addressIndex]] : "",
+        postcodeIndex >= 0 ? row[templateFields[postcodeIndex]] : "",
+      ].join(" / "),
+      "",
+      "疑似列错位",
+      reason
+    );
+  });
+
+  return rowsMarked;
+};
+
 const markNamesForRowsWithIssues = (
   result: Record<string, unknown>[],
   highlightMap: Record<string, HighlightInfo>,
@@ -1166,13 +1549,14 @@ export const processStudentRows = async ({
     dependent: columnMap.find((item) => normalizeDifficultyHeader(item.templateField) === "赡养人口数"),
   };
   const targetApplicationDay = mostFrequentApplicationDay(sourceDataRows, columnMap);
+  const addressPostcodeColumnIssue = detectAddressPostcodeColumnIssue(sourceDataRows, columnMap);
 
   onLog?.({
     type: "info",
     message: `开始执行【困难生数据处理】
 
 本次规则：
-AA、AB、AD列统一为同意；
+AA、AD意见列统一为同意，Y、AB是否同意列规范为是/否；
 W列超过60字自动精简，不标黄；
 其它规则保持。`,
   });
@@ -1182,6 +1566,13 @@ W列超过60字自动精简，不标黄；
       type: "error",
       message: `检测到 ${removedHeaders.length} 个模板外字段，导出时删除：
 ${removedHeaders.map((item) => item.header).join("、")}`,
+    });
+  }
+
+  if (addressPostcodeColumnIssue) {
+    onLog?.({
+      type: "error",
+      message: "检测到家庭地址与邮政编码列疑似错位，已停止对这两列逐格套用格式规则，并转为人工核对问题。",
     });
   }
 
@@ -1233,6 +1624,14 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
       const normalizedField = normalizeDifficultyHeader(field);
       const checked: CheckResult = normalizedField === "特殊困难类型"
         ? checkSpecialDifficultyType(originalValue, sourceRowContext)
+        : addressPostcodeColumnIssue && (isAddressField(field) || isPostcodeField(field, colIndex))
+        ? {
+            value: String(originalValue ?? "").trim(),
+            valid: true,
+            repaired: false,
+            reason: "疑似地址与邮编列错位，等待行级人工核对",
+            highlight: false,
+          }
         : checkAndFixCellByColumnRule(
             field,
             colIndex,
@@ -1390,9 +1789,12 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
   }
 
   const crossMarked = checkCrossColumnRules(result, highlightMap, fieldErrors, templateFields, errorReports);
+  const addressPostcodeMarked = addressPostcodeColumnIssue
+    ? markAddressPostcodeColumnIssue(result, highlightMap, fieldErrors, templateFields, errorReports)
+    : 0;
   const emptyMarked = finalRequiredEmptyCellValidation(result, highlightMap, fieldErrors, templateFields, templateFirstRow, errorReports);
   markNamesForRowsWithIssues(result, highlightMap, templateFields, errorReports);
-  errorCount += crossMarked + emptyMarked;
+  errorCount += crossMarked + addressPostcodeMarked + emptyMarked;
 
   const finalFailRows = buildFailListFromHighlights(result, highlightMap, templateFields);
   const finalFailRowNumbers = new Set(finalFailRows.map((item) => item.rowNumber));
