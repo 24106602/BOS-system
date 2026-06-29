@@ -117,6 +117,15 @@ export type DifficultyStudentFieldBinding = {
   aliases: readonly string[];
 };
 
+export const SPECIAL_DIFFICULTY_TYPE_ALIASES: Readonly<Record<string, string>> = {
+  低保户: "低保家庭学生",
+  建档立卡: "脱贫家庭学生",
+  残疾人家庭: "残疾人子女",
+  父母残疾: "残疾人子女",
+  本人残疾: "残疾学生",
+  残疾家庭: "残疾人子女",
+};
+
 export const normalizeDifficultyField = (value: string) =>
   String(value ?? "")
     .replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0))

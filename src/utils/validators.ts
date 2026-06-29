@@ -35,6 +35,94 @@ export const digitsOnly = (value: unknown) => String(value ?? "").replace(/\D/g,
 const toHalfWidthDigits = (value: string) =>
   value.replace(/[０-９]/g, (digit) => String.fromCharCode(digit.charCodeAt(0) - 0xfee0));
 
+const toHalfWidthAlphaNumeric = (value: unknown) =>
+  String(value ?? "")
+    .replace(/[０-９]/g, (character) => String.fromCharCode(character.charCodeAt(0) - 0xfee0))
+    .replace(/[Ａ-Ｚａ-ｚ]/g, (character) => String.fromCharCode(character.charCodeAt(0) - 0xfee0))
+    .replace(/．/g, ".")
+    .replace(/／/g, "/")
+    .replace(/－/g, "-");
+
+export const normalizeDifficultyLevel = (value: unknown) => {
+  const compact = toHalfWidthAlphaNumeric(value)
+    .replace(/[\s\u00a0\u200b-\u200d\u2060\ufeff\u3000]/g, "")
+    .replace(/[“”‘’"'《》〈〉「」『』【】（）()]/g, "")
+    .replace(/[。．]/g, ".")
+    .toUpperCase();
+  const withoutDots = compact.replace(/\./g, "");
+
+  if (["A", "A家庭经济一般困难", "一般困难", "家庭经济一般困难"].includes(withoutDots)) {
+    return "A.家庭经济一般困难";
+  }
+  if (["C", "C家庭经济特别困难", "特别困难", "家庭经济特别困难"].includes(withoutDots)) {
+    return "C.家庭经济特别困难";
+  }
+  return "";
+};
+
+const formatDateParts = (year: number, month: number, day: number) =>
+  `${year}${String(month).padStart(2, "0")}${String(day).padStart(2, "0")}`;
+
+const isValidDateParts = (year: number, month: number, day: number) => {
+  const date = new Date(year, month - 1, day);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+};
+
+const normalizeEightDigitDate = (digits: string) => {
+  const currentYear = new Date().getFullYear();
+  const sourceYear = Number(digits.slice(0, 4));
+  let candidate = digits;
+
+  if (sourceYear > currentYear + 2) {
+    candidate = digits.startsWith("25") ? `20${digits.slice(2)}` : "";
+  }
+  if (!candidate) return "";
+
+  const year = Number(candidate.slice(0, 4));
+  const month = Number(candidate.slice(4, 6));
+  const day = Number(candidate.slice(6, 8));
+  return year <= currentYear + 2 && isValidDateParts(year, month, day)
+    ? formatDateParts(year, month, day)
+    : "";
+};
+
+export const normalizeDate = (value: unknown) => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return formatDateParts(value.getFullYear(), value.getMonth() + 1, value.getDate());
+  }
+
+  const raw = toHalfWidthAlphaNumeric(value)
+    .trim()
+    .replace(/[“”‘’"'《》〈〉「」『』【】]/g, "")
+    .replace(/[\s\u00a0\u200b-\u200d\u2060\ufeff\u3000]/g, "");
+  if (!raw) return "";
+
+  const digits = raw.replace(/\D/g, "");
+  if (/^\d{8}$/.test(digits)) return normalizeEightDigitDate(digits);
+
+  const serial = Number(raw);
+  if (/^\d+(?:\.\d+)?$/.test(raw) && Number.isFinite(serial) && serial > 20000 && serial < 80000) {
+    const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
+    if (!Number.isNaN(date.getTime())) {
+      return formatDateParts(date.getFullYear(), date.getMonth() + 1, date.getDate());
+    }
+  }
+
+  const match = raw.match(/^(\d{4})[年./-](\d{1,2})[月./-](\d{1,2})日?$/);
+  if (!match) return "";
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  return year <= new Date().getFullYear() + 2 && isValidDateParts(year, month, day)
+    ? formatDateParts(year, month, day)
+    : "";
+};
+
 export const isZeroLikeText = (value: string) => {
   const text = normalizeText(value);
   return ["", "无", "没有", "否", "零", "0", "0.0", "0.00", "暂无"].includes(text);
@@ -183,7 +271,15 @@ export const incomeSourceList = [
   "其他应当计入家庭的收入",
 ];
 
-export const disabilityCategoryList = ["无", "视力残疾", "听力残疾", "智力残疾", "其他残疾"];
+export const disabilityCategoryList = [
+  "无",
+  "视力残疾",
+  "听力残疾",
+  "言语残疾",
+  "肢体残疾",
+  "智力残疾",
+  "其他残疾",
+];
 
 export const keywordMatch = (
   value: string,
@@ -271,7 +367,15 @@ export const fixYesNo = (value: string) => {
   return "否";
 };
 
-export const fixDisabilityCategory = (value: string) => {
+const disabilityCategoryCodeMap: Record<string, string> = {
+  "1": "视力残疾",
+  "2": "听力残疾",
+  "3": "言语残疾",
+  "4": "肢体残疾",
+  "5": "智力残疾",
+};
+
+export const normalizeDisabilityType = (value: unknown) => {
   const text = normalizeText(value);
 
   if (
@@ -284,13 +388,18 @@ export const fixDisabilityCategory = (value: string) => {
     return "无";
   }
 
+  if (disabilityCategoryCodeMap[text]) return disabilityCategoryCodeMap[text];
   if (text.includes(normalizeText("视力"))) return "视力残疾";
   if (text.includes(normalizeText("听力"))) return "听力残疾";
+  if (text.includes(normalizeText("言语"))) return "言语残疾";
+  if (text.includes(normalizeText("肢体"))) return "肢体残疾";
   if (text.includes(normalizeText("智力"))) return "智力残疾";
   if (text.includes(normalizeText("残疾"))) return "其他残疾";
 
-  return disabilityCategoryList.find((item) => normalizeText(item) === text) || value;
+  return disabilityCategoryList.find((item) => normalizeText(item) === text) || String(value ?? "").trim();
 };
+
+export const fixDisabilityCategory = (value: string) => normalizeDisabilityType(value);
 
 export const compressText = (value: string, maxLength: number) => {
   const cleaned = String(value ?? "")

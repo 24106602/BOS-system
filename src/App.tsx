@@ -21,6 +21,7 @@ import {
   parseStudentTemplate,
   readWorkbook,
 } from "./services/templateParser";
+import { resolveDifficultyFieldBinding } from "./constants/difficultyStudentTemplate";
 import { isSameSubmissionCollege, normalizeSubmissionCollegeName, resolveCollegeUpload } from "./utils/collegeDetector";
 import type {
   DisqualifiedRow,
@@ -761,9 +762,35 @@ const askDeepSeek = async (prompt: string) => {
         summary[item.fieldName] = (summary[item.fieldName] || 0) + 1;
         return summary;
       }, {});
+      const repairCategoryCounts = {
+        "推荐档次引号/别名修复": 0,
+        "日期修复": 0,
+        "特殊困难类型标准化": 0,
+        "残疾类别编码修复": 0,
+      };
+      repairLogs.forEach((item) => {
+        const canonicalKey = resolveDifficultyFieldBinding(item.fieldName)?.canonicalKey;
+        if (
+          ["finalRecommendLevel", "collegeRecommendLevel", "schoolRecommendLevel"].includes(
+            canonicalKey || ""
+          ) && String(item.originalValue ?? "").trim()
+        ) {
+          repairCategoryCounts["推荐档次引号/别名修复"] += 1;
+        } else if (canonicalKey === "applicationDate" || canonicalKey === "recognitionDate") {
+          repairCategoryCounts["日期修复"] += 1;
+        } else if (canonicalKey === "specialDifficultyType") {
+          repairCategoryCounts["特殊困难类型标准化"] += 1;
+        } else if (canonicalKey === "disabilityCategory") {
+          repairCategoryCounts["残疾类别编码修复"] += 1;
+        }
+      });
+      const repairCategorySummary = Object.entries(repairCategoryCounts)
+        .map(([label, count]) => `${label}：${count}条`)
+        .join("\n");
       const repairSummary = {
         count: repairLogs.length,
         fields: repairFieldCounts,
+        categories: repairCategoryCounts,
         examples: repairLogs.slice(0, 12),
       };
       const nextStats = {
@@ -788,7 +815,10 @@ const askDeepSeek = async (prompt: string) => {
 系统已自动完成格式治理，不影响上载。
 
 自动修复数量：${repairSummary.count}
-自动修复字段：${Object.keys(repairSummary.fields).join("、") || "无"}`);
+自动修复字段：${Object.keys(repairSummary.fields).join("、") || "无"}
+
+自动修复摘要：
+${repairCategorySummary}`);
       } else {
         try {
           const aiText = await askDeepSeek(`

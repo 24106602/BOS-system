@@ -13,6 +13,7 @@ import type {
 } from "./types";
 import {
   resolveDifficultyFieldBinding,
+  SPECIAL_DIFFICULTY_TYPE_ALIASES,
   type DifficultyStudentCanonicalKey,
   type DifficultyStudentValidatorKey,
 } from "../constants/difficultyStudentTemplate";
@@ -29,13 +30,15 @@ import {
   compressText,
   disabilityCategoryList,
   extractMaxLength,
-  fixDisabilityCategory,
   fixIncomeSource,
   fixProvince,
   formatIncomeNumber,
   incomeSourceList,
   isRequiredByRule,
   isZeroLikeText,
+  normalizeDate as normalizeDateValue,
+  normalizeDifficultyLevel as normalizeDifficultyLevelValue,
+  normalizeDisabilityType as normalizeDisabilityTypeValue,
   normalizeText,
   parseAmountToNumber,
   shouldBeNumber,
@@ -150,7 +153,6 @@ const STRICT_AUTO_REPAIR_FIELDS = [
   "学校推荐档次",
 ];
 
-const GENERAL_DIFFICULTY_LEVEL = "A.家庭经济一般困难";
 const SPECIAL_DIFFICULTY_LEVEL = "C.家庭经济特别困难";
 const DIFFICULTY_LEVEL_ERROR_REASON =
   "推荐档次必须选择 A.家庭经济一般困难 或 C.家庭经济特别困难，系统不根据其他信息自动判断困难等级。";
@@ -158,6 +160,10 @@ const SPECIAL_TYPE_REQUIRED_FOR_C_REASON =
   "已选择 C.家庭经济特别困难，特殊困难类型不能为空或为‘无’，请人工核实并选择对应特殊群体类型。";
 const SPECIAL_TYPE_REQUIRED_FOR_C_SUGGESTION =
   "请根据学生实际情况选择脱贫家庭学生、低保家庭学生、孤儿、残疾学生、其他低收入家庭学生等合法类型；如没有特殊群体依据，请将推荐档次改为 A.家庭经济一般困难。";
+
+export const normalizeDifficultyLevel = normalizeDifficultyLevelValue;
+export const normalizeDate = normalizeDateValue;
+export const normalizeDisabilityType = normalizeDisabilityTypeValue;
 
 const displayOriginalValue = (value: unknown) => {
   const text = String(value ?? "").trim();
@@ -547,17 +553,6 @@ const isNoneSpecialDifficulty = (value: unknown) => {
   return noneSpecialDifficultyTexts.some((item) => normalized === normalizeText(item));
 };
 
-const normalizeDifficultyLevelValue = (value: unknown) => {
-  const normalized = normalizeText(value).replace(/[.。．]/g, "");
-  if (["a", "a家庭经济一般困难", "一般困难", "家庭经济一般困难"].includes(normalized)) {
-    return GENERAL_DIFFICULTY_LEVEL;
-  }
-  if (["c", "c家庭经济特别困难", "特别困难", "家庭经济特别困难"].includes(normalized)) {
-    return SPECIAL_DIFFICULTY_LEVEL;
-  }
-  return "";
-};
-
 const isDifficultyLevelField = (field: string) => {
   const canonicalKey = getCanonicalKey(field);
   return canonicalKey ? DIFFICULTY_LEVEL_CANONICAL_KEYS.has(canonicalKey) : false;
@@ -581,6 +576,11 @@ const matchSpecialDifficultyType = (value: unknown) => {
   if (exact) return exact;
 
   if (isNoneSpecialDifficulty(value)) return "无";
+
+  const explicitAlias = Object.entries(SPECIAL_DIFFICULTY_TYPE_ALIASES).find(
+    ([alias]) => normalizeText(alias) === normalized
+  )?.[1];
+  if (explicitAlias) return explicitAlias;
 
   return specialDifficultyKeywordMap.find(([, keywords]) =>
     keywords.some((keyword) => normalized.includes(normalizeText(keyword)))
@@ -834,48 +834,8 @@ const getColumnValidList = (
   return Array.from(new Set([...dictValues, ...ruleOptions].filter(Boolean)));
 };
 
-const formatDateDigits = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}${month}${day}`;
-};
-
-const parseDateToYYYYMMDD = (value: unknown) => {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return formatDateDigits(value);
-
-  const raw = toHalfWidthText(value).trim();
-  if (!raw) return "";
-
-  const serial = Number(raw);
-  if (/^\d+(\.\d+)?$/.test(raw) && Number.isFinite(serial) && serial > 20000 && serial < 80000) {
-    const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
-    if (!Number.isNaN(date.getTime())) return formatDateDigits(date);
-  }
-
-  const normalized = raw.replace(/[年月./-]/g, "-").replace(/日/g, "");
-  const match = normalized.match(/(20\d{2})-(\d{1,2})-(\d{1,2})/);
-  if (match) {
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const day = Number(match[3]);
-    const date = new Date(year, month - 1, day);
-    if (
-      date.getFullYear() === year &&
-      date.getMonth() === month - 1 &&
-      date.getDate() === day
-    ) {
-      return formatDateDigits(date);
-    }
-  }
-
-  const digits = raw.replace(/\D/g, "");
-  if (/^20\d{6}$/.test(digits)) return digits;
-  return "";
-};
-
 const getDateDay = (value: unknown) => {
-  const dateText = parseDateToYYYYMMDD(value);
+  const dateText = normalizeDateValue(value);
   return dateText ? dateText.slice(-2) : "";
 };
 
@@ -1067,7 +1027,7 @@ const checkStatementReasonColumn = (originalRawValue: unknown): CheckResult => {
 
 const checkDisabilityCategoryAKColumn = (originalRawValue: unknown): CheckResult => {
   const raw = String(originalRawValue ?? "").trim();
-  const fixed = fixDisabilityCategory(raw);
+  const fixed = normalizeDisabilityTypeValue(raw);
   const valid = disabilityCategoryList.includes(fixed);
 
   return {
@@ -1076,10 +1036,22 @@ const checkDisabilityCategoryAKColumn = (originalRawValue: unknown): CheckResult
     repaired: fixed !== raw,
     reason: valid
       ? "AK列残疾类别已按允许字典值处理"
-      : "AK列残疾类别只能填写：无、视力残疾、听力残疾、智力残疾、其他残疾",
+      : `AK列残疾类别只能填写：${disabilityCategoryList.join("、")}`,
     highlight: !valid,
     highlightColor: "yellow",
   };
+};
+
+const FIELD_MISPLACEMENT_KEYWORDS = ["家庭", "困难", "收入", "疾病", "生病", "欠债", "经济"];
+
+export const detectFieldMisplacement = (fieldName: string, value: unknown) => {
+  const raw = String(value ?? "").trim();
+  const compact = stripInvisibleText(raw);
+  if (compact.length <= 15 || !FIELD_MISPLACEMENT_KEYWORDS.some((keyword) => compact.includes(keyword))) {
+    return "";
+  }
+
+  return `疑似字段错位：字段“${fieldName}”应填写“是/否”，当前内容“${raw}”疑似把陈述理由填入了该字段。`;
 };
 
 const checkAndFixCellByCanonicalKey = (
@@ -1130,6 +1102,19 @@ const checkAndFixCellByCanonicalKey = (
       highlight: !fixed.valid,
       highlightColor: "yellow",
     };
+  }
+  if (canonicalKey === "agreesReviewGroup") {
+    const misplacementReason = detectFieldMisplacement(field, originalRawValue);
+    if (misplacementReason) {
+      return {
+        value: String(originalRawValue ?? "").trim(),
+        valid: false,
+        repaired: false,
+        reason: misplacementReason,
+        highlight: true,
+        highlightColor: "yellow",
+      };
+    }
   }
   if (YES_NO_CANONICAL_KEYS.has(canonicalKey)) {
     const emptyDefault = canonicalKey === "agreesCollegeWorkingGroup" ? "是" : "否";
@@ -1192,7 +1177,7 @@ const checkAndFixCellByCanonicalKey = (
     };
   }
   if (canonicalKey === "recognitionDate") {
-    const fixed = parseDateToYYYYMMDD(originalRawValue);
+    const fixed = normalizeDateValue(originalRawValue);
     return fixed
       ? {
           value: fixed,
@@ -1699,7 +1684,11 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
           field,
           originalValue,
           checked.value,
-          checked.reason.includes("必填项为空") ? "必填缺失" : "数据格式错误",
+          checked.reason.startsWith("疑似字段错位")
+            ? "疑似字段错位"
+            : checked.reason.includes("必填项为空")
+            ? "必填缺失"
+            : "数据格式错误",
           checked.reason
         );
         onLog?.({
