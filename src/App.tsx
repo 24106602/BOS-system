@@ -990,12 +990,15 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
         templateFirstRow,
         highlightCellMap,
         disqualifiedRows,
+        collegeName: studentCollegeName,
         exportMode,
       });
       pushLog("success", `${exportMode === "passed" ? "通过名单" : "不通过名单"}导出成功，不通过人数：${result.failCount}`);
     } catch (error) {
       console.error(error);
-      alert("导出失败，请检查模板是否存在。");
+      const message = error instanceof Error ? error.message : "导出失败，请检查模板是否存在。";
+      pushLog("error", message);
+      alert(message);
     }
   };
 

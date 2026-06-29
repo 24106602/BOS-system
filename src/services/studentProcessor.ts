@@ -2086,6 +2086,82 @@ const getIssueSuggestion = (reason: string) =>
     ? SPECIAL_TYPE_REQUIRED_FOR_C_SUGGESTION
     : "请按错误原因核对并修改该字段";
 
+export type StudentExportIdentity = {
+  collegeName: string;
+  name: string;
+  studentId: string;
+  idCard: string;
+  nativePlace: string;
+};
+
+const EXPORT_ALIGNMENT_ERROR = "检测到导出字段错位，请检查导出字段映射。";
+
+const firstExportText = (...values: unknown[]) => {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return "";
+};
+
+const findStudentIdField = (templateFields: string[]) =>
+  templateFields.find((field) => ["学号", "学生学号"].includes(cleanFieldName(field))) || "";
+
+const findExportField = (
+  templateFields: string[],
+  canonicalKey: DifficultyStudentCanonicalKey
+) => templateFields.find((field) => getCanonicalKey(field) === canonicalKey) || "";
+
+export const resolveStudentExportIdentity = (
+  row: Record<string, unknown>,
+  templateFields: string[],
+  currentCollegeName = ""
+): StudentExportIdentity => {
+  const nameField = findExportField(templateFields, "name");
+  const studentIdField = findStudentIdField(templateFields);
+  const idCardField = findExportField(templateFields, "idCard");
+  const nativePlaceField = findExportField(templateFields, "nativePlace");
+
+  return {
+    collegeName: firstExportText(row.collegeName, row.college_name, currentCollegeName),
+    name: firstExportText(row.name, nameField ? row[nameField] : ""),
+    studentId: firstExportText(row.studentId, row.student_id, studentIdField ? row[studentIdField] : ""),
+    idCard: firstExportText(row.idCard, row.id_card, idCardField ? row[idCardField] : ""),
+    nativePlace: firstExportText(row.nativePlace, nativePlaceField ? row[nativePlaceField] : ""),
+  };
+};
+
+export const validateExportRow = (row: Partial<StudentExportIdentity>) => {
+  const collegeName = String(row.collegeName ?? "").replace(/\s+/g, "");
+  const studentId = String(row.studentId ?? "").trim();
+  const idCard = String(row.idCard ?? "").trim();
+  const idCardLooksLikeNativePlace = /(?:省|自治区|特别行政区)$/.test(idCard) ||
+    /^(?:北京市|天津市|上海市|重庆市)$/.test(idCard);
+
+  if (
+    /^\d{8,20}$/.test(collegeName) ||
+    idCardLooksLikeNativePlace ||
+    /[\u3400-\u9fff]/.test(studentId)
+  ) {
+    throw new Error(EXPORT_ALIGNMENT_ERROR);
+  }
+
+  return true;
+};
+
+export const buildTemplateExportMatrix = (
+  rows: Record<string, unknown>[],
+  templateFields: string[]
+) => [
+  [...templateFields],
+  ...rows.map((row) => templateFields.map((field) => row[field] ?? "")),
+];
+
+const makeTemplateListSheet = (
+  rows: Record<string, unknown>[],
+  templateFields: string[]
+) => XLSX.utils.aoa_to_sheet(buildTemplateExportMatrix(rows, templateFields));
+
 export const exportStudentExcel = ({
   processedData,
   templateWorkbook,
@@ -2095,6 +2171,7 @@ export const exportStudentExcel = ({
   templateFirstRow,
   highlightCellMap,
   disqualifiedRows,
+  collegeName = "",
   exportMode = "all",
 }: {
   processedData: Record<string, unknown>[];
@@ -2105,6 +2182,7 @@ export const exportStudentExcel = ({
   templateFirstRow: unknown[];
   highlightCellMap: Record<string, HighlightInfo>;
   disqualifiedRows: DisqualifiedRow[];
+  collegeName?: string;
   exportMode?: "all" | "passed" | "failed";
 }) => {
   const originalSheet = templateWorkbook.worksheets[templateOutputSheet];
@@ -2168,41 +2246,56 @@ export const exportStudentExcel = ({
 
   const failRowNumberSet = new Set(disqualifiedRows.map((item) => item.rowNumber));
   const passedRows = processedData.filter((_, index) => !failRowNumberSet.has(index + 1));
-  const passedSheet = XLSX.utils.json_to_sheet(passedRows, { header: templateFields });
+  const passedSheet = makeTemplateListSheet(passedRows, templateFields);
   passedSheet["!cols"] = templateFields.map(() => ({ wch: 18 }));
   if (exportMode !== "failed") XLSX.utils.book_append_sheet(workbook, passedSheet, "通过名单");
 
-  const studentIdFieldIndex = templateFields.findIndex((field) => cleanFieldName(field).includes("学号"));
-  const studentIdField = studentIdFieldIndex >= 0 ? templateFields[studentIdFieldIndex] : "";
+  const failedRows = processedData
+    .map((row, rowIndex) => ({ row, rowIndex }))
+    .filter(({ rowIndex }) => failRowNumberSet.has(rowIndex + 1));
+  const failedIdentityMap = new Map(
+    failedRows.map(({ row, rowIndex }) => [
+      rowIndex,
+      resolveStudentExportIdentity(row, templateFields, collegeName),
+    ])
+  );
+  if (exportMode !== "passed") {
+    failedIdentityMap.forEach((identity) => validateExportRow(identity));
+  }
+
   const failIssueRows = issueEntries
     .filter(({ rowIndex }) => failRowNumberSet.has(rowIndex + 1))
     .map(({ rowIndex, colIndex, info }) => {
-    const row = processedData[rowIndex] || {};
-    const fieldName = templateFields[colIndex] || `第${colIndex + 1}列`;
-    return [
-      rowIndex + 1,
-      String(row[templateFields[1]] ?? ""),
-      String(row[templateFields[0]] ?? ""),
-      studentIdField ? String(row[studentIdField] ?? "") : "",
-      String(row[templateFields[2]] ?? ""),
-      fieldName,
-      String(row[fieldName] ?? ""),
-      info.reason,
-      info.color === "red" ? "error" : "warning",
-      getIssueSuggestion(info.reason),
-    ];
-  });
+      const row = processedData[rowIndex] || {};
+      const identity = failedIdentityMap.get(rowIndex) ||
+        resolveStudentExportIdentity(row, templateFields, collegeName);
+      const fieldName = templateFields[colIndex] || `第${colIndex + 1}列`;
+      return [
+        rowIndex + 1,
+        identity.collegeName,
+        identity.name,
+        identity.studentId,
+        identity.idCard,
+        fieldName,
+        String(row[fieldName] ?? ""),
+        info.reason,
+        info.color === "red" ? "error" : "warning",
+        getIssueSuggestion(info.reason),
+      ];
+    });
 
   const noIssueFailRows = disqualifiedRows
     .filter((item) => !failIssueRows.some((row) => Number(row[0]) === item.rowNumber))
     .map((item) => {
       const row = processedData[item.rowNumber - 1] || {};
+      const identity = failedIdentityMap.get(item.rowNumber - 1) ||
+        resolveStudentExportIdentity(row, templateFields, collegeName);
       return [
         item.rowNumber,
-        String(row[templateFields[1]] ?? ""),
-        String(item.name ?? ""),
-        studentIdField ? String(row[studentIdField] ?? "") : "",
-        String(item.idCard ?? ""),
+        identity.collegeName,
+        identity.name || String(item.name ?? ""),
+        identity.studentId,
+        identity.idCard || String(item.idCard ?? ""),
         "",
         "",
         item.reason,
@@ -2212,10 +2305,7 @@ export const exportStudentExcel = ({
     });
 
   const failDataRows = [...failIssueRows, ...noIssueFailRows];
-  const failedRows = processedData
-    .map((row, rowIndex) => ({ row, rowIndex }))
-    .filter(({ rowIndex }) => failRowNumberSet.has(rowIndex + 1));
-  const failSheet = XLSX.utils.json_to_sheet(failedRows.map(({ row }) => row), { header: templateFields });
+  const failSheet = makeTemplateListSheet(failedRows.map(({ row }) => row), templateFields);
   failSheet["!cols"] = templateFields.map(() => ({ wch: 18 }));
   failedRows.forEach(({ rowIndex }, failIndex) => {
     templateFields.forEach((_, colIndex) => {
