@@ -57,6 +57,11 @@ const workspacePaths = new Set([
   "/admin/awards/shanghai",
 ]);
 
+const pageTitles: Record<string, string> = {
+  "/admin": "管理员首页",
+  ...Object.fromEntries([...difficultyMenus, ...baseInfoMenus, ...awardMenus].map((item) => [item.path, item.label])),
+};
+
 function MenuButton({
   item,
   active,
@@ -132,9 +137,9 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
 
       <div className="bos-shell-workspace">
         <header className="bos-topbar-modern">
-          <div className="bos-topbar-search">
-            <span>⌕</span>
-            <input aria-label="搜索系统内容" placeholder="搜索菜单、学院或学生..." />
+          <div className="bos-topbar-context">
+            <span>学校管理后台</span>
+            <strong>{pageTitles[path] || "数据管理"}</strong>
           </div>
           <div className="bos-topbar-account">
             <span className="bos-account-avatar">管</span>

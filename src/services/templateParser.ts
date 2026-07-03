@@ -1,10 +1,19 @@
 // 模板解析服务：负责读取 Excel、解析模板字段、字典值和源数据表头映射。
 import * as XLSX from "xlsx-js-style";
-import type { ColumnMapItem, TemplateParseResult, WorkbookData } from "./types";
+import type {
+  ColumnMapItem,
+  DataTemplateValidationResult,
+  TemplateField,
+  TemplateParseResult,
+  TemplateValidationResult,
+  WorkbookData,
+} from "./types";
 import { cleanFieldName, normalizeText, parseRuleOptions } from "../utils/validators";
 import {
+  DIFFICULTY_STUDENT_FIELD_BINDINGS,
   getDifficultyFieldAliases,
   resolveDifficultyFieldBinding,
+  type DifficultyStudentCanonicalKey,
 } from "../constants/difficultyStudentTemplate";
 
 export const readWorkbook = (file: File): Promise<WorkbookData> => {
@@ -173,6 +182,352 @@ export const normalizeDifficultyHeader = (value: unknown) => {
   return normalized;
 };
 
+export const DIFFICULTY_STUDENT_CORE_KEYS: readonly DifficultyStudentCanonicalKey[] = [
+  "name",
+  "nativePlace",
+  "idCard",
+  "studentId",
+  "familyPopulation",
+  "laborPopulation",
+  "dependentPopulation",
+  "specialDifficultyType",
+  "finalRecommendLevel",
+  "collegeRecommendLevel",
+  "schoolRecommendLevel",
+  "studentStatement",
+  "agreesReviewGroup",
+];
+
+const CORE_FIELD_LABELS: Partial<Record<DifficultyStudentCanonicalKey, string>> = {
+  name: "姓名",
+  nativePlace: "籍贯",
+  idCard: "身份证号",
+  studentId: "学号",
+  familyPopulation: "家庭人口数",
+  laborPopulation: "劳动力人口数",
+  dependentPopulation: "赡养人口数",
+  specialDifficultyType: "特殊困难类型",
+  finalRecommendLevel: "推荐档次",
+  collegeRecommendLevel: "院系推荐档次",
+  schoolRecommendLevel: "学校推荐档次",
+  studentStatement: "陈述理由",
+  agreesReviewGroup: "是否同意评议小组意见",
+};
+
+const RECOMMEND_LEVEL_KEYS = new Set<DifficultyStudentCanonicalKey>([
+  "finalRecommendLevel",
+  "collegeRecommendLevel",
+  "schoolRecommendLevel",
+]);
+
+const WRONG_AWARD_MARKERS = [
+  "国家奖学金",
+  "上海市奖学金",
+  "获奖",
+  "奖项类型",
+  "银行卡号",
+  "开户行",
+  "成绩排名",
+  "专业排名",
+];
+
+const WRONG_FAMILY_MARKERS = [
+  "家庭成员姓名",
+  "家庭成员年龄",
+  "与学生关系",
+  "工作或学习单位",
+  "健康状况",
+  "成员职业",
+];
+
+const describeCoreKey = (key: DifficultyStudentCanonicalKey) => CORE_FIELD_LABELS[key] || key;
+
+const resolveHeaderBinding = (rawHeader: string) => {
+  const direct = resolveDifficultyFieldBinding(rawHeader);
+  if (direct) return direct;
+
+  const normalizedHeader = normalizeDifficultyHeader(rawHeader);
+  if (!normalizedHeader) return undefined;
+
+  const candidates = DIFFICULTY_STUDENT_FIELD_BINDINGS.flatMap((binding) =>
+    [binding.fieldName, ...binding.aliases].map((alias) => ({
+      binding,
+      normalizedAlias: normalizeDifficultyHeader(alias),
+    }))
+  ).filter((item) => item.normalizedAlias)
+    .sort((a, b) => b.normalizedAlias.length - a.normalizedAlias.length);
+
+  return candidates.find(({ normalizedAlias }) => {
+    if (!normalizedHeader.startsWith(normalizedAlias)) return false;
+    const suffix = normalizedHeader.slice(normalizedAlias.length);
+    return /^(?:填写|填报|说明|备注|要求|必填|选填|最多|不超过|请)/.test(suffix);
+  })?.binding;
+};
+
+const buildTemplateFields = (row: unknown[]): TemplateField[] =>
+  row.map((cell, columnIndex) => {
+    const rawHeader = String(cell ?? "").trim();
+    const binding = rawHeader ? resolveHeaderBinding(rawHeader) : undefined;
+    return {
+      rawHeader,
+      normalizedHeader: normalizeDifficultyHeader(rawHeader),
+      canonicalKey: binding?.canonicalKey,
+      validatorKey: binding?.validatorKey,
+      columnIndex,
+    };
+  }).filter((field) => field.rawHeader !== "");
+
+type HeaderCandidate = {
+  sheetName: string;
+  headerRowIndex: number;
+  fields: TemplateField[];
+  canonicalCount: number;
+};
+
+const findBestStudentHeader = (workbookData: WorkbookData): HeaderCandidate | null => {
+  let best: HeaderCandidate | null = null;
+
+  workbookData.sheetNames.forEach((sheetName) => {
+    const rows = workbookData.sheets[sheetName] || [];
+    rows.slice(0, 10).forEach((row, headerRowIndex) => {
+      const fields = buildTemplateFields(row);
+      const canonicalCount = new Set(
+        fields.map((field) => field.canonicalKey).filter(Boolean)
+      ).size;
+      if (canonicalCount === 0) return;
+      if (
+        !best ||
+        canonicalCount > best.canonicalCount ||
+        (canonicalCount === best.canonicalCount && fields.length > best.fields.length)
+      ) {
+        best = { sheetName, headerRowIndex, fields, canonicalCount };
+      }
+    });
+  });
+
+  return best;
+};
+
+const getWrongTemplateType = (fields: TemplateField[]) => {
+  const headers = fields.map((field) => field.normalizedHeader);
+  const awardHits = WRONG_AWARD_MARKERS.filter((marker) =>
+    headers.some((header) => header.includes(normalizeDifficultyHeader(marker)))
+  );
+  const familyHits = WRONG_FAMILY_MARKERS.filter((marker) =>
+    headers.some((header) => header.includes(normalizeDifficultyHeader(marker)))
+  );
+
+  if (awardHits.length >= 2 || awardHits.some((marker) => /奖学金|银行卡号|开户行/.test(marker))) {
+    return "award";
+  }
+  if (familyHits.length >= 2) return "family";
+  return "";
+};
+
+const getCanonicalKeys = (fields: TemplateField[]) =>
+  fields
+    .map((field) => field.canonicalKey)
+    .filter((key): key is DifficultyStudentCanonicalKey => Boolean(key));
+
+const uniqueInOrder = <T,>(values: T[]) => Array.from(new Set(values));
+
+export const createTemplateSignature = (fields: TemplateField[]) =>
+  uniqueInOrder(getCanonicalKeys(fields)).join("|");
+
+const getRequiredCoreErrors = (keySet: Set<DifficultyStudentCanonicalKey>) => {
+  const missing: string[] = [];
+  if (!keySet.has("name")) missing.push("姓名");
+  if (!keySet.has("idCard") && !keySet.has("studentId")) missing.push("身份证号或学号");
+  if (![...RECOMMEND_LEVEL_KEYS].some((key) => keySet.has(key))) {
+    missing.push("推荐档次/院系推荐档次/学校推荐档次");
+  }
+  if (!keySet.has("specialDifficultyType")) missing.push("特殊困难类型");
+  if (!keySet.has("studentStatement")) missing.push("陈述理由");
+  return missing;
+};
+
+const withTemplateErrorPrefix = (errors: string[]) => [
+  "上传的模板表不是困难生本专科信息模板，请上传正确模板。",
+  ...errors,
+];
+
+export const validateTemplateFile = (templateWorkbook: WorkbookData): TemplateValidationResult => {
+  const candidate = findBestStudentHeader(templateWorkbook);
+  const emptyResult: TemplateValidationResult = {
+    ok: false,
+    templateFields: [],
+    templateSignature: "",
+    headerRowIndex: -1,
+    sheetName: "",
+    matchedFieldCount: 0,
+    coreMatchedCount: 0,
+    errors: withTemplateErrorPrefix(["未能在前10行识别出困难生字段表头。"]),
+    warnings: [],
+  };
+  if (!candidate) return emptyResult;
+
+  const canonicalKeys = getCanonicalKeys(candidate.fields);
+  const uniqueCanonicalKeys = uniqueInOrder(canonicalKeys);
+  const keySet = new Set(uniqueCanonicalKeys);
+  const coreMatchedCount = DIFFICULTY_STUDENT_CORE_KEYS.filter((key) => keySet.has(key)).length;
+  const minimumCoreCount = Math.ceil(DIFFICULTY_STUDENT_CORE_KEYS.length * 0.7);
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const wrongTemplateType = getWrongTemplateType(candidate.fields);
+  const missingRequired = getRequiredCoreErrors(keySet);
+  const duplicateKeys = canonicalKeys.filter((key, index) => canonicalKeys.indexOf(key) !== index);
+
+  if (wrongTemplateType === "award") errors.push("检测到三奖、获奖或银行卡相关字段。");
+  if (wrongTemplateType === "family") errors.push("检测到家庭成员信息表字段。");
+  if (coreMatchedCount < minimumCoreCount) {
+    errors.push(`核心字段仅匹配 ${coreMatchedCount}/${DIFFICULTY_STUDENT_CORE_KEYS.length}，低于70%要求。`);
+  }
+  if (missingRequired.length > 0) errors.push(`缺少必需核心字段：${missingRequired.join("、")}。`);
+  if (duplicateKeys.length > 0) {
+    errors.push(`存在重复字段绑定：${uniqueInOrder(duplicateKeys).map(describeCoreKey).join("、")}。`);
+  }
+
+  const unknownHeaders = candidate.fields.filter((field) => !field.canonicalKey).map((field) => field.rawHeader);
+  if (unknownHeaders.length > 0) {
+    warnings.push(`检测到 ${unknownHeaders.length} 个非标准字段：${unknownHeaders.slice(0, 6).join("、")}。`);
+  }
+
+  return {
+    ok: errors.length === 0,
+    templateFields: candidate.fields,
+    templateSignature: createTemplateSignature(candidate.fields),
+    headerRowIndex: candidate.headerRowIndex,
+    sheetName: candidate.sheetName,
+    matchedFieldCount: uniqueCanonicalKeys.length,
+    coreMatchedCount,
+    errors: errors.length > 0 ? withTemplateErrorPrefix(errors) : [],
+    warnings,
+  };
+};
+
+const longestCommonSubsequenceLength = (left: DifficultyStudentCanonicalKey[], right: DifficultyStudentCanonicalKey[]) => {
+  const table = Array.from({ length: left.length + 1 }, () => Array(right.length + 1).fill(0));
+  for (let i = 1; i <= left.length; i++) {
+    for (let j = 1; j <= right.length; j++) {
+      table[i][j] = left[i - 1] === right[j - 1]
+        ? table[i - 1][j - 1] + 1
+        : Math.max(table[i - 1][j], table[i][j - 1]);
+    }
+  }
+  return table[left.length][right.length];
+};
+
+export const validateDataAgainstTemplate = (
+  dataWorkbook: WorkbookData,
+  templateInfo: TemplateValidationResult
+): DataTemplateValidationResult => {
+  const candidate = findBestStudentHeader(dataWorkbook);
+  const invalidResult = (errors: string[]): DataTemplateValidationResult => ({
+    ok: false,
+    dataFields: candidate?.fields || [],
+    dataSignature: candidate ? createTemplateSignature(candidate.fields) : "",
+    headerRowIndex: candidate?.headerRowIndex ?? -1,
+    sheetName: candidate?.sheetName || "",
+    mismatchLevel: "invalid",
+    matchedFieldCount: 0,
+    templateFieldCount: uniqueInOrder(getCanonicalKeys(templateInfo.templateFields)).length,
+    dataFieldCount: candidate?.fields.length || 0,
+    matchRate: 0,
+    missingCoreFields: [],
+    extraFields: [],
+    errors: ["数据表与模板表不匹配。请确认上传的是同一个困难生本专科信息模板。", ...errors],
+    warnings: [],
+  });
+
+  if (!templateInfo.ok) return invalidResult(["模板表尚未通过校验，请重新上传正确模板。"]);
+  if (!candidate) return invalidResult(["未能在前10行识别出数据表头。"]);
+
+  const wrongTemplateType = getWrongTemplateType(candidate.fields);
+  if (wrongTemplateType === "award") return invalidResult(["检测到三奖、获奖或银行卡相关字段。"]);
+  if (wrongTemplateType === "family") return invalidResult(["检测到家庭成员信息表字段。"]);
+
+  const templateKeys = uniqueInOrder(getCanonicalKeys(templateInfo.templateFields));
+  const dataKeys = uniqueInOrder(getCanonicalKeys(candidate.fields));
+  const templateKeySet = new Set(templateKeys);
+  const dataKeySet = new Set(dataKeys);
+  const matchedKeys = templateKeys.filter((key) => dataKeySet.has(key));
+  const matchRate = templateKeys.length > 0 ? matchedKeys.length / templateKeys.length : 0;
+  const templateCoreKeys = DIFFICULTY_STUDENT_CORE_KEYS.filter((key) => templateKeySet.has(key));
+  const missingCoreKeys = templateCoreKeys.filter((key) => !dataKeySet.has(key));
+  const missingRequired = getRequiredCoreErrors(dataKeySet);
+  const missingCoreFields = uniqueInOrder([
+    ...missingCoreKeys.map(describeCoreKey),
+    ...missingRequired,
+  ]);
+  const missingNonCoreKeys = templateKeys.filter(
+    (key) => !dataKeySet.has(key) && !DIFFICULTY_STUDENT_CORE_KEYS.includes(key)
+  );
+  const extraFields = candidate.fields
+    .filter((field) => !field.canonicalKey || !templateKeySet.has(field.canonicalKey))
+    .map((field) => field.rawHeader);
+  const warnings: string[] = [];
+  const errors: string[] = [];
+
+  if (missingCoreFields.length > 0) errors.push(`缺失核心字段：${missingCoreFields.join("、")}。`);
+  if (matchRate < 0.9) errors.push(`字段匹配率为 ${(matchRate * 100).toFixed(1)}%，低于90%要求。`);
+  if (missingNonCoreKeys.length > 0) {
+    warnings.push(`缺少非核心字段：${missingNonCoreKeys.map(describeCoreKey).join("、")}。`);
+  }
+  if (extraFields.length > 0) warnings.push(`新增非核心字段：${extraFields.slice(0, 8).join("、")}。`);
+
+  const templateRawByKey = new Map(
+    templateInfo.templateFields
+      .filter((field): field is TemplateField & { canonicalKey: DifficultyStudentCanonicalKey } => Boolean(field.canonicalKey))
+      .map((field) => [field.canonicalKey, field.rawHeader])
+  );
+  const hasHeaderFormattingDifference = candidate.fields.some((field) =>
+    field.canonicalKey &&
+    templateRawByKey.has(field.canonicalKey) &&
+    templateRawByKey.get(field.canonicalKey) !== field.rawHeader
+  );
+  if (hasHeaderFormattingDifference) warnings.push("数据表表头存在空格、星号、括号或说明文字差异，已按标准字段识别。");
+
+  const expectedCommonOrder = templateKeys.filter((key) => dataKeySet.has(key));
+  const actualCommonOrder = dataKeys.filter((key) => templateKeySet.has(key));
+  const orderSimilarity = expectedCommonOrder.length === 0
+    ? 0
+    : longestCommonSubsequenceLength(expectedCommonOrder, actualCommonOrder) / expectedCommonOrder.length;
+  if (orderSimilarity < 0.8) {
+    errors.push(`核心结构顺序相似度为 ${(orderSimilarity * 100).toFixed(1)}%，字段存在大面积错位。`);
+  } else if (orderSimilarity < 1) {
+    warnings.push(`字段顺序存在小幅变化，相似度为 ${(orderSimilarity * 100).toFixed(1)}%。`);
+  }
+
+  const hasInvalidError = missingCoreFields.length > 0 || matchRate < 0.9;
+  const hasMajorOrderMismatch = orderSimilarity < 0.8;
+  const mismatchLevel = hasInvalidError
+    ? "invalid"
+    : hasMajorOrderMismatch
+    ? "major"
+    : warnings.length > 0
+    ? "minor"
+    : "none";
+
+  return {
+    ok: errors.length === 0,
+    dataFields: candidate.fields,
+    dataSignature: createTemplateSignature(candidate.fields),
+    headerRowIndex: candidate.headerRowIndex,
+    sheetName: candidate.sheetName,
+    mismatchLevel,
+    matchedFieldCount: matchedKeys.length,
+    templateFieldCount: templateKeys.length,
+    dataFieldCount: candidate.fields.length,
+    matchRate,
+    missingCoreFields,
+    extraFields,
+    errors: errors.length > 0
+      ? ["数据表与模板表不匹配。请确认上传的是同一个困难生本专科信息模板。", ...errors]
+      : [],
+    warnings,
+  };
+};
+
 const normalizeHeaderText = (value: unknown) => normalizeDifficultyHeader(value);
 
 const rowHasMeaningfulCells = (row: unknown[]) =>
@@ -202,7 +557,11 @@ const findTemplateHeaderRowIndex = (rows: unknown[][], type: "student" | "family
   return bestScore >= 2 ? bestIndex : -1;
 };
 
-const pickTemplateHeaderRows = (rows: unknown[][], type: "student" | "family") => {
+const pickTemplateHeaderRows = (
+  rows: unknown[][],
+  type: "student" | "family",
+  requireDataRows = true
+) => {
   if (rows.length === 0) throw new Error("没有找到有效 Sheet");
 
   const headerIndex = findTemplateHeaderRowIndex(rows, type);
@@ -215,7 +574,7 @@ const pickTemplateHeaderRows = (rows: unknown[][], type: "student" | "family") =
     .filter(rowHasMeaningfulCells)
     .filter((row) => getHeaderScore(row, type === "student" ? STUDENT_HEADER_KEYWORDS : FAMILY_HEADER_KEYWORDS) < 2);
 
-  if (dataRows.length === 0) throw new Error("没有读取到数据行");
+  if (requireDataRows && dataRows.length === 0) throw new Error("没有读取到数据行");
   return { firstRow, secondRow, headerIndex, dataRows };
 };
 
@@ -381,16 +740,22 @@ const pickTemplateSheets = (workbookData: WorkbookData) => {
 };
 
 export const parseStudentTemplate = (workbookData: WorkbookData): TemplateParseResult => {
-  const { dictSheet, outputSheet: initialOutputSheet } = pickTemplateSheets(workbookData);
-  const outputSheet =
-    findTemplateHeaderRowIndex(workbookData.sheets[initialOutputSheet] || [], "student") >= 0
-      ? initialOutputSheet
-      : workbookData.sheetNames.find((name) => name !== dictSheet && findTemplateHeaderRowIndex(workbookData.sheets[name] || [], "student") >= 0) || initialOutputSheet;
+  const validation = validateTemplateFile(workbookData);
+  if (!validation.ok) throw new Error(validation.errors.join("\n"));
+
+  const outputSheet = validation.sheetName;
+  const dictSheet = workbookData.sheetNames.find(
+    (name) => name !== outputSheet && name.includes("字典")
+  ) || workbookData.sheetNames.find((name) => name !== outputSheet) || "";
   const outputRows = workbookData.sheets[outputSheet] || [];
   const dictRows = workbookData.sheets[dictSheet] || [];
-  const { firstRow, secondRow } = pickTemplateHeaderRows(outputRows, "student");
+  const secondRow = outputRows[validation.headerRowIndex] || [];
+  const firstRow = validation.headerRowIndex > 0
+    ? outputRows[validation.headerRowIndex - 1] || []
+    : [];
+  const columnCount = getEffectiveColumnCount(firstRow, secondRow);
 
-  const fields = secondRow.slice(0, 40).map((item, index) => {
+  const fields = secondRow.slice(0, columnCount).map((item, index) => {
     const value = String(item ?? "").trim();
     return value || `空字段${index + 1}`;
   });
@@ -402,8 +767,8 @@ export const parseStudentTemplate = (workbookData: WorkbookData): TemplateParseR
     workbookData,
     outputSheet,
     dictSheet,
-    firstRow: firstRow.slice(0, 40),
-    secondRow: secondRow.slice(0, 40),
+    firstRow: firstRow.slice(0, columnCount),
+    secondRow: secondRow.slice(0, columnCount),
     fields,
     dictionaries,
     fieldToDict,

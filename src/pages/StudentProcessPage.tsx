@@ -1,15 +1,30 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ChangeEventHandler, type DragEvent, type ReactNode, type RefObject } from "react";
-import type { DisqualifiedRow, LogItem, ProcessingStats } from "../services/types";
+import type {
+  DataTemplateValidationResult,
+  DisqualifiedRow,
+  LogItem,
+  ProcessingStats,
+  TemplateValidationResult,
+} from "../services/types";
 import { ACADEMIC_YEAR_OPTIONS } from "../utils/academicYear";
 import {
   DIFFICULTY_STUDENT_TEMPLATE_FIELDS,
   getDifficultyTemplateValue,
 } from "../constants/difficultyStudentTemplate";
+import AdminCard from "../components/ui/AdminCard";
+import PageHeader from "../components/ui/PageHeader";
+import StatCard from "../components/ui/StatCard";
+import Toolbar from "../components/ui/Toolbar";
 
 type StudentProcessPageProps = {
+  templateRef: RefObject<HTMLInputElement | null>;
   dataRef: RefObject<HTMLInputElement | null>;
   uploadData: ChangeEventHandler<HTMLInputElement>;
+  uploadTemplateFile: (file: File) => Promise<void>;
   uploadDataFile: (file: File) => Promise<void>;
+  startProcessing: () => Promise<void>;
+  templateInfo: TemplateValidationResult | null;
+  dataTemplateCheck: DataTemplateValidationResult | null;
   isProcessing: boolean;
   exportExcel: () => void;
   exportStudentErrorReport: () => void;
@@ -37,9 +52,14 @@ type StudentProcessPageProps = {
 type ModalType = "import" | "passed" | "failed" | "analysis" | null;
 
 export default function StudentProcessPage({
+  templateRef,
   dataRef,
   uploadData,
+  uploadTemplateFile,
   uploadDataFile,
+  startProcessing,
+  templateInfo,
+  dataTemplateCheck,
   isProcessing,
   exportExcel,
   exportStudentErrorReport,
@@ -64,6 +84,7 @@ export default function StudentProcessPage({
   onBackToDifficulty,
 }: StudentProcessPageProps) {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+  const [templateFileName, setTemplateFileName] = useState("");
   const [importFileName, setImportFileName] = useState("");
   const [filters, setFilters] = useState({
     name: "",
@@ -119,10 +140,41 @@ export default function StudentProcessPage({
     reviewConfirmed ? "学院已确认" :
     "已处理，待确认";
 
+  const canUploadData = Boolean(templateInfo?.ok) && !isProcessing;
+  const canStartProcessing = Boolean(templateInfo?.ok && dataTemplateCheck?.ok) && !isProcessing;
+  const templateStatusText = !templateInfo
+    ? "未上传"
+    : templateInfo.ok
+    ? `已识别：匹配字段 ${templateInfo.matchedFieldCount} 个，核心字段 ${templateInfo.coreMatchedCount} 个`
+    : `识别失败：${templateInfo.errors[0] || "模板不符合要求"}`;
+  const dataStatusText = !dataTemplateCheck
+    ? "未上传"
+    : dataTemplateCheck.ok
+    ? `与模板匹配：匹配率 ${(dataTemplateCheck.matchRate * 100).toFixed(1)}%`
+    : `与模板不匹配：${dataTemplateCheck.errors[0] || "数据表格式错误"}`;
+
+  const selectTemplateFile = () => {
+    if (!templateRef.current || isProcessing) return;
+    templateRef.current.value = "";
+    templateRef.current.click();
+  };
+
   const selectFile = () => {
+    if (!templateInfo?.ok) {
+      alert("必须先上传并通过校验的困难生本专科模板表。");
+      return;
+    }
     if (!dataRef.current) return;
     dataRef.current.value = "";
     dataRef.current.click();
+  };
+
+  const handleTemplateFileChange: ChangeEventHandler<HTMLInputElement> = async (event) => {
+    const file = event.currentTarget.files?.[0];
+    if (!file) return;
+    setTemplateFileName(file.name);
+    setImportFileName("");
+    await uploadTemplateFile(file);
   };
 
   const handleFileChange: ChangeEventHandler<HTMLInputElement> = async (event) => {
@@ -137,6 +189,15 @@ export default function StudentProcessPage({
     if (!file) return;
     setImportFileName(file.name);
     await uploadDataFile(file);
+  };
+
+  const handleTemplateDrop = async (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    setTemplateFileName(file.name);
+    setImportFileName("");
+    await uploadTemplateFile(file);
   };
 
   const resetSearch = () => {
@@ -175,24 +236,48 @@ export default function StudentProcessPage({
 
   return (
     <section className="bos-table-page difficulty-workspace">
-      <header className="bos-page-title-row">
-        <div>
-          <div className="bos-breadcrumb">困难生业务 / 本专科信息 / Student Information</div>
-          <h1>困难生数据处理</h1>
-          <p>当前处理：本专科信息。保留原 Excel 解析、数据治理、自动修复、名单导出、学院确认和学校端上载逻辑。</p>
-        </div>
-        <div className="bos-status-row">
+      <PageHeader
+        breadcrumb="困难生业务 / 本专科信息"
+        title="困难生本专科信息处理"
+        description="上传模板表与数据表，完成格式校验、自动修复、问题核查和学院上载。"
+        actions={(
+          <div className="bos-status-row">
           <span className="bos-status-badge">{studentCollegeName}</span>
-          {onBackToDifficulty && <button style={pageStyles.backButton} onClick={onBackToDifficulty}>返回业务首页</button>}
-        </div>
-      </header>
+          {onBackToDifficulty && <button className="bos-button" onClick={onBackToDifficulty}>返回业务首页</button>}
+          </div>
+        )}
+      />
 
-      <div className="difficulty-cockpit-grid">
-        <CockpitStat label="治理数据总量" value={stats.total} tone="blue" />
-        <CockpitStat label="治理通过" value={passedRows.length} tone="green" />
-        <CockpitStat label="不通过" value={disqualifiedRows.length} tone="red" />
-        <CockpitStat label="自动修复" value={stats.repaired} tone="amber" />
-        <CockpitStat label="当前选中" value={selectedKeys.size} tone="purple" />
+      <AdminCard
+        className="difficulty-upload-overview"
+        title="文件上传与模板校验"
+        description="必须先识别困难生模板表，再校验同格式数据表；两步均通过后才可开始治理。"
+        extra={<button className="bos-button is-primary" onClick={() => setActiveModal("import")}>选择文件</button>}
+      >
+        <div className="difficulty-upload-steps">
+          <div className={`difficulty-upload-step${templateInfo?.ok ? " is-success" : templateInfo ? " is-error" : ""}`}>
+            <span>1</span>
+            <div><strong>模板表</strong><small>{templateStatusText}</small></div>
+          </div>
+          <div className={`difficulty-upload-step${dataTemplateCheck?.ok ? " is-success" : dataTemplateCheck ? " is-error" : ""}`}>
+            <span>2</span>
+            <div><strong>数据表</strong><small>{dataStatusText}</small></div>
+          </div>
+          <button
+            className="bos-button is-primary"
+            disabled={!canStartProcessing}
+            onClick={() => void startProcessing()}
+          >
+            {isProcessing ? "正在处理..." : "开始处理"}
+          </button>
+        </div>
+      </AdminCard>
+
+      <div className="bos-stat-grid">
+        <StatCard label="治理数据总量" value={stats.total} hint={`当前选中 ${selectedKeys.size} 条`} />
+        <StatCard label="通过人数" value={passedRows.length} tone="green" />
+        <StatCard label="不通过人数" value={disqualifiedRows.length} tone="red" />
+        <StatCard label="自动修复数" value={stats.repaired} tone="amber" />
       </div>
 
       <section className="bos-filter-card">
@@ -213,14 +298,14 @@ export default function StudentProcessPage({
         </div>
       </section>
 
-      <div className="bos-action-toolbar">
+      <Toolbar>
         <button className="is-primary" onClick={() => setActiveModal("import")}>数据导入</button>
         <button onClick={() => setAppliedFilters(filters)}>刷新</button>
         <button onClick={() => setActiveModal("passed")}>查看通过数据</button>
         <button onClick={() => setActiveModal("failed")}>查看不通过数据</button>
         <button onClick={() => setActiveModal("analysis")}>问题分析</button>
-        <button className="is-purple" onClick={exportExcel}>导出通过名单</button>
-        <button className="is-purple" onClick={exportStudentErrorReport}>导出不通过名单</button>
+        <button className="is-purple" disabled={!hasProcessedRows} onClick={exportExcel}>导出通过名单</button>
+        <button className="is-purple" disabled={!hasProcessedRows} onClick={exportStudentErrorReport}>导出不通过名单</button>
         <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedRows}>
           删除选中（{selectedKeys.size}）
         </button>
@@ -239,7 +324,7 @@ export default function StudentProcessPage({
           </>
         )}
         {onViewDifficultyStudents && <button onClick={onViewDifficultyStudents}>查看困难生明细</button>}
-      </div>
+      </Toolbar>
 
       <div className="bos-status-row">
         <span className="bos-status-badge">当前状态：{status}</span>
@@ -250,14 +335,18 @@ export default function StudentProcessPage({
         <span className="bos-status-badge">自动修复 {stats.repaired}</span>
       </div>
 
-      <section className="difficulty-processing-log" aria-label="本专科信息处理日志">
-        <strong>处理日志</strong>
-        <div>
+      <AdminCard title="修复日志" description="格式修复与处理过程仅记录在此，不计入未通过问题。">
+        <div className="bos-log-scroll" aria-label="本专科信息处理日志">
           {logs.length === 0
-            ? "等待导入 Excel"
-            : logs.slice(-4).map((item) => `[${item.time}] ${item.message}`).join("　｜　")}
+            ? <div className="bos-log-empty">等待导入 Excel</div>
+            : logs.map((item, index) => (
+              <div key={`${item.time}_${index}`} className="bos-log-item">
+                <time>{item.time}</time><span>{item.message}</span>
+              </div>
+            ))}
+          <div ref={logEndRef} />
         </div>
-      </section>
+      </AdminCard>
 
       <section className="bos-table-card">
         <div className="bos-table-card-head">
@@ -283,26 +372,87 @@ export default function StudentProcessPage({
         </div>
       </section>
 
+      <AdminCard
+        title={`不通过预览（${disqualifiedRows.length}）`}
+        description="这里只展示真正需要人工确认的问题，自动修复项不会进入本表。"
+        extra={<button className="bos-button" disabled={!disqualifiedRows.length} onClick={() => setActiveModal("failed")}>查看全部</button>}
+      >
+        <div className="bos-preview-table-wrap">
+          <table className="bos-preview-table">
+            <thead><tr><th>行号</th><th>姓名</th><th>身份证号</th><th>问题原因</th><th>修改建议</th></tr></thead>
+            <tbody>
+              {disqualifiedRows.length === 0 ? (
+                <tr><td colSpan={5} className="bos-empty-cell">暂无需要人工处理的问题</td></tr>
+              ) : disqualifiedRows.slice(0, 8).map((row) => (
+                <tr key={`${row.rowNumber}_${row.idCard}`} className="is-error-row">
+                  <td>{row.rowNumber}</td><td>{row.name || "-"}</td><td>{row.idCard || "-"}</td>
+                  <td>{row.reason}</td><td>按问题说明核实并修正后重新导入</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </AdminCard>
+
+      <AdminCard
+        title="DeepSeek 智能分析"
+        description="分析仅基于最终未通过问题，自动修复日志不会计入问题统计。"
+        extra={<button className="bos-button" onClick={() => setActiveModal("analysis")}>查看问题分析</button>}
+      >
+        <div className="bos-ai-summary">
+          <div><span>自动修复摘要</span><strong>{stats.repaired} 条</strong></div>
+          <p>{aiReport || (disqualifiedRows.length ? "已发现人工处理问题，打开问题分析查看详情。" : "本次数据无人工处理问题，可导出通过名单并上载到学校端。")}</p>
+        </div>
+      </AdminCard>
+
       {activeModal === "import" && (
-        <Modal title="本专科信息数据导入" width="620px" onClose={() => setActiveModal(null)}>
+        <Modal title="本专科信息模板与数据导入" width="720px" onClose={() => setActiveModal(null)}>
           <div
             style={pageStyles.importDrop}
+            onClick={selectTemplateFile}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={handleTemplateDrop}
+          >
+            <input ref={templateRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleTemplateFileChange} />
+            <strong>Step 1：上传困难生本专科模板表</strong>
+            <span>系统扫描前10行识别字段，并生成 canonicalKey 模板签名。</span>
+            <button type="button" style={isProcessing ? pageStyles.disabledButton : pageStyles.blueButton} disabled={isProcessing}>
+              {isProcessing ? "正在识别..." : "选择模板表"}
+            </button>
+          </div>
+          <div
+            style={{
+              ...pageStyles.importDrop,
+              marginTop: "12px",
+              opacity: canUploadData ? 1 : 0.58,
+              cursor: canUploadData ? "pointer" : "not-allowed",
+            }}
             onClick={selectFile}
             onDragOver={(event) => event.preventDefault()}
             onDrop={handleDrop}
           >
             <input ref={dataRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileChange} />
-            <strong>选择 Excel 文件</strong>
-            <span>支持 .xls / .xlsx，支持 A1/A2 表头；选择同一文件也可再次处理。</span>
-            <button type="button" style={isProcessing ? pageStyles.disabledButton : pageStyles.blueButton} disabled={isProcessing}>
-              {isProcessing ? "正在治理..." : "选择文件并自动治理"}
+            <strong>Step 2：上传同模板格式的数据表</strong>
+            <span>模板校验通过后才可选择；数据表匹配率需达到90%，核心字段不得缺失。</span>
+            <button type="button" style={canUploadData ? pageStyles.blueButton : pageStyles.disabledButton} disabled={!canUploadData}>
+              选择数据表并校验
             </button>
           </div>
           <div style={pageStyles.modalInfoGrid}>
-            <Info label="文件名" value={importFileName || "未选择文件"} />
-            <Info label="读取状态" value={status} />
+            <Info label="模板文件" value={templateFileName || "未选择文件"} />
+            <Info label="模板表状态" value={templateStatusText} />
+            <Info label="数据文件" value={importFileName || "未选择文件"} />
+            <Info label="数据表状态" value={dataStatusText} />
+            <Info label="当前流程" value={status} />
             <Info label="识别学院" value={studentCollegeName} />
           </div>
+          {(templateInfo?.warnings.length || dataTemplateCheck?.warnings.length || dataTemplateCheck?.errors.length) ? (
+            <div style={pageStyles.modalLogBox}>
+              {templateInfo?.warnings.map((message) => <div key={`template_${message}`}>模板提示：{message}</div>)}
+              {dataTemplateCheck?.warnings.map((message) => <div key={`data_warning_${message}`}>数据提示：{message}</div>)}
+              {dataTemplateCheck?.errors.map((message) => <div key={`data_error_${message}`}>数据错误：{message}</div>)}
+            </div>
+          ) : null}
           <div style={pageStyles.modalLogBox}>
             {logs.length === 0 ? <div style={pageStyles.modalMuted}>暂无导入日志</div> : logs.map((item, index) => (
               <div key={`${item.time}_${index}`}>[{item.time}] {item.message}</div>
@@ -311,7 +461,13 @@ export default function StudentProcessPage({
           </div>
           <div style={pageStyles.modalFooter}>
             <button style={pageStyles.secondaryButton} onClick={() => setActiveModal(null)}>取消</button>
-            <button style={isProcessing ? pageStyles.disabledButton : pageStyles.blueButton} disabled={isProcessing} onClick={selectFile}>开始治理</button>
+            <button
+              style={canStartProcessing ? pageStyles.blueButton : pageStyles.disabledButton}
+              disabled={!canStartProcessing}
+              onClick={() => void startProcessing()}
+            >
+              {isProcessing ? "正在处理..." : "开始处理"}
+            </button>
             <button style={pageStyles.greenButton} onClick={() => setActiveModal(null)}>确认导入/完成</button>
           </div>
         </Modal>
@@ -375,23 +531,6 @@ export default function StudentProcessPage({
         </Modal>
       )}
     </section>
-  );
-}
-
-function CockpitStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "blue" | "green" | "red" | "amber" | "purple";
-}) {
-  return (
-    <div className={`difficulty-cockpit-card is-${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
 

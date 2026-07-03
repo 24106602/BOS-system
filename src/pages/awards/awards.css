@@ -418,3 +418,135 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Shared admin visual language. */
+.award-workspace {
+  --award-blue: #409eff;
+  --award-line: #ebeef5;
+}
+
+.award-switcher {
+  gap: 0;
+  padding: 0 16px;
+  border-color: #ebeef5;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.05);
+}
+
+.award-switcher a {
+  padding: 13px 16px 11px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: #606266;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.award-switcher a:hover {
+  color: #409eff;
+}
+
+.award-switcher a.is-active {
+  color: #409eff;
+  border-bottom-color: #409eff;
+  background: transparent;
+}
+
+.award-message,
+.award-admin-note {
+  min-height: 36px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.award-message {
+  border-color: #b3d8ff;
+  color: #409eff;
+  background: #ecf5ff;
+}
+
+.award-admin-note {
+  border-color: #f5dab1;
+  color: #e6a23c;
+  background: #fdf6ec;
+}
+
+.award-data-table {
+  color: #606266;
+  font-size: 13px;
+}
+
+.award-data-table th,
+.award-data-table td {
+  padding: 11px 12px;
+  border-color: #ebeef5;
+}
+
+.award-data-table th {
+  color: #606266;
+  background: #f5f7fa;
+  font-weight: 600;
+}
+
+.award-data-table tbody tr:hover {
+  background: #f5f7fa;
+}
+
+.award-row-status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.award-row-status.is-passed {
+  color: #67c23a;
+  background: #f0f9eb;
+}
+
+.award-row-status.is-failed {
+  color: #f56c6c;
+  background: #fef0f0;
+}
+
+.award-name-cell button,
+.award-name-cell a {
+  color: #409eff;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.award-upload-drop {
+  border-color: #a0cfff;
+  border-radius: 6px;
+  background: #f5faff;
+}
+
+.award-primary-button {
+  border-color: #409eff;
+  border-radius: 4px;
+  background: #409eff;
+  font-weight: 500;
+}
+
+.award-import-log {
+  max-height: 320px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  color: #606266;
+  background: #fafafa;
+}
+
+.award-import-log .is-success { color: #67c23a; }
+.award-import-log .is-error { color: #f56c6c; }
+.award-import-log .is-info { color: #409eff; }
+
+.award-detail-item {
+  border-color: #ebeef5;
+  border-radius: 6px;
+  background: #fafafa;
+}
+
+.award-detail-item span { color: #909399; }
+.award-detail-item strong { color: #303133; }

@@ -46,6 +46,7 @@ export type DifficultyStudentTemplateField =
 
 export type DifficultyStudentCanonicalKey =
   | "name"
+  | "studentId"
   | "nativePlace"
   | "idCard"
   | "familyPopulation"
@@ -88,6 +89,7 @@ export type DifficultyStudentCanonicalKey =
 
 export type DifficultyStudentValidatorKey =
   | "name"
+  | "studentId"
   | "nativePlace"
   | "idCard"
   | "population"
@@ -111,7 +113,7 @@ export type DifficultyStudentValidatorKey =
   | "incomeSource";
 
 export type DifficultyStudentFieldBinding = {
-  fieldName: DifficultyStudentTemplateField;
+  fieldName: string;
   canonicalKey: DifficultyStudentCanonicalKey;
   validatorKey: DifficultyStudentValidatorKey;
   aliases: readonly string[];
@@ -136,6 +138,7 @@ export const normalizeDifficultyField = (value: string) =>
 
 export const DIFFICULTY_STUDENT_FIELD_BINDINGS = [
   { fieldName: "姓名(*)", canonicalKey: "name", validatorKey: "name", aliases: ["姓名", "学生姓名", "name"] },
+  { fieldName: "学号", canonicalKey: "studentId", validatorKey: "studentId", aliases: ["学号", "学生学号", "student_id"] },
   { fieldName: "籍贯(*)", canonicalKey: "nativePlace", validatorKey: "nativePlace", aliases: ["籍贯", "籍贯(*)", "籍贯（*）"] },
   { fieldName: "身份证号(*)", canonicalKey: "idCard", validatorKey: "idCard", aliases: ["身份证号", "身份证号码", "身份证件号", "证件号码", "证件号", "学生身份证号", "id_card"] },
   { fieldName: "家庭人口数(*)", canonicalKey: "familyPopulation", validatorKey: "population", aliases: ["家庭人口数", "家庭人口", "家庭人数", "人口数"] },

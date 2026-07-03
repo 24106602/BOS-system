@@ -17,6 +17,9 @@ import {
   makeDifficultyRowKey,
   type DifficultyStudentTemplateField,
 } from "../../constants/difficultyStudentTemplate";
+import PageHeader from "../../components/ui/PageHeader";
+import StatCard from "../../components/ui/StatCard";
+import Toolbar from "../../components/ui/Toolbar";
 
 type MergedDifficultyRow = {
   academicYear: string;
@@ -669,30 +672,29 @@ export default function AdminStudentsPage() {
     <section className="bos-table-page difficulty-workspace">
       <div className="bos-layout-active">AI Studio Layout Active - Difficulty Database</div>
 
-      <header className="bos-page-title-row">
-        <div>
-          <div className="bos-breadcrumb">困难生业务 / 困难生数据库 / Student Database</div>
-          <h1>困难生数据库</h1>
-          <p>按学年汇总学院上载数据，并保留管理员往年 Excel 导入与 Supabase 持久化读写。</p>
-        </div>
-        <label className="bos-current-year">
-          当前学年
-          <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
-            {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
-          </select>
-        </label>
-      </header>
+      <PageHeader
+        breadcrumb="困难生业务 / 困难生数据库"
+        title="困难生数据库"
+        description="按学年汇总学院上载数据，并保留管理员往年 Excel 导入与 Supabase 持久化读写。"
+        actions={(
+          <label className="bos-current-year">
+            当前学年
+            <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
+              {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
+            </select>
+          </label>
+        )}
+      />
 
-      <div className="difficulty-cockpit-grid">
-        <CockpitStat label="困难生总量" value={mergedRows.length} tone="blue" />
-        <CockpitStat label="筛选结果" value={filteredRows.length} tone="green" />
-        <CockpitStat label="提交学院" value={availableColleges.length} tone="cyan" />
-        <CockpitStat
+      <div className="bos-stat-grid">
+        <StatCard label="困难生总量" value={mergedRows.length} />
+        <StatCard label="筛选结果" value={filteredRows.length} tone="green" />
+        <StatCard label="提交学院" value={availableColleges.length} tone="purple" />
+        <StatCard
           label="特殊困难"
           value={mergedRows.filter((row) => /特别|特殊|低保|孤儿|残疾|烈士/.test(row.difficultyLevel)).length}
           tone="amber"
         />
-        <CockpitStat label="当前选中" value={selectedKeys.size} tone="purple" />
       </div>
 
       <section className="bos-filter-card">
@@ -728,14 +730,14 @@ export default function AdminStudentsPage() {
         </div>
       </section>
 
-      <div className="bos-action-toolbar">
+      <Toolbar>
         <button className="is-primary" onClick={() => setShowImportModal(true)}>数据导入</button>
         <button onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>{isLoadingDatabase ? "刷新中..." : "刷新"}</button>
         <button className="is-purple" onClick={exportCurrentYearDatabase}>导出当前名单</button>
         <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedRows}>
           删除选中（{selectedKeys.size}）
         </button>
-      </div>
+      </Toolbar>
 
       <div className="bos-status-row">
         <span className="bos-status-badge">合并学生 {mergedRows.length}</span>
@@ -888,23 +890,6 @@ function Stat({ label, value, tone = "#0077d4" }: { label: string; value: number
     <div style={styles.stat}>
       <div style={styles.statLabel}>{label}</div>
       <strong style={{ ...styles.statValue, color: tone }}>{value}</strong>
-    </div>
-  );
-}
-
-function CockpitStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "blue" | "green" | "cyan" | "amber" | "purple";
-}) {
-  return (
-    <div className={`difficulty-cockpit-card is-${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }

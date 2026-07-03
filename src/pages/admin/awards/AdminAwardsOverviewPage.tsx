@@ -9,6 +9,9 @@ import {
 import { awardTypeLabels, awardTypes } from "../../../services/awardConfig";
 import { normalizeHeaderName } from "../../../services/awardFieldResolver";
 import type { AwardAdminRecord, AwardType } from "../../../types/award";
+import PageHeader from "../../../components/ui/PageHeader";
+import StatCard from "../../../components/ui/StatCard";
+import Toolbar from "../../../components/ui/Toolbar";
 import "../../awards/awards.css";
 
 const findTemplateField = (fields: string[], aliases: string[]) => {
@@ -159,20 +162,18 @@ export default function AdminAwardsOverviewPage() {
 
   return (
     <section className="bos-table-page award-workspace">
-      <div className="bos-page-title-row">
-        <div>
-          <div className="bos-breadcrumb">三大奖业务 / 学校端总览</div>
-          <h1>三奖提交总览</h1>
-          <p>统一查看三类奖学金学院上载记录；按奖项切换后，表格动态显示对应 Excel 模板字段。</p>
-        </div>
-      </div>
+      <PageHeader
+        breadcrumb="三大奖业务 / 学校端总览"
+        title="三奖提交总览"
+        description="统一查看三类奖学金学院上载记录，并按奖项动态展示模板字段。"
+        actions={<span className="bos-status-badge">{currentAwardLabel}</span>}
+      />
 
-      <div className="award-cockpit-grid">
-        <AwardCockpitCard label="申报人数" value={filteredRecords.length} />
-        <AwardCockpitCard label="通过人数" value={passedRecords.length} tone="green" />
-        <AwardCockpitCard label="不通过人数" value={failedRecords.length} tone="red" />
-        <AwardCockpitCard label="异常问题数" value={failedRecords.length} tone="amber" />
-        <AwardCockpitCard label="当前奖项类型" value={currentAwardLabel} tone="purple" compact />
+      <div className="bos-stat-grid">
+        <StatCard label="申报人数" value={filteredRecords.length} />
+        <StatCard label="通过人数" value={passedRecords.length} tone="green" />
+        <StatCard label="不通过人数" value={failedRecords.length} tone="red" />
+        <StatCard label="异常问题数" value={failedRecords.length} tone="amber" />
       </div>
 
       <section className="bos-filter-card">
@@ -237,7 +238,7 @@ export default function AdminAwardsOverviewPage() {
         </div>
       </section>
 
-      <div className="bos-action-toolbar award-toolbar">
+      <Toolbar className="award-toolbar">
         <button onClick={refreshRecords}>刷新</button>
         <button disabled title="请在学院端三奖页面导入 Excel">导入</button>
         <button className="is-purple" disabled={passedRecords.length === 0} onClick={() => exportRecords(passedRecords, "通过名单")}>导出通过名单</button>
@@ -246,7 +247,7 @@ export default function AdminAwardsOverviewPage() {
         <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedFromView}>
           删除{selectedKeys.size > 0 ? `（${selectedKeys.size}）` : ""}
         </button>
-      </div>
+      </Toolbar>
 
       <div className="award-admin-note">三大奖数据当前暂存本地 localStorage，后续接入 Supabase award_records 表；删除仅影响当前页面展示。</div>
 
@@ -353,25 +354,6 @@ function OverviewRecordTable({
           })}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function AwardCockpitCard({
-  label,
-  value,
-  tone = "blue",
-  compact = false,
-}: {
-  label: string;
-  value: number | string;
-  tone?: "blue" | "green" | "red" | "amber" | "purple";
-  compact?: boolean;
-}) {
-  return (
-    <div className={`award-cockpit-card is-${tone}${compact ? " is-compact" : ""}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }

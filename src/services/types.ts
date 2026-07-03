@@ -17,6 +17,43 @@ export type WorkbookData = {
   worksheets: Record<string, XLSX.WorkSheet>;
 };
 
+export type TemplateField = {
+  rawHeader: string;
+  normalizedHeader: string;
+  canonicalKey?: DifficultyStudentCanonicalKey;
+  validatorKey?: DifficultyStudentValidatorKey;
+  columnIndex: number;
+};
+
+export type TemplateValidationResult = {
+  ok: boolean;
+  templateFields: TemplateField[];
+  templateSignature: string;
+  headerRowIndex: number;
+  sheetName: string;
+  matchedFieldCount: number;
+  coreMatchedCount: number;
+  errors: string[];
+  warnings: string[];
+};
+
+export type DataTemplateValidationResult = {
+  ok: boolean;
+  dataFields: TemplateField[];
+  dataSignature: string;
+  headerRowIndex: number;
+  sheetName: string;
+  mismatchLevel: "none" | "minor" | "major" | "invalid";
+  matchedFieldCount: number;
+  templateFieldCount: number;
+  dataFieldCount: number;
+  matchRate: number;
+  missingCoreFields: string[];
+  extraFields: string[];
+  errors: string[];
+  warnings: string[];
+};
+
 export type ColumnMapItem = {
   templateField: string;
   templateIndex: number;

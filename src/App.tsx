@@ -20,11 +20,14 @@ import {
   parseFamilyTemplate,
   parseStudentTemplate,
   readWorkbook,
+  validateDataAgainstTemplate,
+  validateTemplateFile,
 } from "./services/templateParser";
 import { resolveDifficultyFieldBinding } from "./constants/difficultyStudentTemplate";
 import { isSameSubmissionCollege, normalizeSubmissionCollegeName, resolveCollegeUpload } from "./utils/collegeDetector";
 import type {
   DisqualifiedRow,
+  DataTemplateValidationResult,
   ErrorReportItem,
   FamilyProcessingStats,
   FamilyReviewRow,
@@ -33,6 +36,7 @@ import type {
   LogType,
   ProcessingStats,
   TemplateParseResult,
+  TemplateValidationResult,
   WorkbookData,
 } from "./services/types";
 
@@ -165,12 +169,6 @@ const detectCollegeFromTableRows = (rows: unknown[][], fields: string[]) => {
   return matched || "";
 };
 
-type StudentProcessRunInput = {
-  parsed: TemplateParseResult;
-  sourceRows: unknown[][];
-  collegeName: string;
-};
-
 type FamilyProcessRunInput = {
   parsed: TemplateParseResult;
   sourceRows: unknown[][];
@@ -186,12 +184,16 @@ type AppProps = {
 };
 
 export default function App({ collegeMode = false, fixedProcessingPanel, onBackToDifficulty, onViewDifficultyStudents, layoutMarker }: AppProps) {
+  const templateRef = useRef<HTMLInputElement>(null);
   const dataRef = useRef<HTMLInputElement>(null);
   const familyDataRef = useRef<HTMLInputElement>(null);
   const logEndRef = useRef<HTMLDivElement>(null);
   const familyLogEndRef = useRef<HTMLDivElement>(null);
 
   const [templateWorkbook, setTemplateWorkbook] = useState<WorkbookData | null>(null);
+  const [studentTemplateParseResult, setStudentTemplateParseResult] = useState<TemplateParseResult | null>(null);
+  const [studentTemplateInfo, setStudentTemplateInfo] = useState<TemplateValidationResult | null>(null);
+  const [studentDataTemplateCheck, setStudentDataTemplateCheck] = useState<DataTemplateValidationResult | null>(null);
   const [templateOutputSheet, setTemplateOutputSheet] = useState("");
   const [templateDictSheet, setTemplateDictSheet] = useState("");
   const [templateFirstRow, setTemplateFirstRow] = useState<unknown[]>([]);
@@ -207,9 +209,8 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   const [highlightCellMap, setHighlightCellMap] = useState<Record<string, HighlightInfo>>({});
   const [disqualifiedRows, setDisqualifiedRows] = useState<DisqualifiedRow[]>([]);
   const [logs, setLogs] = useState<LogItem[]>([]);
-  const [status, setStatus] = useState("等待上传 Excel");
+  const [status, setStatus] = useState("请先上传模板表");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [studentAutoProcessRequested, setStudentAutoProcessRequested] = useState(false);
   const [analysis, setAnalysis] = useState<Record<string, number>>({});
   const [aiReport, setAiReport] = useState("");
   const [activeModule, setActiveModule] = useState<"processing" | "database" | "merge">("processing");
@@ -456,6 +457,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   };
 
   const applyStudentTemplate = (parsed: TemplateParseResult) => {
+    setStudentTemplateParseResult(parsed);
     setTemplateWorkbook(parsed.workbookData);
     setTemplateOutputSheet(parsed.outputSheet);
     setTemplateDictSheet(parsed.dictSheet);
@@ -464,6 +466,28 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     setTemplateFields(parsed.fields);
     setDictionaryMap(parsed.dictionaries);
     setFieldDictMap(parsed.fieldToDict);
+  };
+
+  const clearStudentGovernanceResults = () => {
+    setProcessedData([]);
+    setHighlightCellMap({});
+    setDisqualifiedRows([]);
+    setStudentErrorReports([]);
+    setAnalysis({});
+    setAiReport("");
+    setStats(initialStats);
+  };
+
+  const clearStudentTemplateState = () => {
+    setStudentTemplateParseResult(null);
+    setTemplateWorkbook(null);
+    setTemplateOutputSheet("");
+    setTemplateDictSheet("");
+    setTemplateFirstRow([]);
+    setTemplateSecondRow([]);
+    setTemplateFields([]);
+    setDictionaryMap({});
+    setFieldDictMap({});
   };
 
   const applyFamilyTemplate = (parsed: TemplateParseResult) => {
@@ -477,8 +501,8 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     setFamilyFieldDictMap(parsed.fieldToDict);
   };
 
-  const loadStudentDataFile = async (file: File) => {
-    pushLog("info", `已选择文件：${file.name}`);
+  const loadStudentTemplateFile = async (file: File) => {
+    pushLog("info", `已选择模板表：${file.name}`);
     const fileType = getExcelFileType(file);
     pushLog("info", `文件类型：${fileType || "未知"}`);
 
@@ -487,45 +511,99 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       throw new Error("文件类型不支持：仅支持 .xls / .xlsx");
     }
 
-    pushLog("info", "开始读取 Excel");
-    setStudentAutoProcessRequested(false);
-    setProcessedData([]);
-    setHighlightCellMap({});
-    setDisqualifiedRows([]);
-    setStudentErrorReports([]);
-    setAnalysis({});
-    setAiReport("");
-    setStats(initialStats);
-    setStatus("正在读取 Excel");
-    resetStudentReviewState("重新处理数据后确认状态已重置");
+    clearStudentTemplateState();
+    clearStudentGovernanceResults();
+    setStudentTemplateInfo(null);
+    setStudentDataTemplateCheck(null);
+    setSourceRows([]);
+    setStatus("正在识别模板表");
+    resetStudentReviewState("重新上传模板后确认状态已重置");
 
     let workbookData: WorkbookData;
     try {
       workbookData = await readWorkbook(file);
     } catch (error) {
-      console.error("Student Excel parse exception:", error);
-      throw new Error(`Excel 解析异常：${getErrorMessage(error)}`, { cause: error });
+      console.error("Student template parse exception:", error);
+      throw new Error(`模板表解析异常：${getErrorMessage(error)}`, { cause: error });
     }
 
-    if (workbookData.sheetNames.length === 0) {
-      throw new Error("没有找到有效 Sheet");
-    }
+    const validation = validateTemplateFile(workbookData);
+    setStudentTemplateInfo(validation);
+    if (!validation.ok) throw new Error(validation.errors.join("\n"));
 
-    pushLog("info", `当前 workbook sheets：${workbookData.sheetNames.join("、")}`);
-
-    let parsed: TemplateParseResult;
-    try {
-      parsed = parseStudentTemplate(workbookData);
-    } catch (error) {
-      console.error("Student template parse failed:", error);
-      throw new Error(getErrorMessage(error) || "未识别到表头", { cause: error });
-    }
-
-    if (!parsed.fields.some((field) => /姓名|身份证|困难|收入|陈述理由/.test(field))) {
-      throw new Error(looksLikeFamilyFile(file.name, workbookData) ? "当前页面仅支持困难生本专科信息文件" : "没有找到表头");
-    }
-
+    const parsed = parseStudentTemplate(workbookData);
     applyStudentTemplate(parsed);
+    setStatus("模板表已识别，等待上传数据表");
+    pushLog(
+      "success",
+      `模板表识别成功：Sheet ${validation.sheetName}，表头第 ${validation.headerRowIndex + 1} 行，匹配字段 ${validation.matchedFieldCount} 个，核心字段 ${validation.coreMatchedCount} 个。`
+    );
+    validation.warnings.forEach((warning) => pushLog("info", warning));
+  };
+
+  const uploadStudentTemplateFile = async (file: File) => {
+    try {
+      setLogs([]);
+      setIsProcessing(true);
+      await loadStudentTemplateFile(file);
+    } catch (error) {
+      console.error("Student template load failed:", error);
+      const message = getErrorMessage(error) || "模板表识别失败";
+      setStatus("模板表识别失败");
+      pushLog("error", message);
+      alert(message);
+    } finally {
+      setIsProcessing(false);
+      if (templateRef.current) templateRef.current.value = "";
+    }
+  };
+
+  const loadStudentDataFile = async (file: File) => {
+    if (!studentTemplateInfo?.ok || !studentTemplateParseResult) {
+      throw new Error("必须先上传并通过校验的困难生本专科模板表。");
+    }
+
+    pushLog("info", `已选择数据表：${file.name}`);
+    const fileType = getExcelFileType(file);
+    pushLog("info", `文件类型：${fileType || "未知"}`);
+
+    if (!isExcelFile(file)) {
+      pushLog("error", "文件类型不支持");
+      throw new Error("文件类型不支持：仅支持 .xls / .xlsx");
+    }
+
+    clearStudentGovernanceResults();
+    setStudentDataTemplateCheck(null);
+    setSourceRows([]);
+    setStatus("正在校验数据表格式");
+    resetStudentReviewState("重新上传数据后确认状态已重置");
+
+    let workbookData: WorkbookData;
+    try {
+      workbookData = await readWorkbook(file);
+    } catch (error) {
+      console.error("Student data parse exception:", error);
+      throw new Error(`数据表解析异常：${getErrorMessage(error)}`, { cause: error });
+    }
+
+    const dataCheck = validateDataAgainstTemplate(workbookData, studentTemplateInfo);
+    setStudentDataTemplateCheck(dataCheck);
+    if (!dataCheck.ok) {
+      const detail = [
+        ...dataCheck.errors,
+        `模板识别字段：${dataCheck.templateFieldCount} 个`,
+        `数据识别字段：${dataCheck.dataFieldCount} 个`,
+        `匹配率：${(dataCheck.matchRate * 100).toFixed(1)}%`,
+        dataCheck.missingCoreFields.length > 0
+          ? `缺失核心字段：${dataCheck.missingCoreFields.join("、")}`
+          : "缺失核心字段：无",
+        dataCheck.extraFields.length > 0
+          ? `多余字段：${dataCheck.extraFields.join("、")}`
+          : "多余字段：无",
+        "建议重新下载或选择与模板表一致的数据文件。",
+      ];
+      throw new Error(detail.join("\n"));
+    }
 
     const collegeDetection = resolveCollegeUpload(file.name);
     setStudentCollegeName(collegeDetection.collegeName);
@@ -533,19 +611,21 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     if (collegeDetection.error) pushLog("error", `学院识别失败，但继续按行校验：${collegeDetection.error} 学院不匹配的数据将在治理结果中进入不通过名单。`);
     else pushLog("success", `所属学部（院）已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
 
-    const { sheetName, rowCount, rows } = getWorkbookReadSummary(workbookData, parsed.outputSheet);
+    const { sheetName, rowCount, rows } = getWorkbookReadSummary(workbookData, dataCheck.sheetName);
     if (rowCount === 0) throw new Error("没有读取到数据行");
-    const headerIndex = findHeaderRowIndex(rows, parsed.fields);
+    const headerIndex = dataCheck.headerRowIndex;
     const effectiveDataRowCount = getEffectiveDataRowCount(rows, headerIndex);
     if (effectiveDataRowCount === 0) throw new Error("未读取到有效学生数据，请检查 Sheet、表头行和数据行。");
-    const tableCollege = detectCollegeFromTableRows(rows, parsed.fields);
+    const tableCollege = detectCollegeFromTableRows(rows, studentTemplateParseResult.fields);
 
     setSourceRows(rows);
-    setStatus("正在治理数据");
+    setStatus("数据表与模板匹配，等待开始处理");
     pushLog("success", `读取到 Sheet：${sheetName}`);
     pushLog("success", `使用 Sheet：${sheetName}`);
     pushLog("success", `表头行：第 ${headerIndex + 1} 行`);
-    pushLog("success", `识别到字段：${formatRecognizedFields(parsed.fields)}`);
+    pushLog("success", `识别到字段：${formatRecognizedFields(dataCheck.dataFields.map((field) => field.rawHeader))}`);
+    pushLog("success", `数据表与模板匹配率：${(dataCheck.matchRate * 100).toFixed(1)}%`);
+    dataCheck.warnings.forEach((warning) => pushLog("info", warning));
     pushLog("success", `原始数据行数：${rowCount}`);
     pushLog("success", `有效学生数据行数：${effectiveDataRowCount}`);
     pushLog("info", `当前登录学院：${collegeDetection.collegeName || "未知学院"}`);
@@ -557,13 +637,8 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
 数据表：${sheetName}
 原始行数：${rowCount}
 有效学生数据行数：${effectiveDataRowCount}
-系统将自动执行既有治理规则。`
+  模板校验已通过，请点击“开始处理”执行既有治理规则。`
     );
-    return {
-      parsed,
-      sourceRows: rows,
-      collegeName: collegeDetection.collegeName,
-    };
   };
 
   const uploadData = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -582,15 +657,12 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
 
   const uploadStudentDataFile = async (file: File) => {
     try {
-      setLogs([]);
       setIsProcessing(true);
-      const loaded = await loadStudentDataFile(file);
-      pushLog("info", "开始治理数据");
-      await processData(loaded);
+      await loadStudentDataFile(file);
     } catch (error) {
       console.error("Student Excel load failed:", error);
-      const message = getErrorMessage(error) || "本专科信息读取失败";
-      setStatus("Excel 读取失败");
+      const message = getErrorMessage(error) || "数据表校验失败";
+      setStatus(studentTemplateInfo?.ok ? "数据表与模板不匹配" : "请先上传模板表");
       pushLog("error", message);
       alert(message);
     } finally {
@@ -628,16 +700,24 @@ const askDeepSeek = async (prompt: string) => {
   }
 };
 
-  const processData = async (override?: StudentProcessRunInput) => {
-    const activeTemplateFields = override?.parsed.fields || templateFields;
-    const activeTemplateFirstRow = override?.parsed.firstRow || templateFirstRow;
-    const activeDictionaryMap = override?.parsed.dictionaries || dictionaryMap;
-    const activeFieldDictMap = override?.parsed.fieldToDict || fieldDictMap;
-    const activeSourceRows = override?.sourceRows || sourceRows;
-    const activeCollegeName = override?.collegeName || studentCollegeName;
+  const processData = async () => {
+    const activeTemplateFields = templateFields;
+    const activeTemplateFirstRow = templateFirstRow;
+    const activeDictionaryMap = dictionaryMap;
+    const activeFieldDictMap = fieldDictMap;
+    const activeSourceRows = sourceRows;
+    const activeCollegeName = studentCollegeName;
 
-    if (!override && isProcessing) {
+    if (isProcessing) {
       alert("治理任务执行中");
+      return;
+    }
+    if (!studentTemplateInfo?.ok || !studentTemplateParseResult) {
+      alert("请先上传并通过校验的困难生本专科模板表");
+      return;
+    }
+    if (!studentDataTemplateCheck?.ok) {
+      alert("数据表与模板表不匹配。请确认上传的是同一个困难生本专科信息模板。");
       return;
     }
     if (activeTemplateFields.length === 0) {
@@ -910,18 +990,6 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
       setIsProcessing(false);
     }
   };
-
-  useEffect(() => {
-    if (!studentAutoProcessRequested) return;
-    if (isProcessing || templateFields.length === 0 || sourceRows.length === 0) return;
-
-    const timer = window.setTimeout(() => {
-      setStudentAutoProcessRequested(false);
-      void processData();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [studentAutoProcessRequested, isProcessing, templateFields.length, sourceRows.length]);
 
   useEffect(() => {
     const win = window as typeof window & {
@@ -1398,9 +1466,14 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
 
           {activeProcessingPanel === "student" ? (
             <StudentProcessPage
+              templateRef={templateRef}
               dataRef={dataRef}
               uploadData={uploadData}
+              uploadTemplateFile={uploadStudentTemplateFile}
               uploadDataFile={uploadStudentDataFile}
+              startProcessing={processData}
+              templateInfo={studentTemplateInfo}
+              dataTemplateCheck={studentDataTemplateCheck}
               isProcessing={isProcessing}
               exportExcel={exportExcel}
               exportStudentErrorReport={exportStudentErrorReport}

@@ -9,6 +9,9 @@ import {
   isBatchInAcademicYear,
 } from "../../utils/academicYear";
 import { collegeAccounts, isSameSubmissionCollege, normalizeSubmissionCollegeName, type CollegeAccount } from "../../utils/collegeDetector";
+import PageHeader from "../../components/ui/PageHeader";
+import StatCard from "../../components/ui/StatCard";
+import Toolbar from "../../components/ui/Toolbar";
 
 type CollegeSummary = {
   college: CollegeAccount;
@@ -76,31 +79,31 @@ export default function AdminSummaryPage() {
 
   return (
     <section className="bos-table-page difficulty-workspace">
-      <header className="bos-page-title-row">
-        <div>
-          <div className="bos-breadcrumb">困难生业务 / 学校端自动汇总</div>
-          <h1>全校数据汇总</h1>
-          <p>查看某一学年各学院困难生数据提交和汇总情况。不同学年的数据不会混在一起展示。</p>
-        </div>
-        <label className="bos-current-year">
-          当前学年
-          <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
-            {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year}>{year}</option>)}
-          </select>
-        </label>
-      </header>
+      <PageHeader
+        breadcrumb="困难生业务 / 学校端自动汇总"
+        title="全校数据汇总"
+        description="按学年查看各学院困难生数据提交、通过情况和最近上载记录。"
+        actions={(
+          <label className="bos-current-year">
+            当前学年
+            <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
+              {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year}>{year}</option>)}
+            </select>
+          </label>
+        )}
+      />
 
-      <div className="difficulty-stat-grid">
-        <Stat label="当前学年全校总人数" value={totalStudents} />
-        <Stat label="当前学年已提交学院数" value={submittedCount} />
-        <Stat label="当前学年未提交学院数" value={collegeAccounts.length - submittedCount} />
-        <Stat label="当前学年通过人数" value={passedCount} />
-        <Stat label="当前学年不通过人数" value={failedCount} tone="#c2414d" />
+      <div className="bos-stat-grid">
+        <StatCard label="全校总人数" value={totalStudents} />
+        <StatCard label="已提交学院" value={submittedCount} tone="green" />
+        <StatCard label="未提交学院" value={collegeAccounts.length - submittedCount} tone="amber" />
+        <StatCard label="通过人数" value={passedCount} tone="green" />
+        <StatCard label="不通过人数" value={failedCount} tone="red" />
       </div>
 
-      <div className="bos-action-toolbar">
+      <Toolbar>
         <button className="is-primary" onClick={exportSummary}>导出当前学年汇总表</button>
-      </div>
+      </Toolbar>
 
       <div className="difficulty-summary-split difficulty-summary-split--wide">
       <section className="bos-table-card">
@@ -194,15 +197,6 @@ export default function AdminSummaryPage() {
   );
 }
 
-function Stat({ label, value, tone = "#0077d4" }: { label: string; value: number; tone?: string }) {
-  return (
-    <div className="difficulty-stat-card">
-      <span>{label}</span>
-      <strong style={{ color: tone }}>{value}</strong>
-    </div>
-  );
-}
-
 const styles: Record<string, CSSProperties> = {
   card: { height: "calc(100vh - 104px)", minHeight: 650, display: "grid", gridTemplateRows: "auto auto minmax(0, 1fr) minmax(0, 0.82fr)", gap: 12, overflow: "hidden", background: "#fff", borderRadius: 8, padding: 16, border: "1px solid #d7e1ed", boxShadow: "0 4px 14px rgba(15,35,64,0.05)" },
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 },
@@ -221,10 +215,10 @@ const styles: Record<string, CSSProperties> = {
   subTitle: { margin: "0 0 10px", color: "#172033", fontSize: 17 },
   tableWrap: { flex: 1, minHeight: 0, overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
   table: { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-  th: { position: "sticky", top: 0, zIndex: 1, borderBottom: "1px solid #d7e1ed", background: "#edf4fa", color: "#40526a", padding: 9, textAlign: "center", whiteSpace: "nowrap" },
-  td: { borderTop: "1px solid #e3ebf3", padding: 9, textAlign: "center", whiteSpace: "nowrap", color: "#52647b" },
-  nameCell: { borderTop: "1px solid #e3ebf3", padding: 9, color: "#26364e", whiteSpace: "nowrap" },
-  submitted: { display: "inline-flex", padding: "3px 7px", borderRadius: 999, background: "#e8f7f1", color: "#087b5b", fontWeight: 700, fontSize: 12 },
-  pending: { display: "inline-flex", padding: "3px 7px", borderRadius: 999, background: "#f2f5f8", color: "#728197", fontWeight: 700, fontSize: 12 },
+  th: { position: "sticky", top: 0, zIndex: 1, borderBottom: "1px solid #ebeef5", background: "#f5f7fa", color: "#606266", padding: "11px 12px", textAlign: "center", whiteSpace: "nowrap", fontWeight: 600 },
+  td: { borderTop: "1px solid #ebeef5", padding: "11px 12px", textAlign: "center", whiteSpace: "nowrap", color: "#606266" },
+  nameCell: { borderTop: "1px solid #ebeef5", padding: "11px 12px", color: "#303133", whiteSpace: "nowrap" },
+  submitted: { display: "inline-flex", padding: "4px 8px", borderRadius: 4, background: "#f0f9eb", color: "#67c23a", fontWeight: 500, fontSize: 11 },
+  pending: { display: "inline-flex", padding: "4px 8px", borderRadius: 4, background: "#f4f4f5", color: "#909399", fontWeight: 500, fontSize: 11 },
   empty: { padding: 18, color: "#8190a4", textAlign: "center" },
 };

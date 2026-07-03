@@ -51,6 +51,12 @@ const workspacePaths = new Set([
   "/college/awards/shanghai",
 ]);
 
+const pageTitles: Record<string, string> = {
+  "/college": "平台首页",
+  "/college/upload": "本专科信息处理",
+  ...Object.fromEntries([...difficultyMenus, ...awardMenus].map((item) => [item.path, item.label])),
+};
+
 function MenuButton({
   item,
   active,
@@ -126,9 +132,9 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
 
       <div className="bos-shell-workspace">
         <header className="bos-topbar-modern">
-          <div className="bos-topbar-search">
-            <span>⌕</span>
-            <input aria-label="搜索系统内容" placeholder="搜索菜单、学生或业务..." />
+          <div className="bos-topbar-context">
+            <span>学院业务工作台</span>
+            <strong>{pageTitles[path] || "业务管理"}</strong>
           </div>
           <div className="bos-topbar-account">
             <span className="bos-account-avatar">院</span>

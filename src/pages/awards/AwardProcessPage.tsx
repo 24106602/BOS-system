@@ -21,6 +21,9 @@ import type {
   AwardTemplate,
   AwardType,
 } from "../../types/award";
+import PageHeader from "../../components/ui/PageHeader";
+import StatCard from "../../components/ui/StatCard";
+import Toolbar from "../../components/ui/Toolbar";
 import "./awards.css";
 
 type ModalName = "import" | "passed" | "failed" | "issues" | "detail" | null;
@@ -367,13 +370,12 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
 
   return (
     <section className="bos-processing-frame award-workspace">
-      <div className="bos-page-title-row award-title-row">
-        <div>
-          <div className="bos-breadcrumb">三大奖业务 / 学院端数据治理</div>
-          <h1>{awardName}数据处理</h1>
-          <p>识别官方模板与 Sheet，执行现有治理规则，并按“治理 → 学院确认 → 上载学校端”完成业务闭环。</p>
-        </div>
-      </div>
+      <PageHeader
+        breadcrumb="三大奖业务 / 学院端数据治理"
+        title={`${awardName}数据处理`}
+        description="识别官方模板与 Sheet，完成数据治理、学院确认和学校端上载。"
+        actions={<span className="bos-status-badge">{awardName}</span>}
+      />
 
       <div className="award-switcher" aria-label="三大奖类型选择">
         {awardTypes.map((type) => (
@@ -383,12 +385,11 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
         ))}
       </div>
 
-      <div className="award-cockpit-grid">
-        <AwardCockpitCard label="申报人数" value={visibleProcessedRows.length} />
-        <AwardCockpitCard label="通过人数" value={visiblePassedRows.length} tone="green" />
-        <AwardCockpitCard label="不通过人数" value={visibleFailedRows.length} tone="red" />
-        <AwardCockpitCard label="异常问题数" value={visibleIssues.length} tone="amber" />
-        <AwardCockpitCard label="当前奖项类型" value={awardName} tone="purple" compact />
+      <div className="bos-stat-grid">
+        <StatCard label="申报人数" value={visibleProcessedRows.length} />
+        <StatCard label="通过人数" value={visiblePassedRows.length} tone="green" />
+        <StatCard label="不通过人数" value={visibleFailedRows.length} tone="red" />
+        <StatCard label="异常问题数" value={visibleIssues.length} tone="amber" />
       </div>
 
       <section className="bos-filter-card">
@@ -458,7 +459,7 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
         </div>
       </section>
 
-      <div className="bos-action-toolbar award-toolbar">
+      <Toolbar className="award-toolbar">
         <button onClick={refreshCurrentView}>刷新</button>
         <button className="is-primary" onClick={openImport}>导入</button>
         <button className="is-purple" disabled={!result?.passedRows.length} onClick={exportPassed}>导出通过名单</button>
@@ -476,7 +477,7 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
         <button className="is-warning" disabled={!canConfirm} onClick={confirmReview}>
           {confirmed ? "学院已确认" : "学院确认审核"}
         </button>
-      </div>
+      </Toolbar>
 
       <div className="bos-status-row">
         <span className={`bos-status-badge${collegeError ? " is-danger" : result ? " is-success" : ""}`}>
@@ -707,25 +708,6 @@ function AwardDataTable({
           })}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function AwardCockpitCard({
-  label,
-  value,
-  tone = "blue",
-  compact = false,
-}: {
-  label: string;
-  value: number | string;
-  tone?: "blue" | "green" | "red" | "amber" | "purple";
-  compact?: boolean;
-}) {
-  return (
-    <div className={`award-cockpit-card is-${tone}${compact ? " is-compact" : ""}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
     </div>
   );
 }
