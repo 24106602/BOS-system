@@ -2044,3 +2044,428 @@ button:not(:disabled):hover {
   .difficulty-upload-steps > button { grid-column: auto; }
   .bos-ai-summary { grid-template-columns: 1fr; }
 }
+
+/* ─── BOS Shared UI Components ─── */
+
+/* Loading Spinner */
+.bos-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px;
+  color: #909399;
+  font-size: 13px;
+}
+
+.bos-loading-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #ebeef5;
+  border-top-color: #409eff;
+  border-radius: 50%;
+  animation: bos-spin 0.6s linear infinite;
+}
+
+@keyframes bos-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Empty State */
+.bos-empty-state {
+  padding: 48px 20px;
+  color: #c0c4cc;
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Breadcrumb Navigation */
+.bos-breadcrumb-nav {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+  color: #909399;
+  font-size: 12px;
+}
+
+.bos-breadcrumb-nav__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #409eff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.bos-breadcrumb-nav__link:hover {
+  color: #66b1ff;
+}
+
+.bos-breadcrumb-nav__current {
+  color: #606266;
+  font-weight: 500;
+}
+
+.bos-breadcrumb-nav__sep {
+  margin: 0 8px;
+  color: #c0c4cc;
+}
+
+/* Step Guide */
+.bos-step-guide {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  padding: 20px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.05);
+}
+
+.bos-step-guide__item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.bos-step-guide__marker {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #ebeef5;
+  color: #c0c4cc;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 200ms ease;
+}
+
+.bos-step-guide__item.is-active .bos-step-guide__marker {
+  background: #409eff;
+  color: #fff;
+  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.2);
+}
+
+.bos-step-guide__item.is-completed .bos-step-guide__marker {
+  background: #67c23a;
+  color: #fff;
+}
+
+.bos-step-guide__content {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.bos-step-guide__content strong {
+  color: #303133;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.bos-step-guide__item.is-pending .bos-step-guide__content strong {
+  color: #c0c4cc;
+}
+
+.bos-step-guide__content small {
+  color: #909399;
+  font-size: 11px;
+}
+
+.bos-step-guide__connector {
+  flex: 1;
+  min-width: 20px;
+  height: 2px;
+  margin-top: 14px;
+  background: #ebeef5;
+  transition: background 200ms ease;
+}
+
+.bos-step-guide__item.is-completed + .bos-step-guide__connector,
+.bos-step-guide__item.is-completed ~ .bos-step-guide__connector {
+  background: #67c23a;
+}
+
+/* Quick Entry Grid */
+.bos-quick-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.bos-quick-entry {
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.05);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+.bos-quick-entry:hover {
+  border-color: #a0cfff;
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+.bos-quick-entry strong {
+  color: #303133;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.bos-quick-entry small {
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.bos-quick-entry.is-primary {
+  border-color: #b3d8ff;
+  background: #ecf5ff;
+}
+
+.bos-quick-entry.is-primary strong {
+  color: #409eff;
+}
+
+/* Panel Tabs (for upload page) */
+.bos-panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #f5f7fa;
+}
+
+.bos-panel-tabs button {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #606266;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.bos-panel-tabs button.is-active {
+  background: #fff;
+  color: #409eff;
+  box-shadow: 0 1px 3px rgba(0, 21, 41, 0.08);
+}
+
+.bos-panel-tabs button:hover:not(.is-active) {
+  color: #409eff;
+}
+
+/* Data Table (shared) */
+.bos-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #606266;
+  font-size: 13px;
+}
+
+.bos-data-table th,
+.bos-data-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #ebeef5;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.bos-data-table th {
+  color: #606266;
+  background: #f5f7fa;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+.bos-data-table tbody tr:hover td {
+  background: #f5f7fa;
+}
+
+.bos-data-table tbody tr.is-selected td {
+  background: #ecf5ff;
+}
+
+.bos-data-table__checkbox {
+  width: 46px;
+  min-width: 46px;
+  text-align: center;
+}
+
+.bos-data-table__checkbox input {
+  width: 15px;
+  height: 15px;
+  accent-color: #409eff;
+  cursor: pointer;
+}
+
+.bos-data-table--wide .bos-data-table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.bos-data-table--wide .bos-data-table th,
+.bos-data-table--wide .bos-data-table td {
+  min-width: 138px;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Link Button */
+.bos-link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #409eff;
+  font-size: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.bos-link-button:hover {
+  color: #66b1ff;
+}
+
+/* Detail Modal Groups */
+.bos-detail-groups {
+  display: grid;
+  gap: 24px;
+}
+
+.bos-detail-group__title {
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #ebeef5;
+  color: #303133;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.bos-detail-group__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px 24px;
+}
+
+.bos-detail-item {
+  display: grid;
+  gap: 4px;
+}
+
+.bos-detail-item span {
+  color: #909399;
+  font-size: 12px;
+}
+
+.bos-detail-item strong {
+  color: #303133;
+  font-size: 13px;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+/* Filter Hint */
+.bos-filter-hint {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.bos-filter-hint.is-info {
+  color: #409eff;
+  background: #ecf5ff;
+}
+
+.bos-filter-hint.is-warning {
+  color: #e6a23c;
+  background: #fdf6ec;
+}
+
+/* Page transition */
+.bos-page-enter {
+  animation: bos-page-fade-in 280ms ease both;
+}
+
+@keyframes bos-page-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Modal transition */
+.bos-modal-backdrop {
+  animation: bos-backdrop-in 200ms ease both;
+}
+
+.bos-modal {
+  animation: bos-modal-in 250ms ease both;
+}
+
+@keyframes bos-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes bos-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Responsive for new components */
+@media (max-width: 1180px) {
+  .bos-quick-entry-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bos-step-guide {
+    flex-wrap: wrap;
+  }
+  .bos-step-guide__item {
+    flex: 0 0 auto;
+  }
+  .bos-step-guide__connector {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .bos-quick-entry-grid {
+    grid-template-columns: 1fr;
+  }
+  .bos-detail-group__grid {
+    grid-template-columns: 1fr;
+  }
+}

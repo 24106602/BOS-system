@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx-js-style";
 import type { UserProfile } from "../../types/auth";
 import { ACADEMIC_YEAR_OPTIONS, getCurrentAcademicYear } from "../../utils/academicYear";
@@ -10,9 +10,17 @@ import {
   makeDifficultyRowKey,
   type DifficultyStudentTemplateField,
 } from "../../constants/difficultyStudentTemplate";
+import PageContainer from "../../components/ui/PageContainer";
+import StatCard from "../../components/ui/StatCard";
+import FilterBar, { type FilterField } from "../../components/ui/FilterBar";
+import ActionBar from "../../components/ui/ActionBar";
+import DataTable, { type DataColumn } from "../../components/ui/DataTable";
+import DetailModal, { type DetailGroup } from "../../components/ui/DetailModal";
+import type { BreadcrumbItem } from "../../components/ui/Breadcrumb";
 
 type CollegeDifficultyStudentsPageProps = {
   profile: UserProfile;
+  onNavigate?: (to: string) => void;
 };
 
 const statusText: Record<string, string> = {
@@ -24,25 +32,16 @@ const statusText: Record<string, string> = {
 
 const displayStatus = (status: string) => statusText[status] || status || "已上载学校端";
 
-const normalizeRawKey = (value: string) =>
-  value.replace(/\s|\*|（.*?）|\(.*?\)/g, "").toLowerCase();
-
-const getRawDetail = (row: DifficultyStudentRow, aliases: string[]) => {
-  const rawData = row.raw_data || {};
-  for (const alias of aliases) {
-    const value = rawData[alias];
-    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+const getTemplateCell = (row: DifficultyStudentRow, field: DifficultyStudentTemplateField) => {
+  if (field === "姓名(*)") return getDifficultyTemplateValue(row.raw_data, field, row.name);
+  if (field === "身份证号(*)") return getDifficultyTemplateValue(row.raw_data, field, row.id_card);
+  if (field === "特殊困难类型(*)" || field === "推荐档次(*)") {
+    return getDifficultyTemplateValue(row.raw_data, field, row.difficulty_level);
   }
-
-  const normalizedAliases = aliases.map(normalizeRawKey);
-  const matchedKey = Object.keys(rawData).find((key) => {
-    const normalizedKey = normalizeRawKey(key);
-    return normalizedAliases.some((alias) => normalizedKey.includes(alias) || alias.includes(normalizedKey));
-  });
-  return matchedKey ? String(rawData[matchedKey] ?? "").trim() : "";
+  return getDifficultyTemplateValue(row.raw_data, field);
 };
 
-export default function CollegeDifficultyStudentsPage({ profile }: CollegeDifficultyStudentsPageProps) {
+export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: CollegeDifficultyStudentsPageProps) {
   const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear());
   const [nameKeyword, setNameKeyword] = useState("");
   const [studentIdKeyword, setStudentIdKeyword] = useState("");
@@ -60,15 +59,6 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
 
   const getRowKey = (row: DifficultyStudentRow) =>
     makeDifficultyRowKey(row.academic_year, row.college_name, row.id_card, row.student_id, 0);
-
-  const getTemplateCell = (row: DifficultyStudentRow, field: DifficultyStudentTemplateField) => {
-    if (field === "姓名(*)") return getDifficultyTemplateValue(row.raw_data, field, row.name);
-    if (field === "身份证号(*)") return getDifficultyTemplateValue(row.raw_data, field, row.id_card);
-    if (field === "特殊困难类型(*)" || field === "推荐档次(*)") {
-      return getDifficultyTemplateValue(row.raw_data, field, row.difficulty_level);
-    }
-    return getDifficultyTemplateValue(row.raw_data, field);
-  };
 
   const loadRows = useCallback(async () => {
     setIsLoading(true);
@@ -160,8 +150,6 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
       姓名: row.name,
       学号: row.student_id,
       身份证号: row.id_card,
-      年级: getRawDetail(row, ["grade", "年级", "所在年级"]),
-      性别: getRawDetail(row, ["gender", "性别"]),
       困难等级: row.difficulty_level,
       状态: displayStatus(row.status),
     }));
@@ -172,57 +160,103 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
     XLSX.writeFile(workbook, `${academicYear}_${collegeName || "学院"}_困难生明细.xlsx`);
   };
 
-  return (
-    <section className="bos-table-page difficulty-workspace">
-      <div className="bos-layout-active">AI Studio Layout Active - Difficulty Students</div>
+  const breadcrumb: BreadcrumbItem[] = [
+    { label: "学部（院）端", onClick: () => onNavigate?.("/college") },
+    { label: "困难生业务", onClick: () => onNavigate?.("/college/difficulty") },
+    { label: "困难生明细" },
+  ];
 
-      <header className="bos-page-title-row">
-        <div>
-          <div className="bos-breadcrumb">困难生业务 / 困难生明细 / Student Records</div>
-          <h1>困难生明细</h1>
-          <p>按学年查看本学院已经上载的困难生数据，点击姓名或操作按钮查看学生详情。</p>
-        </div>
+  const filterFields: FilterField[] = [
+    { key: "college", label: "学院/学部", value: collegeName || "学院账号", onChange: () => {}, readOnly: true },
+    { key: "name", label: "姓名", value: nameKeyword, onChange: setNameKeyword, placeholder: "按姓名筛选" },
+    { key: "studentId", label: "学号", value: studentIdKeyword, onChange: setStudentIdKeyword, placeholder: "按学号筛选" },
+    { key: "idCard", label: "身份证号", value: idCardKeyword, onChange: setIdCardKeyword, placeholder: "按身份证号筛选" },
+    { key: "difficulty", label: "困难等级", value: difficultyKeyword, onChange: setDifficultyKeyword, placeholder: "按等级筛选" },
+    { key: "status", label: "状态", value: statusKeyword, onChange: setStatusKeyword, placeholder: "按状态筛选" },
+  ];
+
+  const tableColumns: DataColumn[] = DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => ({
+    key: field,
+    label: field,
+    render: (_value: unknown, row: DifficultyStudentRow) => {
+      const cellValue = getTemplateCell(row, field);
+      if (field === "姓名(*)") {
+        return <button className="bos-link-button" onClick={() => setSelectedRow(row)}>{cellValue || "未填写姓名"}</button>;
+      }
+      return cellValue || "-";
+    },
+  }));
+
+  const detailGroups: DetailGroup[] = selectedRow
+    ? [
+        {
+          title: "基础信息",
+          items: ["姓名(*)", "籍贯(*)", "身份证号(*)", "家庭人口数(*)", "手机号码(*)", "辅导员姓名"]
+            .map((f) => ({ label: f, value: getTemplateCell(selectedRow, f) })),
+        },
+        {
+          title: "家庭情况",
+          items: ["家庭地址(*)", "邮政编码(*)", "家长手机号码(*)", "家庭人均年收入(*)", "收入来源(*)", "家庭欠债金额(*)", "户籍性质（*）", "劳动力人口数（*）", "赡养人口数（*）"]
+            .map((f) => ({ label: f, value: getTemplateCell(selectedRow, f) })),
+        },
+        {
+          title: "困难认定",
+          items: ["特殊困难类型(*)", "是否遭受自然灾害(*)", "自然灾害描述（60字）(*)", "是否遭受突发事件(*)", "突发事件描述（60字）(*)", "推荐档次(*)", "院系推荐档次", "学校推荐档次"]
+            .map((f) => ({ label: f, value: getTemplateCell(selectedRow, f) })),
+        },
+        {
+          title: "审核意见",
+          items: ["陈述理由（60字）(*)", "认定时间(*)", "是否同意评议小组意见(*)", "院系意见（60字）(*)", "是否同意院系工作组意见(*)", "学校意见（60字）(*)"]
+            .map((f) => ({ label: f, value: getTemplateCell(selectedRow, f) })),
+        },
+      ]
+    : [];
+
+  return (
+    <PageContainer
+      title="困难生明细"
+      description="按学年查看本学院已经上载的困难生数据，点击姓名或操作按钮查看学生详情。"
+      breadcrumb={breadcrumb}
+      actions={
         <label className="bos-current-year">
           当前学年
           <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
             {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
           </select>
         </label>
-      </header>
-
-      <div className="difficulty-cockpit-grid">
-        <CockpitStat label="本学院困难生" value={rows.length} tone="blue" />
-        <CockpitStat label="当前筛选结果" value={filteredRows.length} tone="green" />
-        <CockpitStat
+      }
+    >
+      <div className="bos-stat-grid">
+        <StatCard label="本学院困难生" value={rows.length} tone="blue" />
+        <StatCard label="当前筛选结果" value={filteredRows.length} tone="green" />
+        <StatCard
           label="特殊困难"
           value={rows.filter((row) => /特别|特殊|低保|孤儿|残疾|烈士/.test(row.difficulty_level)).length}
           tone="amber"
         />
-        <CockpitStat label="当前选中" value={selectedKeys.size} tone="purple" />
-        <CockpitStat label="云端记录" value={dataSource === "supabase" ? rows.length : 0} tone="cyan" />
+        <StatCard label="当前选中" value={selectedKeys.size} tone="purple" />
       </div>
 
-      <section className="bos-filter-card">
-        <div className="bos-filter-grid">
-          <label className="bos-filter-field">学院/学部<input value={collegeName || "学院账号"} readOnly /></label>
-          <label className="bos-filter-field">姓名<input value={nameKeyword} onChange={(event) => setNameKeyword(event.target.value)} /></label>
-          <label className="bos-filter-field">学号<input value={studentIdKeyword} onChange={(event) => setStudentIdKeyword(event.target.value)} /></label>
-          <label className="bos-filter-field">身份证号<input value={idCardKeyword} onChange={(event) => setIdCardKeyword(event.target.value)} /></label>
-          <label className="bos-filter-field">困难等级<input value={difficultyKeyword} onChange={(event) => setDifficultyKeyword(event.target.value)} /></label>
-          <label className="bos-filter-field">状态<input value={statusKeyword} onChange={(event) => setStatusKeyword(event.target.value)} /></label>
-          <button className="is-primary" onClick={() => void loadRows()} disabled={isLoading}>{isLoading ? "查询中..." : "查询"}</button>
-          <button onClick={resetFilters}>重置</button>
-        </div>
-        {loadMessage && <div style={dataSource === "supabase" ? styles.info : styles.warning}>{loadMessage}</div>}
-      </section>
+      <FilterBar
+        fields={filterFields}
+        onSearch={() => void loadRows()}
+        onReset={resetFilters}
+        extra={loadMessage ? (
+          <div className={dataSource === "supabase" ? "bos-filter-hint is-info" : "bos-filter-hint is-warning"}>
+            {loadMessage}
+          </div>
+        ) : undefined}
+      />
 
-      <div className="bos-action-toolbar">
-        <button className="is-primary" onClick={() => void loadRows()} disabled={isLoading}>{isLoading ? "刷新中..." : "刷新数据"}</button>
+      <ActionBar>
+        <button className="is-primary" onClick={() => void loadRows()} disabled={isLoading}>
+          {isLoading ? "刷新中..." : "刷新数据"}
+        </button>
         <button className="is-purple" onClick={exportCurrentRows}>导出当前名单</button>
         <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedRows}>
           删除选中（{selectedKeys.size}）
         </button>
-      </div>
+      </ActionBar>
 
       <div className="bos-status-row">
         <span className="bos-status-badge">学年 {academicYear}</span>
@@ -232,175 +266,36 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
         <span className="bos-status-badge">筛选结果 {filteredRows.length}</span>
       </div>
 
-      <section className="bos-table-card">
-        <div className="bos-table-card-head">
-          <div>
-            <h2>困难生申请档案数据表</h2>
-            <span>严格按申请档案模板 40 列展示，横向滚动查看全部字段</span>
-          </div>
-          <span>显示 {filteredRows.length} / {rows.length} 条</span>
-        </div>
-        <div className="bos-table-card-body">
-          <div>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={{ ...styles.th, ...styles.checkboxColumn }}>
-                    <input
-                      type="checkbox"
-                      aria-label="选择当前全部数据"
-                      checked={allVisibleSelected}
-                      onChange={toggleAllRows}
-                    />
-                  </th>
-                  {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
-                    <th key={field} style={styles.th}>{field}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {isLoading ? (
-                  <tr>
-                    <td style={styles.empty} colSpan={41}>正在加载困难生明细...</td>
-                  </tr>
-                ) : filteredRows.length === 0 ? (
-                  <tr>
-                    <td style={styles.empty} colSpan={41}>暂无当前学年困难生明细</td>
-                  </tr>
-                ) : (
-                  filteredRows.map((row, index) => (
-                    <tr
-                      key={`${getRowKey(row)}_${index}`}
-                      className={selectedKeys.has(getRowKey(row)) ? "difficulty-row-selected" : ""}
-                    >
-                      <td style={{ ...styles.td, ...styles.checkboxColumn }}>
-                        <input
-                          type="checkbox"
-                          aria-label={`选择${row.name || "该学生"}`}
-                          checked={selectedKeys.has(getRowKey(row))}
-                          onChange={() => toggleRow(row)}
-                        />
-                      </td>
-                      {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
-                        <td key={field} style={field === "姓名(*)" ? styles.nameCell : styles.td}>
-                          {field === "姓名(*)" ? (
-                            <button style={styles.linkButton} onClick={() => setSelectedRow(row)}>
-                              {getTemplateCell(row, field) || "未填写姓名"}
-                            </button>
-                          ) : (
-                            getTemplateCell(row, field) || "-"
-                          )}
-                        </td>
-                      ))}
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div className="bos-table-card-foot">
-          <span>第 1 页</span>
-          <span>共 {filteredRows.length} 条</span>
-        </div>
-      </section>
+      <DataTable
+        columns={tableColumns}
+        rows={filteredRows as unknown as Record<string, unknown>[]}
+        loading={isLoading}
+        emptyText="暂无当前学年困难生明细"
+        selectable
+        selectedKeys={selectedKeys}
+        rowKey={(row) => getRowKey(row as unknown as DifficultyStudentRow)}
+        onSelectAll={() => toggleAllRows()}
+        onSelectRow={(row) => toggleRow(row as unknown as DifficultyStudentRow)}
+        allSelected={allVisibleSelected}
+        title="困难生申请档案数据表"
+        titleExtra={
+          <span>严格按申请档案模板 40 列展示，横向滚动查看全部字段 · 显示 {filteredRows.length} / {rows.length} 条</span>
+        }
+        footer={
+          <>
+            <span>第 1 页</span>
+            <span>共 {filteredRows.length} 条</span>
+          </>
+        }
+        className="bos-data-table--wide"
+      />
 
-      {selectedRow && (
-        <div className="bos-modal-backdrop">
-          <section className="bos-modal bos-modal--compact">
-            <div className="bos-modal-header">
-              <h2 style={styles.subTitle}>困难生明细详情</h2>
-              <button onClick={() => setSelectedRow(null)}>关闭</button>
-            </div>
-            <div className="bos-modal-body">
-              <div style={styles.detailGrid}>
-                {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
-                  <Detail key={field} label={field} value={getTemplateCell(selectedRow, field)} />
-                ))}
-              </div>
-            </div>
-          </section>
-        </div>
-      )}
-    </section>
+      <DetailModal
+        visible={Boolean(selectedRow)}
+        title="困难生明细详情"
+        groups={detailGroups}
+        onClose={() => setSelectedRow(null)}
+      />
+    </PageContainer>
   );
 }
-
-function CockpitStat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "blue" | "green" | "amber" | "purple" | "cyan";
-}) {
-  return (
-    <div className={`difficulty-cockpit-card is-${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={styles.detailItem}>
-      <span>{label}</span>
-      <strong>{value || "-"}</strong>
-    </div>
-  );
-}
-
-const styles: Record<string, CSSProperties> = {
-  page: { height: "100%", minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) clamp(270px, 23vw, 330px)", gap: 10, overflow: "hidden", boxSizing: "border-box" },
-  mainColumn: { height: "100%", minWidth: 0, minHeight: 0, display: "grid", gridTemplateRows: "auto auto auto minmax(0, 1fr)", gap: 10, overflow: "hidden" },
-  hero: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: 12, border: "1px solid #d5dee9", borderRadius: 9, background: "#fff", boxShadow: "0 2px 10px rgba(15,35,64,0.05)" },
-  eyebrow: { color: "#1e5aa8", fontSize: 11, fontWeight: 900, letterSpacing: "0.04em" },
-  title: { margin: "4px 0 5px", color: "#0f1f33", fontSize: 21 },
-  description: { margin: 0, color: "#63738a", fontSize: 12, lineHeight: 1.55 },
-  badge: { padding: "5px 9px", borderRadius: 999, background: "#e9f8f2", color: "#087b5b", border: "1px solid #c7eedf", fontSize: 11, fontWeight: 800, whiteSpace: "nowrap" },
-  card: { padding: 12, border: "1px solid #d5dee9", borderRadius: 9, background: "#fff", boxShadow: "0 2px 10px rgba(15,35,64,0.04)", minWidth: 0, minHeight: 0, overflow: "hidden" },
-  sectionLabel: { marginBottom: 6, color: "#334155", fontSize: 11, fontWeight: 900, letterSpacing: "0.05em" },
-  toolbar: { display: "grid", gridTemplateColumns: "125px repeat(4, minmax(105px, 1fr)) auto auto", gap: 7, alignItems: "end" },
-  fieldLabel: { display: "grid", gap: 5, color: "#40526a", fontSize: 12, fontWeight: 800 },
-  select: { border: "1px solid #cfdbe7", borderRadius: 6, padding: "7px 9px", color: "#15304f", background: "#fff", fontSize: 12 },
-  input: { border: "1px solid #cfdbe7", borderRadius: 6, padding: "7px 9px", color: "#15304f", background: "#fff", fontSize: 12 },
-  secondaryButton: { border: "1px solid #cbd8e6", borderRadius: 6, minHeight: 34, padding: "7px 11px", background: "#fff", color: "#26364e", fontSize: 12, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" },
-  primaryButton: { border: "1px solid #1e5aa8", borderRadius: 6, minHeight: 34, padding: "7px 11px", background: "#1e5aa8", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" },
-  metaRow: { display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, color: "#64748b", fontSize: 12 },
-  info: { marginTop: 7, padding: 8, borderRadius: 6, background: "#f3f9ff", color: "#0875bd", border: "1px solid #cce3f8", fontSize: 12 },
-  warning: { marginTop: 7, padding: 8, borderRadius: 6, background: "#fff8e6", color: "#9a6700", border: "1px solid #fde6a7", fontSize: 12 },
-  stats: { display: "grid", gridTemplateColumns: "repeat(4, minmax(110px, 1fr))", gap: 7 },
-  metric: { minHeight: 56, display: "grid", alignContent: "center", gap: 3, padding: "7px 9px", borderRadius: 7, border: "1px solid #d7e1ed", borderLeft: "3px solid #1e5aa8", background: "#fff" },
-  metricLabel: { color: "#718096", fontSize: 10 },
-  metricValue: { lineHeight: 1.15 },
-  tableCard: { display: "flex", flexDirection: "column" },
-  tableHead: { flex: "0 0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 7 },
-  tableHint: { margin: 0, color: "#8290a6", fontSize: 11 },
-  resultBadge: { padding: "4px 8px", borderRadius: 999, background: "#eff4ff", color: "#1e5aa8", border: "1px solid #cbd9ee", fontSize: 10, fontWeight: 800 },
-  tableWrap: { flex: 1, height: "100%", minHeight: 0, overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
-  table: { width: "max-content", minWidth: "100%", borderCollapse: "collapse", fontSize: 12 },
-  th: { position: "sticky", top: 0, zIndex: 1, border: "1px solid #d7e1ed", background: "#edf4fa", padding: "9px 10px", whiteSpace: "nowrap", textAlign: "center" },
-  td: { border: "1px solid #cbd5e1", padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" },
-  nameCell: { border: "1px solid #cbd5e1", padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap", fontWeight: 800 },
-  empty: { padding: 18, color: "#8190a4", textAlign: "center" },
-  linkButton: { border: "none", background: "transparent", color: "#1e5aa8", fontWeight: 800, cursor: "pointer" },
-  smallButton: { border: "1px solid #bcd9f5", borderRadius: 6, padding: "6px 9px", background: "#f3f9ff", color: "#0879c5", fontWeight: 800, cursor: "pointer" },
-  checkboxColumn: { minWidth: 46, width: 46, position: "sticky", left: 0, zIndex: 4 },
-  logPanel: { height: "100%", minHeight: 0, padding: 14, borderRadius: 9, background: "linear-gradient(180deg, #0b1c30 0%, #0a1426 100%)", border: "1px solid #1e3350", overflow: "hidden", display: "flex", flexDirection: "column", boxSizing: "border-box", boxShadow: "0 4px 18px rgba(8,20,40,0.16)" },
-  logHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, paddingBottom: 10, borderBottom: "1px solid rgba(148,163,184,0.2)" },
-  logTitle: { color: "#e5efff", fontSize: 15, margin: 0 },
-  liveBadge: { display: "inline-flex", alignItems: "center", gap: 5, color: "#9fdcc8", fontSize: 10, fontWeight: 800 },
-  liveDot: { width: 7, height: 7, borderRadius: "50%", background: "#21d59c", boxShadow: "0 0 0 3px rgba(33,213,156,0.12)" },
-  logBox: { flex: 1, minHeight: 0, overflowY: "auto", paddingTop: 10, color: "#dceafe", fontFamily: "Consolas, monospace", fontSize: 12, lineHeight: 1.55 },
-  logItem: { paddingBottom: 8, marginBottom: 8, borderBottom: "1px solid rgba(148,163,184,0.1)", whiteSpace: "pre-wrap" },
-  modalBackdrop: { position: "fixed", inset: 0, zIndex: 9999, background: "rgba(11,28,48,0.58)", display: "grid", placeItems: "center", padding: 18, backdropFilter: "blur(2px)" },
-  detailModal: { width: "min(760px, 92vw)", height: "min(620px, 78vh)", display: "flex", flexDirection: "column", overflow: "hidden", border: "1px solid #cbd5e1", borderRadius: 10, background: "#fff", boxShadow: "0 28px 90px rgba(15,23,42,0.34)" },
-  detailHeader: { flex: "0 0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "13px 16px", borderBottom: "1px solid #d7e1ed", background: "#f8fafc" },
-  detailBody: { flex: 1, minHeight: 0, overflow: "auto", padding: 16 },
-  subTitle: { margin: 0, color: "#172033", fontSize: 17 },
-  closeButton: { border: "1px solid #cbd8e6", borderRadius: 6, padding: "7px 10px", background: "#fff", color: "#26364e", fontWeight: 800, cursor: "pointer" },
-  detailGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 },
-  detailItem: { display: "grid", gap: 4, padding: 10, borderRadius: 6, border: "1px solid #d7e1ed", background: "#fff", color: "#63738a", fontSize: 12 },
-};
