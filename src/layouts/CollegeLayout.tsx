@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import type { ReactNode } from "react";
 import type { UserProfile } from "../types/auth";
 import { getCollegeAccountLabel } from "../services/routeGuard";
@@ -10,20 +12,42 @@ type CollegeLayoutProps = {
   children: ReactNode;
 };
 
-const difficultyMenus = [
-  { path: "/college/difficulty", label: "业务首页", mark: "首" },
-  { path: "/college/difficulty/student", label: "本专科信息处理", mark: "本" },
-  { path: "/college/difficulty/family", label: "家庭成员信息处理", mark: "家" },
-  { path: "/college/difficulty/students", label: "困难生明细", mark: "明" },
-  { path: "/college/records", label: "提交记录", mark: "记" },
-];
+type MenuItem = {
+  path: string;
+  label: string;
+  mark: string;
+};
 
-const awardMenus = [
-  { path: "/college/awards", label: "三奖业务首页", mark: "奖" },
-  { path: "/college/awards/national", label: "国家奖学金数据处理", mark: "国" },
-  { path: "/college/awards/inspirational", label: "国家励志奖学金数据处理", mark: "励" },
-  { path: "/college/awards/shanghai", label: "上海市奖学金数据处理", mark: "沪" },
-];
+type ExpandableMenuGroup = {
+  title: string;
+  icon: string;
+  items: MenuItem[];
+  defaultOpen?: boolean;
+};
+
+const difficultyMenuGroup: ExpandableMenuGroup = {
+  title: "困难生业务",
+  icon: "困",
+  items: [
+    { path: "/college/difficulty", label: "业务首页", mark: "首" },
+    { path: "/college/difficulty/student", label: "本专科信息处理", mark: "本" },
+    { path: "/college/difficulty/family", label: "家庭成员信息处理", mark: "家" },
+    { path: "/college/difficulty/students", label: "困难生明细", mark: "明" },
+    { path: "/college/records", label: "提交记录", mark: "记" },
+  ],
+  defaultOpen: true,
+};
+
+const awardMenuGroup: ExpandableMenuGroup = {
+  title: "三大奖业务",
+  icon: "奖",
+  items: [
+    { path: "/college/awards", label: "三奖业务首页", mark: "奖" },
+    { path: "/college/awards/national", label: "国家奖学金数据处理", mark: "国" },
+    { path: "/college/awards/inspirational", label: "国家励志奖学金数据处理", mark: "励" },
+    { path: "/college/awards/shanghai", label: "上海市奖学金数据处理", mark: "沪" },
+  ],
+};
 
 const englishLabels: Record<string, string> = {
   "/college": "Platform Home",
@@ -54,7 +78,7 @@ const workspacePaths = new Set([
 const pageTitles: Record<string, string> = {
   "/college": "平台首页",
   "/college/upload": "本专科信息处理",
-  ...Object.fromEntries([...difficultyMenus, ...awardMenus].map((item) => [item.path, item.label])),
+  ...Object.fromEntries([...difficultyMenuGroup.items, ...awardMenuGroup.items].map((item) => [item.path, item.label])),
 };
 
 function MenuButton({
@@ -62,18 +86,98 @@ function MenuButton({
   active,
   onClick,
 }: {
-  item: { path: string; label: string; mark: string };
+  item: MenuItem;
   active: boolean;
   onClick: () => void;
 }) {
   return (
-    <button className={`bos-nav-item${active ? " is-active" : ""}`} onClick={onClick}>
+    <motion.button
+      className={`bos-nav-item${active ? " is-active" : ""}`}
+      onClick={onClick}
+      whileHover={{ backgroundColor: "rgba(64, 97, 135, 0.28)" }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.15 }}
+    >
       <span className="bos-nav-mark">{item.mark}</span>
       <span className="bos-nav-copy">
         <strong>{item.label}</strong>
         <small>{englishLabels[item.path]}</small>
       </span>
-    </button>
+    </motion.button>
+  );
+}
+
+function ExpandableMenu({
+  group,
+  currentPath,
+  onNavigate,
+}: {
+  group: ExpandableMenuGroup;
+  currentPath: string;
+  onNavigate: (to: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(group.defaultOpen ?? false);
+  const isActive = group.items.some(
+    (item) =>
+      currentPath === item.path ||
+      (currentPath === "/college/upload" && item.path === "/college/difficulty/student")
+  );
+
+  const handleTitleClick = () => {
+    setIsOpen(!isOpen);
+  };
+
+  return (
+    <div className="bos-nav-group">
+      <motion.button
+        className={`bos-nav-group-title-btn${isOpen ? " is-open" : ""}`}
+        onClick={handleTitleClick}
+        whileHover={{ backgroundColor: "rgba(64, 97, 135, 0.15)" }}
+        whileTap={{ scale: 0.98 }}
+        transition={{ duration: 0.15 }}
+      >
+        <span className="bos-nav-group-icon">{group.icon}</span>
+        <span className="bos-nav-group-label">{group.title}</span>
+        <motion.span
+          className="bos-nav-group-arrow"
+          animate={{ rotate: isOpen ? 90 : 0 }}
+          transition={{ duration: 0.2, ease: "easeInOut" }}
+        >
+          →
+        </motion.span>
+      </motion.button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: "easeInOut" }}
+            style={{ overflow: "hidden" }}
+            className="bos-nav-group-content"
+          >
+            {group.items.map((item) => (
+              <motion.div
+                key={item.path}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.15, delay: group.items.indexOf(item) * 0.03 }}
+              >
+                <MenuButton
+                  item={item}
+                  active={currentPath === item.path || (currentPath === "/college/upload" && item.path === "/college/difficulty/student")}
+                  onClick={() => {
+                    onNavigate(item.path);
+                  }}
+                />
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -109,19 +213,17 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
             />
           </div>
 
-          <div className="bos-nav-group">
-            <div className="bos-nav-group-title">困难生业务 / DIFFICULTY</div>
-            {difficultyMenus.map((item) => (
-              <MenuButton key={item.path} item={item} active={path === item.path || (path === "/college/upload" && item.path === "/college/difficulty/student")} onClick={() => onNavigate(item.path)} />
-            ))}
-          </div>
+          <ExpandableMenu
+            group={difficultyMenuGroup}
+            currentPath={path}
+            onNavigate={onNavigate}
+          />
 
-          <div className="bos-nav-group">
-            <div className="bos-nav-group-title">三大奖业务 / AWARDS</div>
-            {awardMenus.map((item) => (
-              <MenuButton key={item.path} item={item} active={path === item.path} onClick={() => onNavigate(item.path)} />
-            ))}
-          </div>
+          <ExpandableMenu
+            group={awardMenuGroup}
+            currentPath={path}
+            onNavigate={onNavigate}
+          />
         </nav>
 
         <div className="bos-sidebar-foot">
@@ -145,7 +247,20 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
             <button onClick={onLogout}>退出登录</button>
           </div>
         </header>
-        <main className={`bos-page-main${workspacePaths.has(path) ? " bos-page-main--workspace" : ""}`}>{children}</main>
+        <main className={`bos-page-main${workspacePaths.has(path) ? " bos-page-main--workspace" : ""}`}>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={path}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className="bos-page-content"
+            >
+              {children}
+            </motion.div>
+          </AnimatePresence>
+        </main>
       </div>
     </div>
   );
