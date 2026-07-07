@@ -32,6 +32,7 @@ import {
   subscribeAuthProfile,
 } from "./services/authService";
 import type { AuthUserContext, UserProfile } from "./types/auth";
+import { TabProvider, useTabs } from "./contexts/TabContext";
 
 const normalizePath = (path: string) => {
   const known = [
@@ -68,27 +69,95 @@ const normalizePath = (path: string) => {
 
 const readPath = () => normalizePath(window.location.pathname || "/login");
 
+const pageTitles: Record<string, string> = {
+  "/admin": "管理员首页",
+  "/admin/difficulty": "业务总览",
+  "/admin/summary": "全校数据汇总",
+  "/admin/student-summary": "本专科信息汇总",
+  "/admin/family-summary": "家庭成员信息汇总",
+  "/admin/students": "困难生数据库",
+  "/admin/base-info": "学院/部门信息",
+  "/admin/accounts": "账号管理",
+  "/admin/colleges": "学院管理",
+  "/admin/awards": "三奖提交总览",
+  "/admin/awards/national": "国家奖学金汇总",
+  "/admin/awards/inspirational": "国家励志奖学金汇总",
+  "/admin/awards/shanghai": "上海市奖学金汇总",
+  "/college": "平台首页",
+  "/college/difficulty": "困难生业务",
+  "/college/difficulty/student": "本专科信息处理",
+  "/college/difficulty/family": "家庭成员信息处理",
+  "/college/difficulty/students": "困难生明细",
+  "/college/upload": "本专科信息处理",
+  "/college/records": "提交记录",
+  "/college/awards": "三奖业务首页",
+  "/college/awards/national": "国家奖学金数据处理",
+  "/college/awards/inspirational": "国家励志奖学金数据处理",
+  "/college/awards/shanghai": "上海市奖学金数据处理",
+};
+
+const pageIcons: Record<string, string> = {
+  "/admin": "首",
+  "/admin/difficulty": "总",
+  "/admin/summary": "汇",
+  "/admin/student-summary": "本",
+  "/admin/family-summary": "家",
+  "/admin/students": "库",
+  "/admin/base-info": "基",
+  "/admin/accounts": "账",
+  "/admin/colleges": "院",
+  "/admin/awards": "览",
+  "/admin/awards/national": "国",
+  "/admin/awards/inspirational": "励",
+  "/admin/awards/shanghai": "沪",
+  "/college": "首",
+  "/college/difficulty": "困",
+  "/college/difficulty/student": "本",
+  "/college/difficulty/family": "家",
+  "/college/difficulty/students": "明",
+  "/college/upload": "本",
+  "/college/records": "记",
+  "/college/awards": "奖",
+  "/college/awards/national": "国",
+  "/college/awards/inspirational": "励",
+  "/college/awards/shanghai": "沪",
+};
+
 const initialAuthState: AuthUserContext = {
   profile: null,
   loading: true,
   error: "",
 };
 
-export default function PlatformApp() {
+function AppContent() {
   const [authState, setAuthState] = useState<AuthUserContext>(initialAuthState);
-  const [path, setPath] = useState(readPath);
+  const [currentPath, setCurrentPath] = useState(readPath);
+  const { tabs, activeTabId, addTab, activateTab, removeTab } = useTabs();
+
+  const activeTab = tabs.find((t) => t.id === activeTabId);
+  const path = activeTab?.path || currentPath;
 
   const navigate = useCallback((to: string, replace = false) => {
     const next = normalizePath(to);
+    const title = pageTitles[next] || "业务管理";
+    const icon = pageIcons[next] || "";
+
+    addTab({ path: next, title, icon });
+
+    const tab = tabs.find((t) => t.path === next);
+    if (tab) {
+      activateTab(tab.id);
+    }
+
     if (window.location.pathname !== next) {
       if (replace) window.history.replaceState({}, "", next);
       else window.history.pushState({}, "", next);
     }
-    setPath(next);
-  }, []);
+    setCurrentPath(next);
+  }, [tabs, addTab, activateTab]);
 
   useEffect(() => {
-    const onPop = () => setPath(readPath());
+    const onPop = () => setCurrentPath(readPath());
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
@@ -146,12 +215,12 @@ export default function PlatformApp() {
     navigate("/login", true);
   }, [navigate]);
 
-  const content = useMemo<ReactNode>(() => {
-    if (path === "/") {
+  const renderPage = (pagePath: string): ReactNode => {
+    if (pagePath === "/") {
       return <RootRedirect profile={authState.profile} loading={authState.loading} onNavigate={navigate} />;
     }
 
-    if (path === "/login") {
+    if (pagePath === "/login") {
       return (
         <LoginPage
           currentProfile={authState.profile}
@@ -161,35 +230,35 @@ export default function PlatformApp() {
       );
     }
 
-    if (path === "/reset-password") {
+    if (pagePath === "/reset-password") {
       return <ResetPasswordPage onComplete={handlePasswordResetComplete} />;
     }
 
-    if (path.startsWith("/admin")) {
+    if (pagePath.startsWith("/admin")) {
       const page =
-        path === "/admin/base-info" ? (
+        pagePath === "/admin/base-info" ? (
           <AdminBaseInfoPage />
-        ) : path === "/admin/accounts" ? (
+        ) : pagePath === "/admin/accounts" ? (
           <AdminAccountManagePage />
-        ) : path === "/admin/colleges" ? (
+        ) : pagePath === "/admin/colleges" ? (
           <AdminCollegesPage />
-        ) : path === "/admin/difficulty" ? (
+        ) : pagePath === "/admin/difficulty" ? (
           <AdminDifficultyOverviewPage onNavigate={navigate} />
-        ) : path === "/admin/student-summary" ? (
+        ) : pagePath === "/admin/student-summary" ? (
           <AdminStudentSummaryPage />
-        ) : path === "/admin/family-summary" ? (
+        ) : pagePath === "/admin/family-summary" ? (
           <AdminFamilySummaryPage />
-        ) : path === "/admin/awards" ? (
+        ) : pagePath === "/admin/awards" ? (
           <AdminAwardsOverviewPage />
-        ) : path === "/admin/awards/national" ? (
+        ) : pagePath === "/admin/awards/national" ? (
           <AdminNationalScholarshipPage />
-        ) : path === "/admin/awards/inspirational" ? (
+        ) : pagePath === "/admin/awards/inspirational" ? (
           <AdminNationalInspirationalPage />
-        ) : path === "/admin/awards/shanghai" ? (
+        ) : pagePath === "/admin/awards/shanghai" ? (
           <AdminShanghaiScholarshipPage />
-        ) : path === "/admin/students" ? (
+        ) : pagePath === "/admin/students" ? (
           <AdminStudentsPage />
-        ) : path === "/admin/summary" ? (
+        ) : pagePath === "/admin/summary" ? (
           <AdminSummaryPage />
         ) : (
           <AdminHomePage onNavigate={navigate} />
@@ -200,10 +269,19 @@ export default function PlatformApp() {
           requiredRole="admin"
           profile={authState.profile}
           loading={authState.loading}
-          path={path}
+          path={pagePath}
           onNavigate={navigate}
         >
-          <AdminLayout path={path} profile={authState.profile!} onNavigate={navigate} onLogout={logout}>
+          <AdminLayout
+            path={pagePath}
+            profile={authState.profile!}
+            onNavigate={navigate}
+            onLogout={logout}
+            activeTabId={activeTabId}
+            tabs={tabs}
+            onActivateTab={activateTab}
+            onRemoveTab={removeTab}
+          >
             {page}
           </AdminLayout>
         </ProtectedRoute>
@@ -211,25 +289,25 @@ export default function PlatformApp() {
     }
 
     const page =
-      path === "/college/upload" ? (
+      pagePath === "/college/upload" ? (
         <CollegeUploadPage panel="student" onNavigate={navigate} />
-      ) : path === "/college/difficulty/student" ? (
+      ) : pagePath === "/college/difficulty/student" ? (
         <CollegeUploadPage panel="student" onNavigate={navigate} />
-      ) : path === "/college/difficulty/family" ? (
+      ) : pagePath === "/college/difficulty/family" ? (
         <CollegeUploadPage panel="family" onNavigate={navigate} />
-      ) : path === "/college/difficulty/students" ? (
+      ) : pagePath === "/college/difficulty/students" ? (
         <CollegeDifficultyStudentsPage profile={authState.profile!} />
-      ) : path === "/college/difficulty" ? (
+      ) : pagePath === "/college/difficulty" ? (
         <CollegeDifficultyPage profile={authState.profile!} onNavigate={navigate} />
-      ) : path === "/college/records" ? (
+      ) : pagePath === "/college/records" ? (
         <CollegeRecordsPage />
-      ) : path === "/college/awards" ? (
+      ) : pagePath === "/college/awards" ? (
         <AwardsHomePage />
-      ) : path === "/college/awards/national" ? (
+      ) : pagePath === "/college/awards/national" ? (
         <NationalScholarshipPage />
-      ) : path === "/college/awards/inspirational" ? (
+      ) : pagePath === "/college/awards/inspirational" ? (
         <NationalInspirationalPage />
-      ) : path === "/college/awards/shanghai" ? (
+      ) : pagePath === "/college/awards/shanghai" ? (
         <ShanghaiScholarshipPage />
       ) : (
         <CollegeHomePage onNavigate={navigate} />
@@ -240,15 +318,55 @@ export default function PlatformApp() {
         requiredRole="college"
         profile={authState.profile}
         loading={authState.loading}
-        path={path}
+        path={pagePath}
         onNavigate={navigate}
       >
-        <CollegeLayout path={path} profile={authState.profile!} onNavigate={navigate} onLogout={logout}>
+        <CollegeLayout
+          path={pagePath}
+          profile={authState.profile!}
+          onNavigate={navigate}
+          onLogout={logout}
+          activeTabId={activeTabId}
+          tabs={tabs}
+          onActivateTab={activateTab}
+          onRemoveTab={removeTab}
+        >
           {page}
         </CollegeLayout>
       </ProtectedRoute>
     );
-  }, [authState.error, authState.loading, authState.profile, handleLogin, handlePasswordResetComplete, logout, navigate, path]);
+  };
+
+  const content = useMemo<ReactNode>(() => {
+    return (
+      <div className="bos-tab-container">
+        {tabs.map((tab) => (
+          <motion.div
+            key={tab.id}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: activeTabId === tab.id ? 1 : 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className={`bos-tab-content${activeTabId === tab.id ? " is-active" : ""}`}
+          >
+            {renderPage(tab.path)}
+          </motion.div>
+        ))}
+      </div>
+    );
+  }, [tabs, activeTabId, authState, handleLogin, handlePasswordResetComplete, logout, navigate]);
 
   return <>{content}</>;
+}
+
+export default function PlatformApp() {
+  const [path] = useState(readPath);
+  const initialTitle = pageTitles[path] || "业务管理";
+  const initialIcon = pageIcons[path] || "";
+
+  return (
+    <TabProvider initialPath={path} initialTitle={initialTitle}>
+      <AppContent />
+    </TabProvider>
+  );
 }

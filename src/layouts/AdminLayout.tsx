@@ -2,6 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ReactNode } from "react";
 import type { UserProfile } from "../types/auth";
+import type { TabItem } from "../types/tab";
 import { getAdminAccountLabel } from "../services/routeGuard";
 
 type AdminLayoutProps = {
@@ -10,6 +11,10 @@ type AdminLayoutProps = {
   onNavigate: (to: string) => void;
   onLogout: () => void;
   children: ReactNode;
+  activeTabId: string;
+  tabs: TabItem[];
+  onActivateTab: (tabId: string) => void;
+  onRemoveTab: (tabId: string) => void;
 };
 
 type MenuItem = {
@@ -185,7 +190,52 @@ function ExpandableMenu({
   );
 }
 
-export default function AdminLayout({ path, profile, onNavigate, onLogout, children }: AdminLayoutProps) {
+function TabBar({ tabs, activeTabId, onActivateTab, onRemoveTab }: { tabs: TabItem[]; activeTabId: string; onActivateTab: (tabId: string) => void; onRemoveTab: (tabId: string) => void }) {
+  if (tabs.length === 0) return null;
+
+  return (
+    <div className="bos-tab-bar">
+      <div className="bos-tab-bar-scroll">
+        <AnimatePresence mode="popLayout">
+          {tabs.map((tab) => (
+            <motion.div
+              key={tab.id}
+              initial={{ opacity: 0, y: -10, width: 0 }}
+              animate={{ opacity: 1, y: 0, width: "auto" }}
+              exit={{ opacity: 0, x: -20, width: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+              className={`bos-tab-item${activeTabId === tab.id ? " is-active" : ""}`}
+            >
+              <motion.button
+                onClick={() => onActivateTab(tab.id)}
+                className="bos-tab-button"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ duration: 0.1 }}
+              >
+                {tab.icon && <span className="bos-tab-icon">{tab.icon}</span>}
+                <span className="bos-tab-label">{tab.title}</span>
+              </motion.button>
+              {tabs.length > 1 && (
+                <motion.button
+                  onClick={() => onRemoveTab(tab.id)}
+                  className="bos-tab-close"
+                  whileHover={{ scale: 1.1, opacity: 1 }}
+                  whileTap={{ scale: 0.9 }}
+                  initial={{ opacity: 0.5 }}
+                >
+                  ×
+                </motion.button>
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+export default function AdminLayout({ path, profile, onNavigate, onLogout, children, activeTabId, tabs, onActivateTab, onRemoveTab }: AdminLayoutProps) {
   const account = getAdminAccountLabel(profile);
 
   return (
@@ -253,19 +303,11 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
             <button onClick={onLogout}>退出登录</button>
           </div>
         </header>
+
+        <TabBar tabs={tabs} activeTabId={activeTabId} onActivateTab={onActivateTab} onRemoveTab={onRemoveTab} />
+
         <main className={`bos-page-main${workspacePaths.has(path) ? " bos-page-main--workspace" : ""}`}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={path}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2, ease: "easeInOut" }}
-              className="bos-page-content"
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
+          <div className="bos-page-content">{children}</div>
         </main>
       </div>
     </div>
