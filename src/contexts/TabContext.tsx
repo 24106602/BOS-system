@@ -25,9 +25,12 @@ export function TabProvider({ children, initialPath, initialTitle }: { children:
     setTabs((prev) => {
       const existing = prev.find((t) => t.path === tab.path);
       if (existing) {
+        setActiveTabId(existing.id);
         return prev;
       }
-      return [...prev, { ...tab, id: generateTabId() }];
+      const newTab = { ...tab, id: generateTabId() };
+      setActiveTabId(newTab.id);
+      return [...prev, newTab];
     });
   }, []);
 
