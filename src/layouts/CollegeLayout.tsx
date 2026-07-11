@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import type { ReactNode } from "react";
 import type { UserProfile } from "../types/auth";
 import type { TabItem } from "../types/tab";
@@ -96,19 +95,16 @@ function MenuButton({
   onClick: () => void;
 }) {
   return (
-    <motion.button
+    <button
       className={`bos-nav-item${active ? " is-active" : ""}`}
       onClick={onClick}
-      whileHover={{ backgroundColor: "rgba(64, 97, 135, 0.28)" }}
-      whileTap={{ scale: 0.98 }}
-      transition={{ duration: 0.15 }}
     >
       <span className="bos-nav-mark">{item.mark}</span>
       <span className="bos-nav-copy">
         <strong>{item.label}</strong>
         <small>{englishLabels[item.path]}</small>
       </span>
-    </motion.button>
+    </button>
   );
 }
 
@@ -134,54 +130,32 @@ function ExpandableMenu({
 
   return (
     <div className="bos-nav-group">
-      <motion.button
+      <button
         className={`bos-nav-group-title-btn${isOpen ? " is-open" : ""}`}
         onClick={handleTitleClick}
-        whileHover={{ backgroundColor: "rgba(64, 97, 135, 0.15)" }}
-        whileTap={{ scale: 0.98 }}
-        transition={{ duration: 0.15 }}
       >
         <span className="bos-nav-group-icon">{group.icon}</span>
         <span className="bos-nav-group-label">{group.title}</span>
-        <motion.span
-          className="bos-nav-group-arrow"
-          animate={{ rotate: isOpen ? 90 : 0 }}
-          transition={{ duration: 0.2, ease: "easeInOut" }}
-        >
+        <span className="bos-nav-group-arrow">
           →
-        </motion.span>
-      </motion.button>
+        </span>
+      </button>
 
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
-            style={{ overflow: "hidden" }}
-            className="bos-nav-group-content"
-          >
-            {group.items.map((item) => (
-              <motion.div
-                key={item.path}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                transition={{ duration: 0.15, delay: group.items.indexOf(item) * 0.03 }}
-              >
-                <MenuButton
-                  item={item}
-                  active={currentPath === item.path || (currentPath === "/college/upload" && item.path === "/college/difficulty/student")}
-                  onClick={() => {
-                    onNavigate(item.path);
-                  }}
-                />
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isOpen && (
+        <div className="bos-nav-group-content">
+          {group.items.map((item) => (
+            <div key={item.path}>
+              <MenuButton
+                item={item}
+                active={currentPath === item.path || (currentPath === "/college/upload" && item.path === "/college/difficulty/student")}
+                onClick={() => {
+                  onNavigate(item.path);
+                }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
