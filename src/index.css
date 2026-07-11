@@ -617,7 +617,7 @@ p {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .bos-page-title-row {
