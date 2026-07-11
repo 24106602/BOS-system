@@ -62,21 +62,6 @@ const awardMenuGroup: ExpandableMenuGroup = {
   ],
 };
 
-const englishLabels: Record<string, string> = {
-  "/admin": "Admin Home",
-  "/admin/difficulty": "Difficulty Overview",
-  "/admin/summary": "School Summary",
-  "/admin/student-summary": "Student Summary",
-  "/admin/family-summary": "Family Summary",
-  "/admin/students": "Student Database",
-  "/admin/base-info": "Organization Info",
-  "/admin/accounts": "Account Management",
-  "/admin/awards": "Awards Overview",
-  "/admin/awards/national": "National Scholarship",
-  "/admin/awards/inspirational": "Inspirational Scholarship",
-  "/admin/awards/shanghai": "Shanghai Scholarship",
-};
-
 const workspacePaths = new Set([
   "/admin/difficulty",
   "/admin/summary",
@@ -111,7 +96,6 @@ function MenuButton({
       <span className="bos-nav-mark">{item.mark}</span>
       <span className="bos-nav-copy">
         <strong>{item.label}</strong>
-        <small>{englishLabels[item.path]}</small>
       </span>
     </button>
   );
@@ -207,7 +191,6 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
           <span className="bos-sidebar-logo">BOS</span>
           <span>
             <strong>学生事务管理平台</strong>
-            <small>Business Operations System</small>
           </span>
         </div>
 
@@ -215,13 +198,12 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
           <span className="bos-role-dot" />
           <span>
             <strong>学校管理员端</strong>
-            <small>School Administration</small>
           </span>
         </div>
 
         <nav className="bos-sidebar-nav">
           <div className="bos-nav-group">
-            <div className="bos-nav-group-title">平台导航 / PLATFORM</div>
+            <div className="bos-nav-group-title">平台导航</div>
             <MenuButton item={{ path: "/admin", label: "管理员首页", mark: "首" }} active={path === "/admin"} onClick={() => onNavigate("/admin")} />
           </div>
 
@@ -253,14 +235,12 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
       <div className="bos-shell-workspace">
         <header className="bos-topbar-modern">
           <div className="bos-topbar-context">
-            <span>学校管理后台</span>
             <strong>{pageTitles[path] || "数据管理"}</strong>
           </div>
           <div className="bos-topbar-account">
             <span className="bos-account-avatar">管</span>
             <span className="bos-account-copy">
               <strong>{account}</strong>
-              <small>校级数据管理员</small>
             </span>
             <button onClick={onLogout}>退出登录</button>
           </div>

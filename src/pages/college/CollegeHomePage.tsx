@@ -9,11 +9,9 @@ export default function CollegeHomePage({ onNavigate }: CollegeHomePageProps) {
     <section>
       <div style={styles.hero}>
         <div>
-          <div style={styles.eyebrow}>学部（院）端 / 业务模块入口</div>
-          <h1 style={styles.title}>学生事务业务工作台</h1>
-          <p style={styles.text}>学部（院）只处理本单位业务数据。困难生业务和三奖业务可分别进入对应工作区。</p>
+          <h1 style={styles.title}>学部（院）业务工作台</h1>
+          <p style={styles.text}>请选择需要办理的业务模块，进入对应工作区进行数据处理。</p>
         </div>
-        <div style={styles.heroBadge}>学院数据治理</div>
       </div>
 
       <div style={styles.businessGrid}>
@@ -23,7 +21,7 @@ export default function CollegeHomePage({ onNavigate }: CollegeHomePageProps) {
           description="上传本专科信息与家庭成员信息，完成治理后上载到学校端。"
           status="已启用"
           statusTone="enabled"
-          metrics={["数据处理", "不通过预览", "提交记录"]}
+          metrics={["本专科信息处理", "家庭成员信息处理"]}
           actionText="进入业务"
           onClick={() => onNavigate?.("/college/difficulty")}
         />
@@ -93,18 +91,8 @@ const styles: Record<string, CSSProperties> = {
     background: "#fff",
     boxShadow: "0 4px 14px rgba(15,35,64,0.05)",
   },
-  eyebrow: { color: "#0077d4", fontSize: 13, fontWeight: 800 },
   title: { margin: "5px 0 7px", color: "#172033", fontSize: 26 },
   text: { margin: 0, color: "#63738a", fontSize: 14, lineHeight: 1.7 },
-  heroBadge: {
-    padding: "7px 10px",
-    borderRadius: 999,
-    background: "#e9f8f2",
-    color: "#087b5b",
-    fontSize: 12,
-    fontWeight: 800,
-    whiteSpace: "nowrap",
-  },
   businessGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",

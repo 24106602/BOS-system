@@ -2,7 +2,6 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import type { UserProfile } from "../types/auth";
 import type { TabItem } from "../types/tab";
-import { getCollegeAccountLabel } from "../services/routeGuard";
 
 type CollegeLayoutProps = {
   path: string;
@@ -36,8 +35,6 @@ const difficultyMenuGroup: ExpandableMenuGroup = {
     { path: "/college/difficulty", label: "业务首页", mark: "首" },
     { path: "/college/difficulty/student", label: "本专科信息处理", mark: "本" },
     { path: "/college/difficulty/family", label: "家庭成员信息处理", mark: "家" },
-    { path: "/college/difficulty/students", label: "困难生明细", mark: "明" },
-    { path: "/college/records", label: "提交记录", mark: "记" },
   ],
   defaultOpen: true,
 };
@@ -53,26 +50,11 @@ const awardMenuGroup: ExpandableMenuGroup = {
   ],
 };
 
-const englishLabels: Record<string, string> = {
-  "/college": "Platform Home",
-  "/college/difficulty": "Difficulty Overview",
-  "/college/difficulty/student": "Student Information",
-  "/college/difficulty/family": "Family Information",
-  "/college/difficulty/students": "Student Records",
-  "/college/records": "Submission Records",
-  "/college/awards": "Awards Home",
-  "/college/awards/national": "National Scholarship",
-  "/college/awards/inspirational": "Inspirational Scholarship",
-  "/college/awards/shanghai": "Shanghai Scholarship",
-};
-
 const workspacePaths = new Set([
   "/college/upload",
   "/college/difficulty",
   "/college/difficulty/student",
   "/college/difficulty/family",
-  "/college/difficulty/students",
-  "/college/records",
   "/college/awards",
   "/college/awards/national",
   "/college/awards/inspirational",
@@ -102,7 +84,6 @@ function MenuButton({
       <span className="bos-nav-mark">{item.mark}</span>
       <span className="bos-nav-copy">
         <strong>{item.label}</strong>
-        <small>{englishLabels[item.path]}</small>
       </span>
     </button>
   );
@@ -194,7 +175,6 @@ function TabBar({ tabs, activeTabId, onActivateTab, onRemoveTab }: { tabs: TabIt
 }
 
 export default function CollegeLayout({ path, profile, onNavigate, onLogout, children, activeTabId, tabs, onActivateTab, onRemoveTab }: CollegeLayoutProps) {
-  const account = getCollegeAccountLabel(profile);
 
   return (
     <div className="bos-app-frame">
@@ -203,7 +183,6 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
           <span className="bos-sidebar-logo">BOS</span>
           <span>
             <strong>学部（院）业务工作台</strong>
-            <small>Student Affairs Platform</small>
           </span>
         </div>
 
@@ -211,13 +190,12 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
           <span className="bos-role-dot" />
           <span>
             <strong>学部（院）端</strong>
-            <small>{account}</small>
           </span>
         </div>
 
         <nav className="bos-sidebar-nav">
           <div className="bos-nav-group">
-            <div className="bos-nav-group-title">平台导航 / PLATFORM</div>
+            <div className="bos-nav-group-title">平台导航</div>
             <MenuButton
               item={{ path: "/college", label: "平台首页", mark: "首" }}
               active={path === "/college"}
@@ -247,14 +225,12 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
       <div className="bos-shell-workspace">
         <header className="bos-topbar-modern">
           <div className="bos-topbar-context">
-            <span>学院业务工作台</span>
             <strong>{pageTitles[path] || "业务管理"}</strong>
           </div>
           <div className="bos-topbar-account">
             <span className="bos-account-avatar">院</span>
             <span className="bos-account-copy">
               <strong>{profile.display_name || "学部（院）经办人"}</strong>
-              <small>{account}</small>
             </span>
             <button onClick={onLogout}>退出登录</button>
           </div>
