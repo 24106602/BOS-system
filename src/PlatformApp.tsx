@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import AdminLayout from "./layouts/AdminLayout";
 import CollegeLayout from "./layouts/CollegeLayout";
 import LoginPage from "./pages/LoginPage";
@@ -336,21 +335,14 @@ function AppContent() {
   const content = useMemo<ReactNode>(() => {
     return (
       <div className="bos-tab-container">
-        <AnimatePresence mode="wait">
-          {tabs.map((tab) => (
-            <motion.div
-              key={tab.id}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: activeTabId === tab.id ? 1 : 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className={`bos-tab-content${activeTabId === tab.id ? " is-active" : ""}`}
-              style={{ display: activeTabId === tab.id ? "block" : "none" }}
-            >
-              {renderPage(tab.path)}
-            </motion.div>
-          ))}
-        </AnimatePresence>
+        {tabs.map((tab) => (
+          <div
+            key={tab.id}
+            className={`bos-tab-content${activeTabId === tab.id ? " is-active" : ""}`}
+          >
+            {activeTabId === tab.id && renderPage(tab.path)}
+          </div>
+        ))}
       </div>
     );
   }, [tabs, activeTabId, authState, handleLogin, handlePasswordResetComplete, logout, navigate]);
