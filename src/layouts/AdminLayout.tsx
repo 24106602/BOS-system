@@ -29,19 +29,6 @@ type ExpandableMenuGroup = {
   defaultOpen?: boolean;
 };
 
-const difficultyMenuGroup: ExpandableMenuGroup = {
-  title: "困难生业务",
-  icon: "困",
-  items: [
-    { path: "/admin/difficulty", label: "业务总览", mark: "总" },
-    { path: "/admin/summary", label: "全校数据汇总", mark: "汇" },
-    { path: "/admin/student-summary", label: "本专科信息汇总", mark: "本" },
-    { path: "/admin/family-summary", label: "家庭成员信息汇总", mark: "家" },
-    { path: "/admin/students", label: "困难生数据库", mark: "库" },
-  ],
-  defaultOpen: true,
-};
-
 const baseInfoMenuGroup: ExpandableMenuGroup = {
   title: "基础信息维护",
   icon: "基",
@@ -72,11 +59,6 @@ const awardMenuGroup: ExpandableMenuGroup = {
 };
 
 const workspacePaths = new Set([
-  "/admin/difficulty",
-  "/admin/summary",
-  "/admin/student-summary",
-  "/admin/family-summary",
-  "/admin/students",
   "/admin/base-info",
   "/admin/departments",
   "/admin/accounts",
@@ -89,7 +71,7 @@ const workspacePaths = new Set([
 
 const pageTitles: Record<string, string> = {
   "/admin": "管理员首页",
-  ...Object.fromEntries([...difficultyMenuGroup.items, ...baseInfoMenuGroup.items, ...accountMenuGroup.items, ...awardMenuGroup.items].map((item) => [item.path, item.label])),
+  ...Object.fromEntries([...baseInfoMenuGroup.items, ...accountMenuGroup.items, ...awardMenuGroup.items].map((item) => [item.path, item.label])),
 };
 
 function MenuButton({
@@ -219,12 +201,6 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
             <div className="bos-nav-group-title">平台导航</div>
             <MenuButton item={{ path: "/admin", label: "管理员首页", mark: "首" }} active={path === "/admin"} onClick={() => onNavigate("/admin")} />
           </div>
-
-          <ExpandableMenu
-            group={difficultyMenuGroup}
-            currentPath={path}
-            onNavigate={onNavigate}
-          />
 
           <ExpandableMenu
             group={baseInfoMenuGroup}

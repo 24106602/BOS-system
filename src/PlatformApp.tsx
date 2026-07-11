@@ -4,15 +4,11 @@ import CollegeLayout from "./layouts/CollegeLayout";
 import LoginPage from "./pages/LoginPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AdminHomePage from "./pages/admin/AdminHomePage";
-import AdminDifficultyOverviewPage from "./pages/admin/AdminDifficultyOverviewPage";
 import AdminAccountManagePage from "./pages/admin/AdminAccountManagePage";
 import AdminBaseInfoPage from "./pages/admin/AdminBaseInfoPage";
 import AdminCollegesPage from "./pages/admin/AdminCollegesPage";
 import AdminDepartmentsPage from "./pages/admin/AdminDepartmentsPage";
-import AdminStudentsPage from "./pages/admin/AdminStudentsPage";
-import AdminSummaryPage from "./pages/admin/AdminSummaryPage";
-import AdminStudentSummaryPage from "./pages/admin/AdminStudentSummaryPage";
-import AdminFamilySummaryPage from "./pages/admin/AdminFamilySummaryPage";
+
 import AdminAwardsOverviewPage from "./pages/admin/awards/AdminAwardsOverviewPage";
 import AdminNationalScholarshipPage from "./pages/admin/awards/AdminNationalScholarshipPage";
 import AdminNationalInspirationalPage from "./pages/admin/awards/AdminNationalInspirationalPage";
@@ -41,15 +37,10 @@ const normalizePath = (path: string) => {
     "/login",
     "/reset-password",
     "/admin",
-    "/admin/difficulty",
     "/admin/base-info",
     "/admin/departments",
     "/admin/accounts",
     "/admin/colleges",
-    "/admin/students",
-    "/admin/summary",
-    "/admin/student-summary",
-    "/admin/family-summary",
     "/admin/awards",
     "/admin/awards/national",
     "/admin/awards/inspirational",
@@ -73,11 +64,6 @@ const readPath = () => normalizePath(window.location.pathname || "/login");
 
 const pageTitles: Record<string, string> = {
   "/admin": "管理员首页",
-  "/admin/difficulty": "业务总览",
-  "/admin/summary": "全校数据汇总",
-  "/admin/student-summary": "本专科信息汇总",
-  "/admin/family-summary": "家庭成员信息汇总",
-  "/admin/students": "困难生数据库",
   "/admin/base-info": "学校基础信息",
   "/admin/departments": "院系基础信息",
   "/admin/accounts": "学校账号维护",
@@ -101,11 +87,6 @@ const pageTitles: Record<string, string> = {
 
 const pageIcons: Record<string, string> = {
   "/admin": "首",
-  "/admin/difficulty": "总",
-  "/admin/summary": "汇",
-  "/admin/student-summary": "本",
-  "/admin/family-summary": "家",
-  "/admin/students": "库",
   "/admin/base-info": "校",
   "/admin/departments": "院",
   "/admin/accounts": "校",
@@ -245,12 +226,6 @@ function AppContent() {
           <AdminAccountManagePage />
         ) : pagePath === "/admin/colleges" ? (
           <AdminCollegesPage />
-        ) : pagePath === "/admin/difficulty" ? (
-          <AdminDifficultyOverviewPage onNavigate={navigate} />
-        ) : pagePath === "/admin/student-summary" ? (
-          <AdminStudentSummaryPage />
-        ) : pagePath === "/admin/family-summary" ? (
-          <AdminFamilySummaryPage />
         ) : pagePath === "/admin/awards" ? (
           <AdminAwardsOverviewPage />
         ) : pagePath === "/admin/awards/national" ? (
@@ -259,10 +234,6 @@ function AppContent() {
           <AdminNationalInspirationalPage />
         ) : pagePath === "/admin/awards/shanghai" ? (
           <AdminShanghaiScholarshipPage />
-        ) : pagePath === "/admin/students" ? (
-          <AdminStudentsPage />
-        ) : pagePath === "/admin/summary" ? (
-          <AdminSummaryPage />
         ) : (
           <AdminHomePage onNavigate={navigate} />
         );
