@@ -43,11 +43,20 @@ const difficultyMenuGroup: ExpandableMenuGroup = {
 };
 
 const baseInfoMenuGroup: ExpandableMenuGroup = {
-  title: "基础信息",
+  title: "基础信息维护",
   icon: "基",
   items: [
-    { path: "/admin/base-info", label: "学院/部门信息", mark: "基" },
-    { path: "/admin/accounts", label: "账号管理", mark: "账" },
+    { path: "/admin/base-info", label: "学校基础信息", mark: "校" },
+    { path: "/admin/departments", label: "院系基础信息", mark: "院" },
+  ],
+};
+
+const accountMenuGroup: ExpandableMenuGroup = {
+  title: "账号维护管理",
+  icon: "账",
+  items: [
+    { path: "/admin/accounts", label: "学校账号维护", mark: "校" },
+    { path: "/admin/colleges", label: "院系账号维护", mark: "院" },
   ],
 };
 
@@ -68,6 +77,10 @@ const workspacePaths = new Set([
   "/admin/student-summary",
   "/admin/family-summary",
   "/admin/students",
+  "/admin/base-info",
+  "/admin/departments",
+  "/admin/accounts",
+  "/admin/colleges",
   "/admin/awards",
   "/admin/awards/national",
   "/admin/awards/inspirational",
@@ -76,7 +89,7 @@ const workspacePaths = new Set([
 
 const pageTitles: Record<string, string> = {
   "/admin": "管理员首页",
-  ...Object.fromEntries([...difficultyMenuGroup.items, ...baseInfoMenuGroup.items, ...awardMenuGroup.items].map((item) => [item.path, item.label])),
+  ...Object.fromEntries([...difficultyMenuGroup.items, ...baseInfoMenuGroup.items, ...accountMenuGroup.items, ...awardMenuGroup.items].map((item) => [item.path, item.label])),
 };
 
 function MenuButton({
@@ -215,6 +228,12 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
 
           <ExpandableMenu
             group={baseInfoMenuGroup}
+            currentPath={path}
+            onNavigate={onNavigate}
+          />
+
+          <ExpandableMenu
+            group={accountMenuGroup}
             currentPath={path}
             onNavigate={onNavigate}
           />

@@ -8,6 +8,7 @@ import AdminDifficultyOverviewPage from "./pages/admin/AdminDifficultyOverviewPa
 import AdminAccountManagePage from "./pages/admin/AdminAccountManagePage";
 import AdminBaseInfoPage from "./pages/admin/AdminBaseInfoPage";
 import AdminCollegesPage from "./pages/admin/AdminCollegesPage";
+import AdminDepartmentsPage from "./pages/admin/AdminDepartmentsPage";
 import AdminStudentsPage from "./pages/admin/AdminStudentsPage";
 import AdminSummaryPage from "./pages/admin/AdminSummaryPage";
 import AdminStudentSummaryPage from "./pages/admin/AdminStudentSummaryPage";
@@ -42,6 +43,7 @@ const normalizePath = (path: string) => {
     "/admin",
     "/admin/difficulty",
     "/admin/base-info",
+    "/admin/departments",
     "/admin/accounts",
     "/admin/colleges",
     "/admin/students",
@@ -76,9 +78,10 @@ const pageTitles: Record<string, string> = {
   "/admin/student-summary": "本专科信息汇总",
   "/admin/family-summary": "家庭成员信息汇总",
   "/admin/students": "困难生数据库",
-  "/admin/base-info": "学院/部门信息",
-  "/admin/accounts": "账号管理",
-  "/admin/colleges": "学院管理",
+  "/admin/base-info": "学校基础信息",
+  "/admin/departments": "院系基础信息",
+  "/admin/accounts": "学校账号维护",
+  "/admin/colleges": "院系账号维护",
   "/admin/awards": "三奖提交总览",
   "/admin/awards/national": "国家奖学金汇总",
   "/admin/awards/inspirational": "国家励志奖学金汇总",
@@ -103,8 +106,9 @@ const pageIcons: Record<string, string> = {
   "/admin/student-summary": "本",
   "/admin/family-summary": "家",
   "/admin/students": "库",
-  "/admin/base-info": "基",
-  "/admin/accounts": "账",
+  "/admin/base-info": "校",
+  "/admin/departments": "院",
+  "/admin/accounts": "校",
   "/admin/colleges": "院",
   "/admin/awards": "览",
   "/admin/awards/national": "国",
@@ -231,8 +235,12 @@ function AppContent() {
 
     if (pagePath.startsWith("/admin")) {
       const page =
-        pagePath === "/admin/base-info" ? (
+        pagePath === "/admin" ? (
+          <AdminHomePage onNavigate={navigate} />
+        ) : pagePath === "/admin/base-info" ? (
           <AdminBaseInfoPage />
+        ) : pagePath === "/admin/departments" ? (
+          <AdminDepartmentsPage />
         ) : pagePath === "/admin/accounts" ? (
           <AdminAccountManagePage />
         ) : pagePath === "/admin/colleges" ? (
