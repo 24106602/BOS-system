@@ -406,7 +406,13 @@ export default function StudentProcessPage({
       </AdminCard>
 
       {activeModal === "import" && (
-        <Modal title="本专科信息模板与数据导入" width="720px" onClose={() => setActiveModal(null)}>
+        <Modal title="本专科信息数据导入" width="720px" headerTone="green" onClose={() => setActiveModal(null)}>
+          <div style={pageStyles.importHint}>
+            <strong>导入说明</strong>
+            <span>1. 请先下载标准模板，按模板要求填写困难生本专科信息；</span>
+            <span>2. 第一步上传模板表，第二步上传同格式的数据表；</span>
+            <span>3. 支持 .xls / .xlsx 格式，数据表匹配率需达到 90% 以上。</span>
+          </div>
           <div
             style={pageStyles.importDrop}
             onClick={selectTemplateFile}
@@ -414,11 +420,8 @@ export default function StudentProcessPage({
             onDrop={handleTemplateDrop}
           >
             <input ref={templateRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleTemplateFileChange} />
-            <strong>Step 1：上传困难生本专科模板表</strong>
-            <span>系统扫描前10行识别字段，并生成 canonicalKey 模板签名。</span>
-            <button type="button" style={isProcessing ? pageStyles.disabledButton : pageStyles.blueButton} disabled={isProcessing}>
-              {isProcessing ? "正在识别..." : "选择模板表"}
-            </button>
+            <strong>第一步：上传困难生本专科模板表</strong>
+            <span>点击或拖拽上传模板表</span>
           </div>
           <div
             style={{
@@ -432,11 +435,8 @@ export default function StudentProcessPage({
             onDrop={handleDrop}
           >
             <input ref={dataRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileChange} />
-            <strong>Step 2：上传同模板格式的数据表</strong>
-            <span>模板校验通过后才可选择；数据表匹配率需达到90%，核心字段不得缺失。</span>
-            <button type="button" style={canUploadData ? pageStyles.blueButton : pageStyles.disabledButton} disabled={!canUploadData}>
-              选择数据表并校验
-            </button>
+            <strong>第二步：上传同模板格式的数据表</strong>
+            <span>模板校验通过后才可选择</span>
           </div>
           <div style={pageStyles.modalInfoGrid}>
             <Info label="模板文件" value={templateFileName || "未选择文件"} />
@@ -460,15 +460,25 @@ export default function StudentProcessPage({
             <div ref={logEndRef} />
           </div>
           <div style={pageStyles.modalFooter}>
-            <button style={pageStyles.secondaryButton} onClick={() => setActiveModal(null)}>取消</button>
+            <button style={pageStyles.templateButton} onClick={() => {
+              const template = [DIFFICULTY_STUDENT_TEMPLATE_FIELDS, DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map(() => "")];
+              const csv = template.map((row) => row.join(",")).join("\n");
+              const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = "困难生本专科信息模板.csv";
+              link.click();
+              URL.revokeObjectURL(url);
+            }}>下载 EXCEL 模板</button>
             <button
-              style={canStartProcessing ? pageStyles.blueButton : pageStyles.disabledButton}
+              style={canStartProcessing ? pageStyles.greenButton : pageStyles.disabledButton}
               disabled={!canStartProcessing}
               onClick={() => void startProcessing()}
             >
               {isProcessing ? "正在处理..." : "开始处理"}
             </button>
-            <button style={pageStyles.greenButton} onClick={() => setActiveModal(null)}>确认导入/完成</button>
+            <button style={pageStyles.secondaryButton} onClick={() => setActiveModal(null)}>关闭</button>
           </div>
         </Modal>
       )}
@@ -596,13 +606,13 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Modal({ title, width = "80vw", children, onClose }: { title: string; width?: string; children: ReactNode; onClose: () => void }) {
+function Modal({ title, width = "80vw", headerTone, children, onClose }: { title: string; width?: string; headerTone?: "green"; children: ReactNode; onClose: () => void }) {
   return (
     <div className="bos-modal-backdrop">
       <section className={`bos-modal${width === "620px" ? " bos-modal--compact" : ""}`} style={{ width }}>
-        <div className="bos-modal-header">
-          <h2 style={pageStyles.modalTitle}>{title}</h2>
-          <button onClick={onClose}>关闭</button>
+        <div style={headerTone === "green" ? pageStyles.modalHeaderGreen : pageStyles.modalHeader}>
+          <h2 style={headerTone === "green" ? pageStyles.modalTitleWhite : pageStyles.modalTitle}>{title}</h2>
+          <button style={headerTone === "green" ? pageStyles.modalCloseWhite : undefined} onClick={onClose}>关闭</button>
         </div>
         <div className="bos-modal-body">{children}</div>
       </section>
@@ -700,7 +710,12 @@ const pageStyles: Record<string, CSSProperties> = {
   modalBody: { flex: 1, minHeight: 0, overflow: "auto", padding: 16, display: "flex", flexDirection: "column", gap: 12 },
   modalFooter: { position: "sticky", bottom: 0, zIndex: 2, flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: 8, padding: "11px 0 0", borderTop: "1px solid #e2e8f0", background: "#fff" },
   modalTableScroll: { flex: 1, minHeight: 280, display: "flex", overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
-  importDrop: { display: "grid", gap: 8, placeItems: "center", textAlign: "center", border: "1px dashed #7faed4", borderRadius: 8, background: "#f7fbff", padding: 20, cursor: "pointer", color: "#40526a" },
+  importHint: { display: "grid", gap: 6, padding: 12, borderRadius: 6, background: "#f0f9f4", border: "1px solid #b8e0c8", color: "#1a5c3a", fontSize: 12, lineHeight: 1.6 },
+  importDrop: { display: "grid", gap: 8, placeItems: "center", textAlign: "center", border: "1px dashed #7faed4", borderRadius: 8, background: "#f7fbff", padding: 24, cursor: "pointer", color: "#40526a" },
+  modalHeaderGreen: { flex: "0 0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: "1px solid #0a8f68", background: "#0a8f68" },
+  modalTitleWhite: { margin: 0, color: "#fff", fontSize: 18 },
+  modalCloseWhite: { border: "1px solid rgba(255,255,255,0.5)", borderRadius: 6, padding: "7px 10px", background: "transparent", color: "#fff", fontWeight: 800, cursor: "pointer" },
+  templateButton: { border: "1px solid #cbd8e6", borderRadius: 6, minHeight: 34, padding: "8px 11px", background: "#fff", color: "#26364e", fontSize: 12, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" },
   modalInfoGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 },
   infoItem: { display: "grid", gap: 4, padding: 10, border: "1px solid #d7e1ed", borderRadius: 6, background: "#f8fbfe", color: "#63738a", fontSize: 12 },
   modalLogBox: { minHeight: 120, maxHeight: 180, overflow: "auto", padding: 10, borderRadius: 6, background: "#0b1428", color: "#dceafe", fontFamily: "Consolas, monospace", fontSize: 12, lineHeight: 1.6 },
