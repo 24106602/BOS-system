@@ -475,7 +475,8 @@ p {
 
 .bos-page-content {
   width: 100%;
-  min-height: 100%;
+  height: 100%;
+  overflow: auto;
 }
 
 .bos-tab-bar {
@@ -2221,26 +2222,19 @@ button:not(:disabled):hover {
   .bos-ai-summary { grid-template-columns: 1fr; }
 }
 
-/* Tab 容器：所有 Tab 内容重叠在同一位置 */
+/* Tab 容器：填满整个视口 */
 .bos-tab-container {
-  position: relative;
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.bos-tab-content {
   width: 100%;
   height: 100%;
   overflow: hidden;
 }
 
-.bos-tab-content {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  overflow-y: auto;
-  pointer-events: none;
-  z-index: 1;
-}
-
 .bos-tab-content.is-active {
-  pointer-events: auto;
-  z-index: 2;
+  display: block;
 }

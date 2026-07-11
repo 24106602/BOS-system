@@ -345,11 +345,12 @@ function AppContent() {
           {tabs.map((tab) => (
             <motion.div
               key={tab.id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: activeTabId === tab.id ? 1 : 0, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: activeTabId === tab.id ? 1 : 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
               className={`bos-tab-content${activeTabId === tab.id ? " is-active" : ""}`}
+              style={{ display: activeTabId === tab.id ? "block" : "none" }}
             >
               {renderPage(tab.path)}
             </motion.div>
