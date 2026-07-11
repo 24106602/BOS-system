@@ -95,7 +95,7 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
               value={account}
               autoComplete="username"
               placeholder="请输入账号或邮箱"
-              disabled={busy || Boolean(envMessage)}
+              disabled={busy}
               onChange={(event) => setAccount(event.target.value)}
             />
           </label>
@@ -108,7 +108,7 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
               type="password"
               autoComplete="current-password"
               placeholder="请输入密码"
-              disabled={busy || Boolean(envMessage)}
+              disabled={busy}
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
