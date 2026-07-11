@@ -39,9 +39,13 @@ export default function ProtectedRoute({
   const redirectTo = loading ? "" : getProtectedRedirect(profile, requiredRole);
 
   useEffect(() => {
-    if (!redirectTo || redirectTo === path) return;
+    if (!redirectTo) return;
+    if (redirectTo === path) return;
+    const currentPath = window.location.pathname;
+    if (currentPath.startsWith("/admin") && requiredRole === "admin") return;
+    if (currentPath.startsWith("/college") && requiredRole === "college") return;
     onNavigate(redirectTo, true);
-  }, [onNavigate, path, redirectTo]);
+  }, [onNavigate, path, redirectTo, requiredRole]);
 
   if (loading) return <div style={styles.message}>正在读取登录状态...</div>;
   if (!profile) return <div style={styles.message}>未登录，正在跳转到登录页...</div>;

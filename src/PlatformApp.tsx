@@ -145,17 +145,12 @@ function AppContent() {
 
     addTab({ path: next, title, icon });
 
-    const tab = tabs.find((t) => t.path === next);
-    if (tab) {
-      activateTab(tab.id);
-    }
-
     if (window.location.pathname !== next) {
       if (replace) window.history.replaceState({}, "", next);
       else window.history.pushState({}, "", next);
     }
     setCurrentPath(next);
-  }, [tabs, addTab, activateTab]);
+  }, [addTab]);
 
   useEffect(() => {
     const onPop = () => setCurrentPath(readPath());

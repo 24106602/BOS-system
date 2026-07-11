@@ -488,6 +488,8 @@ p {
   border-bottom: 1px solid #e2e8f0;
   background: #f8fafc;
   overflow: hidden;
+  z-index: 100;
+  position: relative;
 }
 
 .bos-tab-bar-scroll {
