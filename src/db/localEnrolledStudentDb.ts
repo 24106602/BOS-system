@@ -1,8 +1,22 @@
+/**
+ * 在校生数据库 - Supabase 优先 + 本地降级
+ * 当 Supabase 已配置时，数据存储到云端；否则降级到 localStorage
+ */
+import { isSupabaseConfigured } from "../lib/supabaseClient";
 import type { EnrolledStudentRecord } from "../types/enrolledStudent";
+import {
+  fetchEnrolledStudents,
+  saveEnrolledStudentsToCloud,
+  addEnrolledStudentsToCloud,
+  clearEnrolledStudentsFromCloud,
+  verifyEnrolledStudentFromCloud,
+} from "../services/supabaseDataService";
 
 const STORAGE_KEY = "bos_enrolled_students";
 
-export const getAllEnrolledStudents = (): EnrolledStudentRecord[] => {
+// ---- 本地存储降级 ----
+
+const getLocalStudents = (): EnrolledStudentRecord[] => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     return raw ? JSON.parse(raw) : [];
@@ -11,24 +25,57 @@ export const getAllEnrolledStudents = (): EnrolledStudentRecord[] => {
   }
 };
 
-export const getEnrolledStudentCount = (): number => {
-  return getAllEnrolledStudents().length;
-};
-
-export const saveEnrolledStudents = (students: EnrolledStudentRecord[]) => {
+const setLocalStudents = (students: EnrolledStudentRecord[]) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(students));
 };
 
-export const clearEnrolledStudents = () => {
+// ---- 对外接口（与原 localEnrolledStudentDb 兼容）----
+
+export const getAllEnrolledStudents = async (): Promise<EnrolledStudentRecord[]> => {
+  if (isSupabaseConfigured) {
+    try {
+      return await fetchEnrolledStudents();
+    } catch (e) {
+      console.warn("Supabase 读取在校生失败，降级到本地存储", e);
+    }
+  }
+  return getLocalStudents();
+};
+
+export const getEnrolledStudentCount = async (): Promise<number> => {
+  const students = await getAllEnrolledStudents();
+  return students.length;
+};
+
+export const saveEnrolledStudents = async (students: EnrolledStudentRecord[]): Promise<void> => {
+  if (isSupabaseConfigured) {
+    try {
+      await saveEnrolledStudentsToCloud(students);
+      return;
+    } catch (e) {
+      console.warn("Supabase 保存在校生失败，降级到本地存储", e);
+    }
+  }
+  setLocalStudents(students);
+};
+
+export const clearEnrolledStudents = async (): Promise<void> => {
+  if (isSupabaseConfigured) {
+    try {
+      await clearEnrolledStudentsFromCloud();
+    } catch (e) {
+      console.warn("Supabase 清空在校生失败", e);
+    }
+  }
   localStorage.removeItem(STORAGE_KEY);
 };
 
-export const findEnrolledStudent = (query: {
+export const findEnrolledStudent = async (query: {
   studentId?: string;
   idCard?: string;
   name?: string;
-}): EnrolledStudentRecord | null => {
-  const all = getAllEnrolledStudents();
+}): Promise<EnrolledStudentRecord | null> => {
+  const all = await getAllEnrolledStudents();
   if (query.studentId) {
     const byId = all.find((s) => s.studentId && s.studentId === query.studentId);
     if (byId) return byId;
@@ -46,12 +93,21 @@ export const findEnrolledStudent = (query: {
   return null;
 };
 
-export const verifyEnrolledStudent = (
+export const verifyEnrolledStudent = async (
   studentId: string,
   idCard: string,
   name: string
-): { verified: boolean; reason?: string } => {
-  const all = getAllEnrolledStudents();
+): Promise<{ verified: boolean; reason?: string }> => {
+  if (isSupabaseConfigured) {
+    try {
+      return await verifyEnrolledStudentFromCloud(studentId, idCard, name);
+    } catch (e) {
+      console.warn("Supabase 校验在校生失败，降级到本地存储", e);
+    }
+  }
+
+  // 本地降级校验
+  const all = getLocalStudents();
   if (all.length === 0) {
     return { verified: true, reason: "在校生数据库未配置，已跳过校验" };
   }
@@ -63,17 +119,26 @@ export const verifyEnrolledStudent = (
     }
   }
   if (idCard) {
-    const byIdCard = all.find((s) => s.idCard && s.idCard === idCard);
+    const byIdCard = all.find((s) => s.idCard === idCard);
     if (byIdCard) {
-      if (byId.name === name) return { verified: true };
+      if (byIdCard.name === name) return { verified: true };
       return { verified: false, reason: "身份证号匹配但姓名不匹配，请核对" };
     }
   }
-  return { verified: false, reason: "未在在校生数据库中找到该学生，请核对学号或身份证号+姓名" };
+  return { verified: false, reason: "未在在校生数据库中找到该学生" };
 };
 
-export const addEnrolledStudents = (newStudents: EnrolledStudentRecord[]) => {
-  const existing = getAllEnrolledStudents();
+export const addEnrolledStudents = async (newStudents: EnrolledStudentRecord[]): Promise<number> => {
+  if (isSupabaseConfigured) {
+    try {
+      return await addEnrolledStudentsToCloud(newStudents);
+    } catch (e) {
+      console.warn("Supabase 增量保存在校生失败，降级到本地存储", e);
+    }
+  }
+
+  // 本地降级
+  const existing = getLocalStudents();
   const existingKeys = new Set(
     existing.map((s) => s.idCard || s.studentId || s.name)
   );
@@ -85,6 +150,6 @@ export const addEnrolledStudents = (newStudents: EnrolledStudentRecord[]) => {
       existingKeys.add(key);
     }
   }
-  saveEnrolledStudents(merged);
+  setLocalStudents(merged);
   return merged.length;
 };

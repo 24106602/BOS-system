@@ -1,200 +1,184 @@
-﻿import type { StudentRecord } from "../types/student";
+/**
+ * 困难生数据库 - Supabase 优先 + 本地降级
+ * 当 Supabase 已配置时，数据存储到云端；否则降级到 IndexedDB/localStorage
+ */
+import { isSupabaseConfigured } from "../lib/supabaseClient";
+import type { StudentRecord } from "../types/student";
+import {
+  fetchHardshipStudents,
+  saveHardshipStudentsToCloud,
+  mergeHardshipStudentsToCloud,
+  clearHardshipStudentsFromCloud,
+  findHardshipStudentFromCloud,
+} from "../services/supabaseDataService";
 
-// 本地困难生数据库封装：优先使用 IndexedDB，失败时回退到 localStorage。
-const DB_NAME = "bos-student-local-database";
-const DB_VERSION = 1;
-const STORE_NAME = "hardship_students";
-const FALLBACK_KEY = "bos-hardship-students-fallback";
+const DB_NAME = "bos_student_db";
+const STORE_NAME = "students";
+const LOCAL_KEY = "bos_student_records";
 
-function readFallbackStudents(): StudentRecord[] {
-  try {
-    const raw = window.localStorage.getItem(FALLBACK_KEY);
-    return raw ? (JSON.parse(raw) as StudentRecord[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeFallbackStudents(students: StudentRecord[]) {
-  window.localStorage.setItem(FALLBACK_KEY, JSON.stringify(students));
-}
-
-function mergeStudents(oldStudents: StudentRecord[], newStudents: StudentRecord[]) {
-  const map = new Map<string, StudentRecord>();
-
-  oldStudents.forEach((student) => map.set(student.key, student));
-  newStudents.forEach((student) => {
-    if (student.key) map.set(student.key, student);
-  });
-
-  return Array.from(map.values());
-}
+// ---- 本地存储降级 ----
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    if (!window.indexedDB) {
-      reject(new Error("当前浏览器不支持本地数据库 IndexedDB"));
-      return;
-    }
-
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
-
+    const request = indexedDB.open(DB_NAME, 1);
     request.onupgradeneeded = () => {
       const db = request.result;
-
       if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: "key" });
-        store.createIndex("studentId", "studentId", { unique: false });
-        store.createIndex("idCard", "idCard", { unique: false });
-        store.createIndex("name", "name", { unique: false });
-        store.createIndex("college", "college", { unique: false });
+        db.createObjectStore(STORE_NAME, { keyPath: "key" });
       }
     };
-
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
 }
 
-async function saveStudentsToIndexedDb(students: StudentRecord[]) {
-  const db = await openDb();
+async function getFromLocalStorage(): Promise<StudentRecord[]> {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
 
-  return new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
+async function saveToLocalStorage(records: StudentRecord[]) {
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(records));
+}
 
-    students.forEach((student) => {
-      if (student.key) store.put(student);
+async function getAllLocal(): Promise<StudentRecord[]> {
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const request = tx.objectStore(STORE_NAME).getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
     });
-
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error);
-    };
-  });
-}
-
-async function getAllStudentsFromIndexedDb(): Promise<StudentRecord[]> {
-  const db = await openDb();
-
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const store = tx.objectStore(STORE_NAME);
-    const request = store.getAll();
-
-    request.onsuccess = () => {
-      db.close();
-      resolve(request.result as StudentRecord[]);
-    };
-    request.onerror = () => {
-      db.close();
-      reject(request.error);
-    };
-  });
-}
-
-async function getStudentCountFromIndexedDb() {
-  const db = await openDb();
-
-  return new Promise<number>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readonly");
-    const store = tx.objectStore(STORE_NAME);
-    const request = store.count();
-
-    request.onsuccess = () => {
-      db.close();
-      resolve(request.result);
-    };
-    request.onerror = () => {
-      db.close();
-      reject(request.error);
-    };
-  });
-}
-
-async function clearStudentsFromIndexedDb() {
-  const db = await openDb();
-
-  return new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, "readwrite");
-    const store = tx.objectStore(STORE_NAME);
-    store.clear();
-
-    tx.oncomplete = () => {
-      db.close();
-      resolve();
-    };
-    tx.onerror = () => {
-      db.close();
-      reject(tx.error);
-    };
-  });
-}
-
-export async function saveStudents(students: StudentRecord[]) {
-  try {
-    await saveStudentsToIndexedDb(students);
   } catch {
-    writeFallbackStudents(mergeStudents(readFallbackStudents(), students));
+    return getFromLocalStorage();
   }
 }
 
-export async function getAllStudents(): Promise<StudentRecord[]> {
+async function saveAllLocal(records: StudentRecord[]) {
   try {
-    const indexedStudents = await getAllStudentsFromIndexedDb();
-    if (indexedStudents.length > 0) return indexedStudents;
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      store.clear();
+      records.forEach((r) => store.put(r));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
   } catch {
-    return readFallbackStudents();
+    await saveToLocalStorage(records);
   }
-
-  return readFallbackStudents();
 }
 
-export async function getStudentCount() {
-  try {
-    const indexedCount = await getStudentCountFromIndexedDb();
-    if (indexedCount > 0) return indexedCount;
-  } catch {
-    return readFallbackStudents().length;
+async function mergeLocal(newRecords: StudentRecord[]) {
+  const existing = await getAllLocal();
+  const map = new Map(existing.map((r) => [r.key, r]));
+  for (const r of newRecords) {
+    map.set(r.key, r);
   }
-
-  return readFallbackStudents().length;
+  const merged = Array.from(map.values());
+  await saveAllLocal(merged);
+  return merged.length;
 }
 
-export async function findStudent(keyword: string): Promise<StudentRecord | null> {
-  const text = String(keyword ?? "").trim();
+async function clearLocal() {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    localStorage.removeItem(LOCAL_KEY);
+  }
+}
 
+async function findLocal(keyword: string): Promise<StudentRecord | null> {
+  const all = await getAllLocal();
+  const text = keyword.trim();
   if (!text) return null;
-
-  const students = await getAllStudents();
-  const exact = students.find((student) => {
-    return student.idCard === text || student.studentId === text || student.name === text;
-  });
-
-  if (exact) return exact;
-
   return (
-    students.find((student) => {
-      return (
-        Boolean(student.name && text.includes(student.name)) ||
-        Boolean(student.name && student.name.includes(text)) ||
-        Boolean(student.idCard && student.idCard.includes(text)) ||
-        Boolean(student.studentId && student.studentId.includes(text))
-      );
-    }) || null
+    all.find(
+      (r) => r.studentId === text || r.idCard === text || r.name === text
+    ) ||
+    all.find(
+      (r) =>
+        r.name.includes(text) ||
+        r.studentId.includes(text) ||
+        r.idCard.includes(text)
+    ) ||
+    null
   );
 }
 
-export async function clearStudents() {
-  try {
-    await clearStudentsFromIndexedDb();
-  } catch {
-    // IndexedDB may be unavailable on file:// pages. The fallback is cleared below.
-  }
+// ---- 对外接口（Supabase 优先 + 本地降级）----
 
-  window.localStorage.removeItem(FALLBACK_KEY);
+export async function getAllStudents(): Promise<StudentRecord[]> {
+  if (isSupabaseConfigured) {
+    try {
+      return await fetchHardshipStudents();
+    } catch (e) {
+      console.warn("Supabase 读取困难生失败，降级到本地存储", e);
+    }
+  }
+  return getAllLocal();
 }
+
+export async function saveAllStudents(records: StudentRecord[]): Promise<void> {
+  if (isSupabaseConfigured) {
+    try {
+      await saveHardshipStudentsToCloud(records);
+      return;
+    } catch (e) {
+      console.warn("Supabase 保存困难生失败，降级到本地存储", e);
+    }
+  }
+  await saveAllLocal(records);
+}
+
+export async function mergeStudents(newRecords: StudentRecord[]): Promise<number> {
+  if (isSupabaseConfigured) {
+    try {
+      return await mergeHardshipStudentsToCloud(newRecords);
+    } catch (e) {
+      console.warn("Supabase 合并困难生失败，降级到本地存储", e);
+    }
+  }
+  return mergeLocal(newRecords);
+}
+
+export async function clearStudents(): Promise<void> {
+  if (isSupabaseConfigured) {
+    try {
+      await clearHardshipStudentsFromCloud();
+    } catch (e) {
+      console.warn("Supabase 清空困难生失败", e);
+    }
+  }
+  await clearLocal();
+}
+
+export async function findStudent(keyword: string): Promise<StudentRecord | null> {
+  if (isSupabaseConfigured) {
+    try {
+      return await findHardshipStudentFromCloud(keyword);
+    } catch (e) {
+      console.warn("Supabase 查找困难生失败，降级到本地存储", e);
+    }
+  }
+  return findLocal(keyword);
+}
+
+export async function getStudentCount(): Promise<number> {
+  const all = await getAllStudents();
+  return all.length;
+}
+
+// 兼容旧接口
+export const saveStudents = saveAllStudents;

@@ -1,6 +1,19 @@
+/**
+ * 学院提交批次 - Supabase 优先 + 本地降级
+ * 当 Supabase 已配置时，数据存储到云端；否则降级到 IndexedDB/localStorage
+ */
+import { isSupabaseConfigured } from "../lib/supabaseClient";
 import type { CollegeProcessedBatch } from "../types/merge";
 import { getBatchAcademicYear, withAcademicYear } from "../utils/academicYear";
 import { normalizeSubmissionCollegeName } from "../utils/collegeDetector";
+import {
+  fetchCollegeBatches,
+  saveCollegeBatchToCloud,
+  deleteCollegeBatchFromCloud,
+  clearCollegeBatchesFromCloud,
+} from "../services/supabaseDataService";
+
+// ---- 本地存储降级 ----
 
 const DB_NAME = "bos_merge_db";
 const STORE_NAME = "batches";
@@ -24,14 +37,12 @@ const isSameYearScope = (left: CollegeProcessedBatch, right: CollegeProcessedBat
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1);
-
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME, { keyPath: "id" });
       }
     };
-
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
@@ -49,7 +60,7 @@ async function saveToLocalStorage(batches: CollegeProcessedBatch[]) {
   localStorage.setItem(LOCAL_KEY, JSON.stringify(batches.map(normalizeBatch)));
 }
 
-export async function saveMergeBatch(batch: CollegeProcessedBatch) {
+async function saveMergeBatchLocal(batch: CollegeProcessedBatch) {
   const normalizedBatch = normalizeBatch(batch);
   try {
     const db = await openDb();
@@ -77,7 +88,7 @@ export async function saveMergeBatch(batch: CollegeProcessedBatch) {
   }
 }
 
-export async function getMergeBatches(): Promise<CollegeProcessedBatch[]> {
+async function getMergeBatchesLocal(): Promise<CollegeProcessedBatch[]> {
   try {
     const db = await openDb();
     return await new Promise((resolve, reject) => {
@@ -91,7 +102,7 @@ export async function getMergeBatches(): Promise<CollegeProcessedBatch[]> {
   }
 }
 
-export async function deleteMergeBatch(id: string) {
+async function deleteMergeBatchLocal(id: string) {
   try {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
@@ -106,7 +117,7 @@ export async function deleteMergeBatch(id: string) {
   }
 }
 
-export async function clearMergeBatches() {
+async function clearMergeBatchesLocal() {
   try {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
@@ -118,4 +129,52 @@ export async function clearMergeBatches() {
   } catch {
     localStorage.removeItem(LOCAL_KEY);
   }
+}
+
+// ---- 对外接口（Supabase 优先 + 本地降级）----
+
+export async function saveMergeBatch(batch: CollegeProcessedBatch) {
+  if (isSupabaseConfigured) {
+    try {
+      await saveCollegeBatchToCloud(batch);
+      return;
+    } catch (e) {
+      console.warn("Supabase 保存批次失败，降级到本地存储", e);
+    }
+  }
+  await saveMergeBatchLocal(batch);
+}
+
+export async function getMergeBatches(): Promise<CollegeProcessedBatch[]> {
+  if (isSupabaseConfigured) {
+    try {
+      return await fetchCollegeBatches();
+    } catch (e) {
+      console.warn("Supabase 读取批次失败，降级到本地存储", e);
+    }
+  }
+  return getMergeBatchesLocal();
+}
+
+export async function deleteMergeBatch(id: string) {
+  if (isSupabaseConfigured) {
+    try {
+      await deleteCollegeBatchFromCloud(id);
+      return;
+    } catch (e) {
+      console.warn("Supabase 删除批次失败，降级到本地存储", e);
+    }
+  }
+  await deleteMergeBatchLocal(id);
+}
+
+export async function clearMergeBatches() {
+  if (isSupabaseConfigured) {
+    try {
+      await clearCollegeBatchesFromCloud();
+    } catch (e) {
+      console.warn("Supabase 清空批次失败", e);
+    }
+  }
+  await clearMergeBatchesLocal();
 }
