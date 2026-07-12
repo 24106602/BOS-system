@@ -512,7 +512,6 @@ p {
   gap: 0;
   border-radius: 8px 8px 0 0;
   background: #e2e8f0;
-  overflow: hidden;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.04);
 }
 
