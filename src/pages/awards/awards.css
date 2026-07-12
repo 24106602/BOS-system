@@ -393,7 +393,8 @@
   padding-left: 18px;
 }
 
-.award-selection-card a {
+.award-selection-card a,
+.award-selection-card .award-selection-link {
   display: block;
   padding: 9px 12px;
   border-radius: 7px;
@@ -403,6 +404,9 @@
   font-weight: 900;
   text-align: center;
   text-decoration: none;
+  border: none;
+  cursor: pointer;
+  width: 100%;
 }
 
 @media (max-width: 1180px) {

@@ -2,6 +2,10 @@ import { awardTypeLabels, awardTypes } from "../../services/awardConfig";
 import type { AwardType } from "../../types/award";
 import "./awards.css";
 
+type AwardsHomePageProps = {
+  onNavigate?: (to: string) => void;
+};
+
 const awardPaths: Record<AwardType, string> = {
   national: "/college/awards/national",
   inspirational: "/college/awards/inspirational",
@@ -14,7 +18,7 @@ const awardDescriptions: Record<AwardType, string> = {
   shanghai: "处理上海市奖学金官方申请档案，独立识别模板，避免与国家奖学金混判。",
 };
 
-export default function AwardsHomePage() {
+export default function AwardsHomePage({ onNavigate }: AwardsHomePageProps) {
   return (
     <section className="bos-table-page award-workspace">
       <div className="bos-page-title-row">
@@ -23,7 +27,7 @@ export default function AwardsHomePage() {
           <h1>选择奖项</h1>
           <p>请选择本次要处理的奖项。三个奖项使用独立模板识别、治理结果和上载数据池。</p>
         </div>
-        <span className="bos-layout-active">AI Studio 工作台已接入</span>
+        <span className="bos-layout-active">工作台已接入</span>
       </div>
 
       <div className="award-selection-grid">
@@ -31,7 +35,7 @@ export default function AwardsHomePage() {
           <article className="award-selection-card" key={awardType}>
             <div className="award-selection-icon">{["国", "励", "沪"][index]}</div>
             <div>
-              <span>AWARD DATA GOVERNANCE</span>
+              <span>奖学金数据治理</span>
               <h2>{awardTypeLabels[awardType]}</h2>
               <p>{awardDescriptions[awardType]}</p>
             </div>
@@ -40,7 +44,13 @@ export default function AwardsHomePage() {
               <li>通过 / 不通过 / 问题分析弹窗</li>
               <li>学院确认后上载学校端</li>
             </ul>
-            <a href={awardPaths[awardType]}>进入数据处理</a>
+            <button
+              type="button"
+              className="award-selection-link"
+              onClick={() => onNavigate?.(awardPaths[awardType])}
+            >
+              进入数据处理
+            </button>
           </article>
         ))}
       </div>

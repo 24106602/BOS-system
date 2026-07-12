@@ -276,7 +276,7 @@ function AppContent() {
       ) : pagePath === "/college/records" ? (
         <CollegeRecordsPage />
       ) : pagePath === "/college/awards" ? (
-        <AwardsHomePage />
+        <AwardsHomePage onNavigate={navigate} />
       ) : pagePath === "/college/awards/national" ? (
         <NationalScholarshipPage />
       ) : pagePath === "/college/awards/inspirational" ? (
