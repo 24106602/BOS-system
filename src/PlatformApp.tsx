@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import AdminLayout from "./layouts/AdminLayout";
 import CollegeLayout from "./layouts/CollegeLayout";
 import LoginPage from "./pages/LoginPage";
@@ -23,6 +23,7 @@ import NationalScholarshipPage from "./pages/awards/NationalScholarshipPage";
 import NationalInspirationalPage from "./pages/awards/NationalInspirationalPage";
 import ShanghaiScholarshipPage from "./pages/awards/ShanghaiScholarshipPage";
 import ProtectedRoute, { RootRedirect } from "./components/ProtectedRoute";
+import ErrorBoundary from "./components/ErrorBoundary";
 import {
   getCurrentSessionProfile,
   signOut,
@@ -278,11 +279,11 @@ function AppContent() {
       ) : pagePath === "/college/awards" ? (
         <AwardsHomePage onNavigate={navigate} />
       ) : pagePath === "/college/awards/national" ? (
-        <NationalScholarshipPage />
+        <NationalScholarshipPage onNavigate={navigate} />
       ) : pagePath === "/college/awards/inspirational" ? (
-        <NationalInspirationalPage />
+        <NationalInspirationalPage onNavigate={navigate} />
       ) : pagePath === "/college/awards/shanghai" ? (
-        <ShanghaiScholarshipPage />
+        <ShanghaiScholarshipPage onNavigate={navigate} />
       ) : (
         <CollegeHomePage onNavigate={navigate} />
       );
@@ -311,22 +312,22 @@ function AppContent() {
     );
   };
 
-  const content = useMemo<ReactNode>(() => {
-    return (
-      <div className="bos-tab-container">
-        {tabs.map((tab) => (
-          <div
-            key={tab.id}
-            className={`bos-tab-content${activeTabId === tab.id ? " is-active" : ""}`}
-          >
-            {activeTabId === tab.id && renderPage(tab.path)}
-          </div>
-        ))}
-      </div>
-    );
-  }, [tabs, activeTabId, authState, handleLogin, handlePasswordResetComplete, logout, navigate]);
-
-  return <>{content}</>;
+  return (
+    <div className="bos-tab-container">
+      {tabs.map((tab) => (
+        <div
+          key={tab.id}
+          className={`bos-tab-content${activeTabId === tab.id ? " is-active" : ""}`}
+        >
+          {activeTabId === tab.id && (
+            <ErrorBoundary onNavigate={navigate}>
+              {renderPage(tab.path)}
+            </ErrorBoundary>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function PlatformApp() {

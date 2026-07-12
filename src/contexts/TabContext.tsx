@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from "react";
 import type { TabItem, TabState, TabActions } from "../types/tab";
 
 interface TabContextType extends TabState, TabActions {}
@@ -21,33 +21,36 @@ export function TabProvider({ children, initialPath, initialTitle }: { children:
   ]);
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0]?.id || "");
 
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+
   const addTab = useCallback((tab: Omit<TabItem, "id">) => {
-    setTabs((prev) => {
-      const existing = prev.find((t) => t.path === tab.path);
-      if (existing) {
-        setActiveTabId(existing.id);
-        return prev;
-      }
-      const newTab = { ...tab, id: generateTabId() };
-      setActiveTabId(newTab.id);
-      return [...prev, newTab];
-    });
+    const existing = tabsRef.current.find((t) => t.path === tab.path);
+    if (existing) {
+      setActiveTabId(existing.id);
+      return;
+    }
+    const newTab = { ...tab, id: generateTabId() };
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(newTab.id);
   }, []);
 
   const removeTab = useCallback((tabId: string) => {
-    setTabs((prev) => {
-      const newTabs = prev.filter((t) => t.id !== tabId);
-      if (newTabs.length === 0) {
-        return prev;
+    const current = tabsRef.current;
+    const newTabs = current.filter((t) => t.id !== tabId);
+    if (newTabs.length === 0) {
+      return;
+    }
+    const removedIndex = current.findIndex((t) => t.id === tabId);
+    const newIndex = removedIndex > 0 ? removedIndex - 1 : 0;
+    setTabs(newTabs);
+    setActiveTabId((prevActive) => {
+      if (prevActive === tabId) {
+        return newTabs[newIndex].id;
       }
-      if (prev.find((t) => t.id === tabId)?.id === activeTabId) {
-        const currentIndex = prev.findIndex((t) => t.id === tabId);
-        const newIndex = currentIndex > 0 ? currentIndex - 1 : 0;
-        setActiveTabId(newTabs[newIndex].id);
-      }
-      return newTabs;
+      return prevActive;
     });
-  }, [activeTabId]);
+  }, []);
 
   const activateTab = useCallback((tabId: string) => {
     setActiveTabId(tabId);

@@ -1,5 +1,9 @@
 import AwardProcessPage from "./AwardProcessPage";
 
-export default function NationalInspirationalPage() {
-  return <AwardProcessPage awardType="inspirational" />;
+type NationalInspirationalPageProps = {
+  onNavigate?: (to: string) => void;
+};
+
+export default function NationalInspirationalPage({ onNavigate }: NationalInspirationalPageProps) {
+  return <AwardProcessPage awardType="inspirational" onNavigate={onNavigate} />;
 }

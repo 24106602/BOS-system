@@ -31,6 +31,7 @@ type ImportLog = { tone: "info" | "success" | "error"; message: string };
 
 type AwardProcessPageProps = {
   awardType: AwardType;
+  onNavigate?: (to: string) => void;
 };
 
 const awardPaths: Record<AwardType, string> = {
@@ -51,7 +52,7 @@ const findField = (fields: string[], aliases: string[]) => {
 
 const rowValue = (row: AwardProcessedRow, field?: string) => String(field ? row.values[field] ?? "" : "");
 
-export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
+export default function AwardProcessPage({ awardType, onNavigate }: AwardProcessPageProps) {
   const awardName = awardTypeLabels[awardType];
   const fileRef = useRef<HTMLInputElement>(null);
   const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear);
@@ -379,9 +380,14 @@ export default function AwardProcessPage({ awardType }: AwardProcessPageProps) {
 
       <div className="award-switcher" aria-label="三大奖类型选择">
         {awardTypes.map((type) => (
-          <a key={type} className={type === awardType ? "is-active" : ""} href={awardPaths[type]}>
+          <button
+            key={type}
+            type="button"
+            className={type === awardType ? "is-active" : ""}
+            onClick={() => onNavigate?.(awardPaths[type])}
+          >
             {awardTypeLabels[type]}
-          </a>
+          </button>
         ))}
       </div>
 

@@ -19,17 +19,22 @@
   box-shadow: 0 2px 9px rgba(15, 35, 64, 0.04);
 }
 
-.award-switcher a {
+.award-switcher a,
+.award-switcher button {
   flex: 0 0 auto;
   padding: 7px 12px;
+  border: none;
   border-radius: 6px;
   color: #52657a;
+  background: transparent;
   font-size: 11px;
   font-weight: 800;
   text-decoration: none;
+  cursor: pointer;
 }
 
-.award-switcher a.is-active {
+.award-switcher a.is-active,
+.award-switcher button.is-active {
   color: #fff;
   background: var(--award-blue);
 }
@@ -437,20 +442,26 @@
   box-shadow: 0 1px 4px rgba(0, 21, 41, 0.05);
 }
 
-.award-switcher a {
+.award-switcher a,
+.award-switcher button {
   padding: 13px 16px 11px;
+  border: none;
   border-bottom: 2px solid transparent;
   border-radius: 0;
   color: #606266;
+  background: transparent;
   font-size: 12px;
   font-weight: 500;
+  cursor: pointer;
 }
 
-.award-switcher a:hover {
+.award-switcher a:hover,
+.award-switcher button:hover {
   color: #409eff;
 }
 
-.award-switcher a.is-active {
+.award-switcher a.is-active,
+.award-switcher button.is-active {
   color: #409eff;
   border-bottom-color: #409eff;
   background: transparent;

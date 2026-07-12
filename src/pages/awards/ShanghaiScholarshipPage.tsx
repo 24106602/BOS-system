@@ -1,5 +1,9 @@
 import AwardProcessPage from "./AwardProcessPage";
 
-export default function ShanghaiScholarshipPage() {
-  return <AwardProcessPage awardType="shanghai" />;
+type ShanghaiScholarshipPageProps = {
+  onNavigate?: (to: string) => void;
+};
+
+export default function ShanghaiScholarshipPage({ onNavigate }: ShanghaiScholarshipPageProps) {
+  return <AwardProcessPage awardType="shanghai" onNavigate={onNavigate} />;
 }
