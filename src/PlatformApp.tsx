@@ -8,6 +8,8 @@ import AdminAccountManagePage from "./pages/admin/AdminAccountManagePage";
 import AdminBaseInfoPage from "./pages/admin/AdminBaseInfoPage";
 import AdminCollegesPage from "./pages/admin/AdminCollegesPage";
 import AdminDepartmentsPage from "./pages/admin/AdminDepartmentsPage";
+import AdminDifficultyPage from "./pages/admin/AdminDifficultyPage";
+import EnrolledStudentDatabasePage from "./pages/EnrolledStudentDatabasePage";
 
 import AdminAwardsOverviewPage from "./pages/admin/awards/AdminAwardsOverviewPage";
 import AdminNationalScholarshipPage from "./pages/admin/awards/AdminNationalScholarshipPage";
@@ -46,6 +48,9 @@ const normalizePath = (path: string) => {
     "/admin/awards/national",
     "/admin/awards/inspirational",
     "/admin/awards/shanghai",
+    "/admin/difficulty",
+    "/admin/difficulty/database",
+    "/admin/difficulty/enrolled",
     "/college",
     "/college/difficulty",
     "/college/difficulty/student",
@@ -73,6 +78,9 @@ const pageTitles: Record<string, string> = {
   "/admin/awards/national": "国家奖学金汇总",
   "/admin/awards/inspirational": "国家励志奖学金汇总",
   "/admin/awards/shanghai": "上海市奖学金汇总",
+  "/admin/difficulty": "困难生业务",
+  "/admin/difficulty/database": "困难生数据库",
+  "/admin/difficulty/enrolled": "在校生数据库",
   "/college": "平台首页",
   "/college/difficulty": "困难生业务",
   "/college/difficulty/student": "本专科信息处理",
@@ -96,6 +104,9 @@ const pageIcons: Record<string, string> = {
   "/admin/awards/national": "国",
   "/admin/awards/inspirational": "励",
   "/admin/awards/shanghai": "沪",
+  "/admin/difficulty": "困",
+  "/admin/difficulty/database": "库",
+  "/admin/difficulty/enrolled": "在",
   "/college": "首",
   "/college/difficulty": "困",
   "/college/difficulty/student": "本",
@@ -235,6 +246,12 @@ function AppContent() {
           <AdminNationalInspirationalPage />
         ) : pagePath === "/admin/awards/shanghai" ? (
           <AdminShanghaiScholarshipPage />
+        ) : pagePath === "/admin/difficulty" ? (
+          <AdminDifficultyPage onNavigate={navigate} />
+        ) : pagePath === "/admin/difficulty/database" ? (
+          <DatabasePage />
+        ) : pagePath === "/admin/difficulty/enrolled" ? (
+          <EnrolledStudentDatabasePage />
         ) : (
           <AdminHomePage onNavigate={navigate} />
         );
