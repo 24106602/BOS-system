@@ -1501,10 +1501,8 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
 
           {activeProcessingPanel === "student" ? (
             <StudentProcessPage
-              templateRef={templateRef}
               dataRef={dataRef}
               uploadData={uploadData}
-              uploadTemplateFile={uploadStudentTemplateFile}
               uploadDataFile={uploadStudentDataFile}
               startProcessing={processData}
               templateInfo={studentTemplateInfo}
@@ -1526,8 +1524,6 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
               renderTable={renderTable}
               processedData={processedData}
               disqualifiedRows={disqualifiedRows}
-              analysis={analysis}
-              aiReport={aiReport}
               logs={logs}
               logEndRef={logEndRef}
               onBackToDifficulty={onBackToDifficulty}
