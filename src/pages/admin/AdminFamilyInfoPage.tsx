@@ -24,12 +24,16 @@ const getText = (row: Record<string, unknown>, aliases: string[]) => {
 };
 
 const familyColumns = [
-  { key: "studentIdCard", label: "学生身份证号", aliases: ["student_id_card", "学生身份证号", "身份证件号"] },
-  { key: "memberName", label: "家庭成员姓名", aliases: ["member_name", "家庭成员姓名", "成员姓名"] },
-  { key: "relationship", label: "与学生关系", aliases: ["relationship", "与学生关系", "关系"] },
-  { key: "age", label: "年龄", aliases: ["age", "年龄"] },
-  { key: "occupation", label: "职业", aliases: ["occupation", "职业"] },
-  { key: "income", label: "年收入", aliases: ["income", "年收入", "收入"] },
+  { key: "year", label: "年度*", aliases: ["年度*", "年度", "year"] },
+  { key: "semester", label: "学期*", aliases: ["学期*", "学期", "semester"] },
+  { key: "studentIdCard", label: "学生身份证号*", aliases: ["学生身份证号*", "学生身份证号", "student_id_card", "身份证件号"] },
+  { key: "memberName", label: "家庭成员姓名*", aliases: ["家庭成员姓名*", "家庭成员姓名", "member_name", "成员姓名"] },
+  { key: "age", label: "家庭成员年龄*", aliases: ["家庭成员年龄*", "家庭成员年龄", "年龄", "age"] },
+  { key: "relationship", label: "与学生关系*", aliases: ["与学生关系*", "与学生关系", "关系", "relationship"] },
+  { key: "workUnit", label: "工作或学习单位*", aliases: ["工作或学习单位*", "工作或学习单位", "work_unit"] },
+  { key: "income", label: "年收入（元）*", aliases: ["年收入（元）*", "年收入（元）", "年收入", "income"] },
+  { key: "occupation", label: "职业*", aliases: ["职业*", "职业", "occupation"] },
+  { key: "healthStatus", label: "健康状况*", aliases: ["健康状况*", "健康状况", "health_status"] },
 ];
 
 export default function AdminFamilyInfoPage({ onNavigate }: AdminFamilyInfoPageProps) {
@@ -47,8 +51,8 @@ export default function AdminFamilyInfoPage({ onNavigate }: AdminFamilyInfoPageP
       batch.rows.map((row) => ({
         ...row,
         _batch: batch,
-        _studentIdCard: getText(row, ["student_id_card", "学生身份证号"]),
-        _memberName: getText(row, ["member_name", "家庭成员姓名"]),
+        _studentIdCard: getText(row, ["学生身份证号*", "学生身份证号", "student_id_card"]),
+        _memberName: getText(row, ["家庭成员姓名*", "家庭成员姓名", "member_name"]),
         _college: batch.collegeName,
       }))
     );
