@@ -63,14 +63,10 @@ export default function StudentProcessPage({
   status,
   academicYear,
   onAcademicYearChange,
-  studentCollegeName,
   stats,
   renderTable,
   processedData,
   disqualifiedRows,
-  logs,
-  logEndRef,
-  onBackToDifficulty,
 }: StudentProcessPageProps) {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [importTab, setImportTab] = useState<ImportTab>("success");
@@ -204,22 +200,32 @@ export default function StudentProcessPage({
   const importFailedCount = disqualifiedRows.length;
   const importTotalCount = processedData.length;
 
+  const failedRowsWithReason = useMemo(() => {
+    return disqualifiedRows.map((row) => {
+      const originalRow = processedData[row.rowNumber - 1] || {};
+      return {
+        "导入状态": "导入失败",
+        "错误信息": row.reason,
+        ...originalRow,
+      };
+    });
+  }, [disqualifiedRows, processedData]);
+
   return (
     <div style={pageStyles.workspace}>
       <div style={pageStyles.headerSection}>
         <div style={pageStyles.headerLeft}>
-          <div style={pageStyles.breadcrumb}>困难生业务 / 本专科信息</div>
           <h2 style={pageStyles.pageTitle}>本专科信息处理</h2>
-        </div>
-        <div style={pageStyles.headerRight}>
-          <span style={pageStyles.collegeBadge}>{studentCollegeName}</span>
-          {onBackToDifficulty && <button style={pageStyles.backButton} onClick={onBackToDifficulty}>返回业务首页</button>}
         </div>
       </div>
 
       <div style={pageStyles.filterSection}>
         <div style={pageStyles.filterTitle}>
           <span>过滤</span>
+          <div style={pageStyles.filterButtons}>
+            <button style={pageStyles.queryButton}>查询</button>
+            <button style={pageStyles.resetButton} onClick={resetFilters}>重置</button>
+          </div>
         </div>
         <div style={pageStyles.filterContent}>
           <div style={pageStyles.filterRow}>
@@ -280,10 +286,6 @@ export default function StudentProcessPage({
               </select>
             </label>
           </div>
-          <div style={pageStyles.filterButtons}>
-            <button style={pageStyles.queryButton}>查询</button>
-            <button style={pageStyles.resetButton} onClick={resetFilters}>重置</button>
-          </div>
         </div>
       </div>
 
@@ -294,14 +296,14 @@ export default function StudentProcessPage({
         {!hideSubmitAction && (
           <>
             <button
-              style={reviewConfirmed ? { ...pageStyles.toolbarButton, background: "#67c23a", borderColor: "#67c23a" } : { ...pageStyles.toolbarButton, background: "#e6a23c", borderColor: "#e6a23c" }}
+              style={reviewConfirmed ? { ...pageStyles.toolbarButton, background: "#67c23a", borderColor: "#67c23a", color: "#fff" } : pageStyles.toolbarButton}
               disabled={!canConfirm}
               onClick={confirmCollegeReview}
             >
               {reviewConfirmed ? "学院已确认" : "学院确认审核"}
             </button>
             <button
-              style={hasProcessedRows && reviewConfirmed && !hasBlockingRows && !uploadedToSchool ? { ...pageStyles.toolbarButton, background: "#67c23a", borderColor: "#67c23a" } : { ...pageStyles.toolbarButton, background: "#e6a23c", borderColor: "#e6a23c" }}
+              style={hasProcessedRows && reviewConfirmed && !hasBlockingRows && !uploadedToSchool ? { ...pageStyles.toolbarButton, background: "#67c23a", borderColor: "#67c23a", color: "#fff" } : pageStyles.toolbarButton}
               disabled={!hasProcessedRows || !reviewConfirmed || hasBlockingRows || uploadedToSchool}
               onClick={addStudentResultToMergePool}
             >
@@ -332,7 +334,9 @@ export default function StudentProcessPage({
           {filteredRows.length === 0 ? (
             <div style={pageStyles.empty}>暂无处理数据，请点击"数据导入"上传 Excel。</div>
           ) : (
-            renderTable(paginatedRows)
+            <div style={pageStyles.tableScrollWrapper}>
+              {renderTable(paginatedRows)}
+            </div>
           )}
         </div>
         {filteredRows.length > 0 && (
@@ -403,18 +407,22 @@ export default function StudentProcessPage({
                     passedRows.length === 0 ? (
                       <div style={pageStyles.empty}>暂无成功数据</div>
                     ) : (
-                      renderTable(passedRows)
+                      <div style={pageStyles.tableScrollWrapper}>
+                        {renderSuccessTable(passedRows)}
+                      </div>
                     )
                   ) : (
-                    disqualifiedRows.length === 0 ? (
+                    failedRowsWithReason.length === 0 ? (
                       <div style={pageStyles.empty}>暂无失败数据</div>
                     ) : (
-                      renderTable(disqualifiedRows)
+                      <div style={pageStyles.tableScrollWrapper}>
+                        {renderFailedTable(failedRowsWithReason)}
+                      </div>
                     )
                   )}
                 </div>
                 <div style={pageStyles.importPreviewFooter}>
-                  <span>显示 {(currentPage - 1) * pageSize + 1} 到 {Math.min(currentPage * pageSize, importTab === "success" ? importSuccessCount : importFailedCount)} 条，共 {importTab === "success" ? importSuccessCount : importFailedCount} 条</span>
+                  <span>显示 1 到 {importTab === "success" ? importSuccessCount : importFailedCount} 条，共 {importTab === "success" ? importSuccessCount : importFailedCount} 条</span>
                 </div>
               </div>
             </>
@@ -465,6 +473,59 @@ export default function StudentProcessPage({
   );
 }
 
+function renderSuccessTable(rows: Record<string, unknown>[]) {
+  if (rows.length === 0) return null;
+  const columns = Object.keys(rows[0]);
+  return (
+    <table style={styles.successTable}>
+      <thead>
+        <tr>
+          {columns.map((col) => (
+            <th key={col} style={styles.successTh}>{col}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, index) => (
+          <tr key={index}>
+            {columns.map((col) => (
+              <td key={col} style={styles.successTd}>{String(row[col] ?? "")}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function renderFailedTable(rows: Record<string, unknown>[]) {
+  const columns = ["导入状态", "错误信息", "姓名(*)", "身份证号(*)", "院系(*)", "学校名称(*)"];
+  const availableColumns = columns.filter((col) => rows[0] && col in rows[0]);
+  if (availableColumns.length === 0) return null;
+  return (
+    <table style={styles.failedTable}>
+      <thead>
+        <tr>
+          {availableColumns.map((col) => (
+            <th key={col} style={styles.failedTh}>{col}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, index) => (
+          <tr key={index}>
+            {availableColumns.map((col) => (
+              <td key={col} style={col === "错误信息" ? styles.failedErrorTd : styles.failedTd}>
+                {String(row[col] ?? "")}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   return (
     <div style={pageStyles.modalBackdrop}>
@@ -479,6 +540,63 @@ function Modal({ title, children, onClose }: { title: string; children: ReactNod
   );
 }
 
+const styles: Record<string, CSSProperties> = {
+  successTable: {
+    borderCollapse: "collapse",
+    minWidth: "100%",
+    fontSize: 13,
+    tableLayout: "auto",
+  },
+  successTh: {
+    border: "1px solid #cbd5e1",
+    padding: "8px 12px",
+    background: "#edf4fa",
+    textAlign: "center",
+    whiteSpace: "nowrap",
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
+  },
+  successTd: {
+    border: "1px solid #cbd5e1",
+    padding: "8px 12px",
+    textAlign: "center",
+    whiteSpace: "nowrap",
+  },
+  failedTable: {
+    borderCollapse: "collapse",
+    minWidth: "100%",
+    fontSize: 13,
+    tableLayout: "auto",
+  },
+  failedTh: {
+    border: "1px solid #cbd5e1",
+    padding: "8px 12px",
+    background: "#edf4fa",
+    textAlign: "center",
+    whiteSpace: "nowrap",
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
+  },
+  failedTd: {
+    border: "1px solid #cbd5e1",
+    padding: "8px 12px",
+    textAlign: "center",
+    whiteSpace: "nowrap",
+  },
+  failedErrorTd: {
+    border: "1px solid #cbd5e1",
+    padding: "8px 12px",
+    textAlign: "left",
+    whiteSpace: "normal",
+    minWidth: 200,
+    maxWidth: 300,
+    color: "#f56c6c",
+    background: "#fff5f5",
+  },
+};
+
 const pageStyles: Record<string, CSSProperties> = {
   workspace: {
     width: "100%",
@@ -492,9 +610,8 @@ const pageStyles: Record<string, CSSProperties> = {
   headerSection: {
     flex: "0 0 auto",
     display: "flex",
-    justifyContent: "space-between",
     alignItems: "center",
-    padding: "12px 16px",
+    padding: "10px 16px",
     background: "#fff",
     borderBottom: "1px solid #e4e7ed",
   },
@@ -503,47 +620,24 @@ const pageStyles: Record<string, CSSProperties> = {
     flexDirection: "column",
     gap: 4,
   },
-  breadcrumb: {
-    color: "#909399",
-    fontSize: 12,
-  },
   pageTitle: {
     margin: 0,
     fontSize: 18,
     fontWeight: 600,
     color: "#303133",
   },
-  headerRight: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-  },
-  collegeBadge: {
-    padding: "4px 12px",
-    borderRadius: 4,
-    background: "#ecf5ff",
-    color: "#409eff",
-    fontSize: 12,
-    fontWeight: 600,
-  },
-  backButton: {
-    padding: "5px 14px",
-    border: "1px solid #dcdfe6",
-    borderRadius: 4,
-    background: "#fff",
-    color: "#606266",
-    fontSize: 12,
-    cursor: "pointer",
-  },
   filterSection: {
     flex: "0 0 auto",
-    margin: "10px 16px",
+    margin: "8px 16px 0",
     background: "#fff",
     border: "1px solid #e4e7ed",
     borderRadius: 6,
     overflow: "hidden",
   },
   filterTitle: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: "8px 14px",
     background: "#f5f7fa",
     borderBottom: "1px solid #e4e7ed",
@@ -552,11 +646,11 @@ const pageStyles: Record<string, CSSProperties> = {
     fontSize: 13,
   },
   filterContent: {
-    padding: "12px 14px",
+    padding: "10px 14px",
   },
   filterRow: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
     gap: 10,
     alignItems: "end",
   },
@@ -569,14 +663,10 @@ const pageStyles: Record<string, CSSProperties> = {
   },
   filterButtons: {
     display: "flex",
-    justifyContent: "flex-end",
     gap: 8,
-    marginTop: 12,
-    paddingTop: 12,
-    borderTop: "1px solid #e4e7ed",
   },
   queryButton: {
-    padding: "6px 20px",
+    padding: "5px 18px",
     border: "none",
     borderRadius: 4,
     background: "#409eff",
@@ -585,7 +675,7 @@ const pageStyles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
   resetButton: {
-    padding: "6px 20px",
+    padding: "5px 18px",
     border: "1px solid #dcdfe6",
     borderRadius: 4,
     background: "#fff",
@@ -615,7 +705,7 @@ const pageStyles: Record<string, CSSProperties> = {
     flex: "0 0 auto",
     display: "flex",
     gap: 10,
-    padding: "8px 16px",
+    padding: "6px 16px",
     background: "#fff",
     borderBottom: "1px solid #e4e7ed",
     flexWrap: "wrap",
@@ -636,7 +726,7 @@ const pageStyles: Record<string, CSSProperties> = {
     minHeight: 0,
     display: "flex",
     flexDirection: "column",
-    margin: "10px 16px",
+    margin: "10px 16px 12px",
     background: "#fff",
     border: "1px solid #e4e7ed",
     borderRadius: 6,
@@ -663,14 +753,20 @@ const pageStyles: Record<string, CSSProperties> = {
     flex: 1,
     minHeight: 0,
     overflow: "auto",
-    padding: 8,
+    padding: 0,
+  },
+  tableScrollWrapper: {
+    width: "100%",
+    height: "100%",
+    overflow: "auto",
+    minWidth: 0,
   },
   tableFooter: {
     flex: "0 0 auto",
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    padding: "10px 14px",
+    padding: "8px 14px",
     borderTop: "1px solid #e4e7ed",
     background: "#f5f7fa",
   },
@@ -723,9 +819,9 @@ const pageStyles: Record<string, CSSProperties> = {
     zIndex: 1000,
   },
   modal: {
-    width: "700px",
-    maxWidth: "90vw",
-    maxHeight: "85vh",
+    width: "720px",
+    maxWidth: "92vw",
+    maxHeight: "88vh",
     background: "#fff",
     borderRadius: 6,
     display: "flex",
@@ -861,6 +957,10 @@ const pageStyles: Record<string, CSSProperties> = {
     border: "1px solid #e4e7ed",
     borderRadius: "0 4px 4px 4px",
     overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    minHeight: 0,
   },
   importPreviewHeader: {
     display: "flex",
@@ -873,9 +973,10 @@ const pageStyles: Record<string, CSSProperties> = {
     color: "#606266",
   },
   importPreviewBody: {
-    maxHeight: 300,
+    flex: 1,
+    minHeight: 0,
     overflow: "auto",
-    padding: 8,
+    padding: 0,
   },
   importPreviewFooter: {
     padding: "8px 12px",
