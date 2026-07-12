@@ -27,16 +27,6 @@ export default function AdminDifficultyPage({ onNavigate }: AdminDifficultyPageP
           actionText="进入管理"
           onClick={() => onNavigate?.("/admin/difficulty/database")}
         />
-        <BusinessCard
-          icon="在"
-          title="在校生数据库"
-          description="维护全校在校生基础信息，学院端导入困难生数据时将自动校验学生是否在校。"
-          status="已启用"
-          statusTone="enabled"
-          metrics={["在校生数据导入", "学生身份校验", "按学院/专业查询"]}
-          actionText="进入管理"
-          onClick={() => onNavigate?.("/admin/difficulty/enrolled")}
-        />
       </div>
 
       <div style={styles.infoCard}>

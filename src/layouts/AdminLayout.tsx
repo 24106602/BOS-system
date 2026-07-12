@@ -64,7 +64,6 @@ const difficultyMenuGroup: ExpandableMenuGroup = {
   items: [
     { path: "/admin/difficulty", label: "困难生业务首页", mark: "困" },
     { path: "/admin/difficulty/database", label: "困难生数据库", mark: "库" },
-    { path: "/admin/difficulty/enrolled", label: "在校生数据库", mark: "在" },
   ],
 };
 
@@ -224,6 +223,7 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
           <div className="bos-nav-group">
             <div className="bos-nav-group-title">平台导航</div>
             <MenuButton item={{ path: "/admin", label: "管理员首页", mark: "首" }} active={path === "/admin"} onClick={() => onNavigate("/admin")} />
+            <MenuButton item={{ path: "/admin/enrolled", label: "在校生数据库", mark: "在" }} active={path === "/admin/enrolled"} onClick={() => onNavigate("/admin/enrolled")} />
           </div>
 
           <ExpandableMenu

@@ -9,6 +9,7 @@ import AdminBaseInfoPage from "./pages/admin/AdminBaseInfoPage";
 import AdminCollegesPage from "./pages/admin/AdminCollegesPage";
 import AdminDepartmentsPage from "./pages/admin/AdminDepartmentsPage";
 import AdminDifficultyPage from "./pages/admin/AdminDifficultyPage";
+import DatabasePage from "./pages/DatabasePage";
 import EnrolledStudentDatabasePage from "./pages/EnrolledStudentDatabasePage";
 
 import AdminAwardsOverviewPage from "./pages/admin/awards/AdminAwardsOverviewPage";
@@ -51,6 +52,7 @@ const normalizePath = (path: string) => {
     "/admin/difficulty",
     "/admin/difficulty/database",
     "/admin/difficulty/enrolled",
+    "/admin/enrolled",
     "/college",
     "/college/difficulty",
     "/college/difficulty/student",
@@ -81,6 +83,7 @@ const pageTitles: Record<string, string> = {
   "/admin/difficulty": "困难生业务",
   "/admin/difficulty/database": "困难生数据库",
   "/admin/difficulty/enrolled": "在校生数据库",
+  "/admin/enrolled": "在校生数据库",
   "/college": "平台首页",
   "/college/difficulty": "困难生业务",
   "/college/difficulty/student": "本专科信息处理",
@@ -107,6 +110,7 @@ const pageIcons: Record<string, string> = {
   "/admin/difficulty": "困",
   "/admin/difficulty/database": "库",
   "/admin/difficulty/enrolled": "在",
+  "/admin/enrolled": "在",
   "/college": "首",
   "/college/difficulty": "困",
   "/college/difficulty/student": "本",
@@ -250,7 +254,7 @@ function AppContent() {
           <AdminDifficultyPage onNavigate={navigate} />
         ) : pagePath === "/admin/difficulty/database" ? (
           <DatabasePage />
-        ) : pagePath === "/admin/difficulty/enrolled" ? (
+        ) : pagePath === "/admin/difficulty/enrolled" || pagePath === "/admin/enrolled" ? (
           <EnrolledStudentDatabasePage />
         ) : (
           <AdminHomePage onNavigate={navigate} />
