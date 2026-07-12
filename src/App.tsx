@@ -1446,7 +1446,6 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
 
       {activeModule === "processing" && (
         <div className={collegeMode ? "bos-processing-frame" : undefined} style={collegeMode ? undefined : styles.processingWorkspace}>
-          {layoutMarker && <div className="bos-layout-active">{layoutMarker}</div>}
           {!fixedProcessingPanel && (
             <div style={styles.subModuleBar}>
               <button

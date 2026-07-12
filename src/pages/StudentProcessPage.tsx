@@ -93,6 +93,8 @@ export default function StudentProcessPage({
     gender: "",
     status: "",
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(10);
 
   const failedRowNumbers = useMemo(
     () => new Set(disqualifiedRows.map((row) => row.rowNumber)),
@@ -127,6 +129,13 @@ export default function StudentProcessPage({
       return true;
     });
   }, [filters, processedData]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const paginatedRows = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    return filteredRows.slice(start, end);
+  }, [filteredRows, currentPage, pageSize]);
 
   const hasProcessedRows = processedData.length > 0 && !isProcessing;
   const hasBlockingRows = disqualifiedRows.length > 0 || stats.errors > 0;
@@ -212,6 +221,7 @@ export default function StudentProcessPage({
       gender: "",
       status: "",
     });
+    setCurrentPage(1);
   };
 
   const handleConfirmImportSuccess = () => {
@@ -375,9 +385,35 @@ export default function StudentProcessPage({
           {filteredRows.length === 0 ? (
             <div style={pageStyles.empty}>暂无处理数据，请点击"数据导入"上传 Excel。</div>
           ) : (
-            renderTable(filteredRows)
+            renderTable(paginatedRows)
           )}
         </div>
+        {filteredRows.length > 0 && (
+          <div style={pageStyles.tableFooter}>
+            <span style={pageStyles.paginationInfo}>
+              共 {filteredRows.length} 条，当前显示第 {(currentPage - 1) * pageSize + 1} 到 {Math.min(currentPage * pageSize, filteredRows.length)} 条
+            </span>
+            <div style={pageStyles.pagination}>
+              <button
+                style={currentPage === 1 ? pageStyles.paginationButtonDisabled : pageStyles.paginationButton}
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(currentPage - 1)}
+              >
+                上一页
+              </button>
+              <span style={pageStyles.paginationText}>
+                第 {currentPage} / {totalPages} 页
+              </span>
+              <button
+                style={currentPage === totalPages ? pageStyles.paginationButtonDisabled : pageStyles.paginationButton}
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(currentPage + 1)}
+              >
+                下一页
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {activeModal === "import" && (
@@ -786,6 +822,48 @@ const pageStyles: Record<string, CSSProperties> = {
     minHeight: 0,
     overflow: "auto",
     padding: 8,
+  },
+  tableFooter: {
+    flex: "0 0 auto",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "10px 14px",
+    borderTop: "1px solid #e4e7ed",
+    background: "#fafafa",
+  },
+  paginationInfo: {
+    fontSize: 12,
+    color: "#606266",
+  },
+  pagination: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  paginationButton: {
+    padding: "5px 12px",
+    border: "1px solid #dcdfe6",
+    borderRadius: 4,
+    background: "#fff",
+    color: "#606266",
+    fontSize: 12,
+    cursor: "pointer",
+  },
+  paginationButtonDisabled: {
+    padding: "5px 12px",
+    border: "1px solid #ebeef5",
+    borderRadius: 4,
+    background: "#f5f7fa",
+    color: "#c0c4cc",
+    fontSize: 12,
+    cursor: "not-allowed",
+  },
+  paginationText: {
+    fontSize: 12,
+    color: "#606266",
+    minWidth: 80,
+    textAlign: "center",
   },
   empty: { color: "#909399", padding: 30, textAlign: "center", width: "100%" },
   modalBackdrop: {
