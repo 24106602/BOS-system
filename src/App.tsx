@@ -559,10 +559,6 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   };
 
   const loadStudentDataFile = async (file: File) => {
-    if (!studentTemplateInfo?.ok || !studentTemplateParseResult) {
-      throw new Error("必须先上传并通过校验的困难生本专科模板表。");
-    }
-
     pushLog("info", `已选择数据表：${file.name}`);
     const fileType = getExcelFileType(file);
     pushLog("info", `文件类型：${fileType || "未知"}`);
@@ -572,10 +568,12 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       throw new Error("文件类型不支持：仅支持 .xls / .xlsx");
     }
 
+    clearStudentTemplateState();
     clearStudentGovernanceResults();
+    setStudentTemplateInfo(null);
     setStudentDataTemplateCheck(null);
     setSourceRows([]);
-    setStatus("正在校验数据表格式");
+    setStatus("正在读取 Excel");
     resetStudentReviewState("重新上传数据后确认状态已重置");
 
     let workbookData: WorkbookData;
@@ -586,21 +584,27 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       throw new Error(`数据表解析异常：${getErrorMessage(error)}`, { cause: error });
     }
 
-    const dataCheck = validateDataAgainstTemplate(workbookData, studentTemplateInfo);
+    if (workbookData.sheetNames.length === 0) {
+      throw new Error("没有找到有效 Sheet");
+    }
+
+    const validation = validateTemplateFile(workbookData);
+    setStudentTemplateInfo(validation);
+    if (!validation.ok) throw new Error(validation.errors.join("\n"));
+
+    const parsed = parseStudentTemplate(workbookData);
+    applyStudentTemplate(parsed);
+
+    const dataCheck = validateDataAgainstTemplate(workbookData, validation);
     setStudentDataTemplateCheck(dataCheck);
     if (!dataCheck.ok) {
       const detail = [
         ...dataCheck.errors,
-        `模板识别字段：${dataCheck.templateFieldCount} 个`,
-        `数据识别字段：${dataCheck.dataFieldCount} 个`,
-        `匹配率：${(dataCheck.matchRate * 100).toFixed(1)}%`,
+        `识别字段：${dataCheck.dataFieldCount} 个`,
         dataCheck.missingCoreFields.length > 0
           ? `缺失核心字段：${dataCheck.missingCoreFields.join("、")}`
           : "缺失核心字段：无",
-        dataCheck.extraFields.length > 0
-          ? `多余字段：${dataCheck.extraFields.join("、")}`
-          : "多余字段：无",
-        "建议重新下载或选择与模板表一致的数据文件。",
+        "建议检查表头是否正确。",
       ];
       throw new Error(detail.join("\n"));
     }
@@ -616,15 +620,14 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     const headerIndex = dataCheck.headerRowIndex;
     const effectiveDataRowCount = getEffectiveDataRowCount(rows, headerIndex);
     if (effectiveDataRowCount === 0) throw new Error("未读取到有效学生数据，请检查 Sheet、表头行和数据行。");
-    const tableCollege = detectCollegeFromTableRows(rows, studentTemplateParseResult.fields);
+    const tableCollege = detectCollegeFromTableRows(rows, parsed.fields);
 
     setSourceRows(rows);
-    setStatus("数据表与模板匹配，等待开始处理");
+    setStatus("正在治理数据");
     pushLog("success", `读取到 Sheet：${sheetName}`);
     pushLog("success", `使用 Sheet：${sheetName}`);
     pushLog("success", `表头行：第 ${headerIndex + 1} 行`);
     pushLog("success", `识别到字段：${formatRecognizedFields(dataCheck.dataFields.map((field) => field.rawHeader))}`);
-    pushLog("success", `数据表与模板匹配率：${(dataCheck.matchRate * 100).toFixed(1)}%`);
     dataCheck.warnings.forEach((warning) => pushLog("info", warning));
     pushLog("success", `原始数据行数：${rowCount}`);
     pushLog("success", `有效学生数据行数：${effectiveDataRowCount}`);
@@ -637,8 +640,10 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
 数据表：${sheetName}
 原始行数：${rowCount}
 有效学生数据行数：${effectiveDataRowCount}
-  模板校验已通过，请点击“开始处理”执行既有治理规则。`
+系统将自动执行数据治理。`
     );
+
+    await processData();
   };
 
   const uploadData = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -661,8 +666,8 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
       await loadStudentDataFile(file);
     } catch (error) {
       console.error("Student Excel load failed:", error);
-      const message = getErrorMessage(error) || "数据表校验失败";
-      setStatus(studentTemplateInfo?.ok ? "数据表与模板不匹配" : "请先上传模板表");
+      const message = getErrorMessage(error) || "数据表处理失败";
+      setStatus("数据表处理失败");
       pushLog("error", message);
       alert(message);
     } finally {
@@ -1245,31 +1250,62 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
       const currentCollege = normalizeSubmissionCollegeName(activeCollegeName);
       let nextFamilyReviewRows = result.familyReviewRows;
       const nextFamilyHighlightCellMap = { ...result.familyHighlightCellMap };
-      if (!currentCollege || currentCollege === "未知学院") {
-        pushFamilyLog("error", "当前账号学院识别失败，系统已继续治理，家庭成员数据需进入不通过名单核对。");
-        const studentIdField =
-          activeFamilyTemplateFields.find((field) => /学生.*身份证|身份证/.test(field)) || activeFamilyTemplateFields[2] || "学生身份证号";
-        const memberNameField =
-          activeFamilyTemplateFields.find((field) => /家庭成员.*姓名|成员姓名|姓名/.test(field)) || activeFamilyTemplateFields[3] || "家庭成员姓名";
-        const relationField =
-          activeFamilyTemplateFields.find((field) => /关系/.test(field)) || activeFamilyTemplateFields[5] || "与学生关系";
-        const failedRowNumbers = new Set(nextFamilyReviewRows.map((row) => row.rowNumber));
-        nextFamilyReviewRows = [...nextFamilyReviewRows];
 
-        result.familyProcessedData.forEach((row, index) => {
+      const studentIdField =
+        activeFamilyTemplateFields.find((field) => /学生.*身份证|身份证/.test(field)) || activeFamilyTemplateFields[2] || "学生身份证号";
+      const memberNameField =
+        activeFamilyTemplateFields.find((field) => /家庭成员.*姓名|成员姓名|姓名/.test(field)) || activeFamilyTemplateFields[3] || "家庭成员姓名";
+      const relationField =
+        activeFamilyTemplateFields.find((field) => /关系/.test(field)) || activeFamilyTemplateFields[5] || "与学生关系";
+
+      const studentIdCards = new Set(processedData.map((row) => String(row["身份证号"] || row["学生身份证号"] || row["证件号码"] || "")));
+      if (studentIdCards.size === 0) {
+        pushFamilyLog("warning", "本专科信息中没有找到学生身份证号数据，请先导入本专科信息。");
+      }
+
+      const failedRowNumbers = new Set(nextFamilyReviewRows.map((row) => row.rowNumber));
+      nextFamilyReviewRows = [...nextFamilyReviewRows];
+
+      result.familyProcessedData.forEach((row, index) => {
+        const studentIdCard = String(row[studentIdField] ?? "").trim();
+
+        if (!studentIdCards.has(studentIdCard)) {
           nextFamilyHighlightCellMap[`${index}_0`] = {
-            color: "yellow",
-            reason: "当前账号学院识别失败，无法确认该行是否属于本学院",
+            color: "red",
+            reason: "学生身份证号在本专科信息中不存在",
           };
           if (!failedRowNumbers.has(index + 1)) {
             failedRowNumbers.add(index + 1);
             nextFamilyReviewRows.push({
               rowNumber: index + 1,
-              studentId: String(row[studentIdField] ?? ""),
+              studentId: studentIdCard,
               memberName: String(row[memberNameField] ?? ""),
               relation: String(row[relationField] ?? ""),
-              reason: "当前账号学院识别失败，无法确认该行是否属于本学院",
+              reason: "学生身份证号在本专科信息中不存在，请先导入本专科信息",
             });
+          }
+        }
+      });
+
+      if (!currentCollege || currentCollege === "未知学院") {
+        pushFamilyLog("error", "当前账号学院识别失败，系统已继续治理，家庭成员数据需进入不通过名单核对。");
+        result.familyProcessedData.forEach((row, index) => {
+          const studentIdCard = String(row[studentIdField] ?? "").trim();
+          if (studentIdCards.has(studentIdCard)) {
+            nextFamilyHighlightCellMap[`${index}_0`] = {
+              color: "yellow",
+              reason: "当前账号学院识别失败，无法确认该行是否属于本学院",
+            };
+            if (!failedRowNumbers.has(index + 1)) {
+              failedRowNumbers.add(index + 1);
+              nextFamilyReviewRows.push({
+                rowNumber: index + 1,
+                studentId: studentIdCard,
+                memberName: String(row[memberNameField] ?? ""),
+                relation: String(row[relationField] ?? ""),
+                reason: "当前账号学院识别失败，无法确认该行是否属于本学院",
+              });
+            }
           }
         });
       }

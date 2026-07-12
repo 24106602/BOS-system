@@ -167,10 +167,6 @@ export default function StudentProcessPage({
   };
 
   const selectFile = () => {
-    if (!templateInfo?.ok) {
-      alert("必须先上传并通过校验的困难生本专科模板表。");
-      return;
-    }
     if (!dataRef.current) return;
     dataRef.current.value = "";
     dataRef.current.click();
@@ -421,41 +417,26 @@ export default function StudentProcessPage({
           <div style={pageStyles.importHint}>
             <strong>导入说明</strong>
             <span>1. 请先下载标准模板，按模板要求填写困难生本专科信息；</span>
-            <span>2. 第一步上传模板表，第二步上传同格式的数据表；</span>
-            <span>3. 系统会自动校验是否为对应模板表，匹配通过后才可导入。</span>
+            <span>2. 直接上传原始数据表，系统会自动校验格式并执行数据治理；</span>
+            <span>3. 支持 .xls / .xlsx 格式，建议单个文件大小不超过 5MB。</span>
           </div>
 
-          {!templateInfo?.ok ? (
-            <div
-              style={pageStyles.importDrop}
-              onClick={selectTemplateFile}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={handleTemplateDrop}
-            >
-              <input ref={templateRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleTemplateFileChange} />
-              <strong>第一步：上传困难生本专科模板表</strong>
-              <span>点击或拖拽上传模板表</span>
-            </div>
-          ) : (
-            <div
-              style={{
-                ...pageStyles.importDrop,
-                opacity: canUploadData ? 1 : 0.58,
-                cursor: canUploadData ? "pointer" : "not-allowed",
-              }}
-              onClick={selectFile}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={handleDrop}
-            >
-              <input ref={dataRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileChange} />
-              <strong>第二步：上传同模板格式的数据表</strong>
-              <span>模板校验通过后才可选择</span>
-            </div>
-          )}
+          <div
+            style={{
+              ...pageStyles.importDrop,
+              opacity: isProcessing ? 0.58 : 1,
+              cursor: isProcessing ? "not-allowed" : "pointer",
+            }}
+            onClick={selectFile}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={handleDrop}
+          >
+            <input ref={dataRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileChange} />
+            <strong>点击上传 EXCEL 文件</strong>
+            <span>或将文件拖拽到此处</span>
+          </div>
 
           <div style={pageStyles.modalInfoGrid}>
-            <Info label="模板文件" value={templateFileName || "未选择文件"} />
-            <Info label="模板表状态" value={templateStatusText} />
             <Info label="数据文件" value={importFileName || "未选择文件"} />
             <Info label="数据表状态" value={dataStatusText} />
             <Info label="上传总数" value={String(importTotalCount)} />
