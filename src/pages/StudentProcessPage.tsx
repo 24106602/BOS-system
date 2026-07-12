@@ -11,10 +11,6 @@ import {
   DIFFICULTY_STUDENT_TEMPLATE_FIELDS,
   getDifficultyTemplateValue,
 } from "../constants/difficultyStudentTemplate";
-import AdminCard from "../components/ui/AdminCard";
-import PageHeader from "../components/ui/PageHeader";
-import StatCard from "../components/ui/StatCard";
-import Toolbar from "../components/ui/Toolbar";
 
 type StudentProcessPageProps = {
   templateRef: RefObject<HTMLInputElement | null>;
@@ -244,126 +240,145 @@ export default function StudentProcessPage({
   const importTotalCount = processedData.length;
 
   return (
-    <section className="bos-table-page difficulty-workspace">
-      <PageHeader
-        breadcrumb="困难生业务 / 本专科信息"
-        title="本专科信息处理"
-        description="上传模板表与数据表，完成格式校验、自动修复和学院上载。"
-        actions={(
-          <div className="bos-status-row">
-            <span className="bos-status-badge">{studentCollegeName}</span>
-            {onBackToDifficulty && <button className="bos-button" onClick={onBackToDifficulty}>返回业务首页</button>}
+    <div style={pageStyles.workspace}>
+      <div style={pageStyles.topPanel}>
+        <div style={pageStyles.topHeader}>
+          <div>
+            <div style={pageStyles.breadcrumb}>困难生业务 / 本专科信息</div>
+            <h2 style={pageStyles.pageTitle}>本专科信息处理</h2>
           </div>
-        )}
-      />
-
-      <div className="bos-stat-grid">
-        <StatCard label="上传总数" value={importTotalCount} />
-        <StatCard label="成功人数" value={importSuccessCount} tone="green" />
-        <StatCard label="失败人数" value={importFailedCount} tone="red" />
-        <StatCard label="自动修复数" value={stats.repaired} tone="amber" />
-      </div>
-
-      <div className="bos-status-row">
-        <span className="bos-status-badge">当前状态：{status}</span>
-        <span className={`bos-status-badge${hasBlockingRows ? " is-danger" : " is-success"}`}>学院确认：{reviewStatus}</span>
-      </div>
-
-      <section className="bos-filter-card">
-        <div className="bos-filter-grid difficulty-student-filter">
-          <label className="bos-filter-field">学年
-            <select value={filters.academicYear} onChange={(event) => setFilters((current) => ({ ...current, academicYear: event.target.value }))}>
-              {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
-            </select>
-          </label>
-          <label className="bos-filter-field">学期
-            <select value={filters.semester} onChange={(event) => setFilters((current) => ({ ...current, semester: event.target.value }))}>
-              <option value="">全部</option>
-              <option value="秋季学期">秋季学期</option>
-              <option value="春季学期">春季学期</option>
-            </select>
-          </label>
-          <label className="bos-filter-field">姓名<input value={filters.name} onChange={(event) => setFilters((current) => ({ ...current, name: event.target.value }))} placeholder="请输入姓名" /></label>
-          <label className="bos-filter-field">身份证号<input value={filters.idCard} onChange={(event) => setFilters((current) => ({ ...current, idCard: event.target.value }))} placeholder="请输入身份证号" /></label>
-          <label className="bos-filter-field">学校名称<input value={filters.schoolName} onChange={(event) => setFilters((current) => ({ ...current, schoolName: event.target.value }))} placeholder="请输入学校名称" /></label>
-          <label className="bos-filter-field">院系<input value={filters.department} onChange={(event) => setFilters((current) => ({ ...current, department: event.target.value }))} placeholder="请输入院系" /></label>
-          <label className="bos-filter-field">困难等级
-            <select value={filters.difficultyLevel} onChange={(event) => setFilters((current) => ({ ...current, difficultyLevel: event.target.value }))}>
-              <option value="">全部</option>
-              <option value="特别困难">特别困难</option>
-              <option value="比较困难">比较困难</option>
-              <option value="一般困难">一般困难</option>
-            </select>
-          </label>
-          <label className="bos-filter-field">性别
-            <select value={filters.gender} onChange={(event) => setFilters((current) => ({ ...current, gender: event.target.value }))}>
-              <option value="">全部</option>
-              <option value="男">男</option>
-              <option value="女">女</option>
-            </select>
-          </label>
-          <label className="bos-filter-field">状态
-            <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
-              <option value="">全部</option>
-              <option value="通过">通过</option>
-              <option value="不通过">不通过</option>
-              <option value="待审核">待审核</option>
-            </select>
-          </label>
-          <div className="bos-filter-actions">
-            <button className="is-primary" onClick={() => setFilters({ ...filters })}>查询</button>
-            <button onClick={resetFilters}>重置</button>
+          <div style={pageStyles.topActions}>
+            <span style={pageStyles.collegeBadge}>{studentCollegeName}</span>
+            {onBackToDifficulty && <button style={pageStyles.backButton} onClick={onBackToDifficulty}>返回业务首页</button>}
           </div>
         </div>
-      </section>
 
-      <Toolbar>
-        <button className="is-primary" onClick={() => setActiveModal("import")}>数据导入</button>
-        <button className="is-purple" disabled={!hasProcessedRows} onClick={exportExcel}>导出通过名单</button>
-        <button className="is-purple" disabled={!hasProcessedRows} onClick={exportStudentErrorReport}>导出不通过名单</button>
-        {!hideSubmitAction && (
-          <>
-            <button className={reviewConfirmed ? "is-success" : "is-warning"} disabled={!canConfirm} onClick={confirmCollegeReview}>
-              {reviewConfirmed ? "学院已确认" : "学院确认审核"}
-            </button>
-            <button
-              className={hasProcessedRows && reviewConfirmed && !hasBlockingRows && !uploadedToSchool ? "is-success" : "is-warning"}
-              disabled={!hasProcessedRows || !reviewConfirmed || hasBlockingRows || uploadedToSchool}
-              onClick={addStudentResultToMergePool}
-            >
-              {uploadedToSchool ? "已上载学校端" : "上载到学校端"}
-            </button>
-          </>
-        )}
-        {onViewDifficultyStudents && <button onClick={onViewDifficultyStudents}>查看困难生明细</button>}
-      </Toolbar>
-
-      <AdminCard title="处理日志" description="格式修复与处理过程记录。">
-        <div className="bos-log-scroll" aria-label="本专科信息处理日志">
-          {logs.length === 0
-            ? <div className="bos-log-empty">等待导入 Excel</div>
-            : logs.map((item, index) => (
-              <div key={`${item.time}_${index}`} className="bos-log-item">
-                <time>{item.time}</time><span>{item.message}</span>
-              </div>
-            ))}
-          <div ref={logEndRef} />
+        <div style={pageStyles.statsRow}>
+          <div style={pageStyles.statItem}>
+            <span>上传总数</span>
+            <strong>{importTotalCount}</strong>
+          </div>
+          <div style={{ ...pageStyles.statItem, ...pageStyles.statGreen }}>
+            <span>成功人数</span>
+            <strong>{importSuccessCount}</strong>
+          </div>
+          <div style={{ ...pageStyles.statItem, ...pageStyles.statRed }}>
+            <span>失败人数</span>
+            <strong>{importFailedCount}</strong>
+          </div>
+          <div style={{ ...pageStyles.statItem, ...pageStyles.statAmber }}>
+            <span>自动修复数</span>
+            <strong>{stats.repaired}</strong>
+          </div>
         </div>
-      </AdminCard>
 
-      <section className="bos-table-card">
-        <div className="bos-table-card-head">
-          <h2>本专科困难生数据表</h2>
-          <span>显示 {filteredRows.length} / {processedData.length} 条</span>
+        <div style={pageStyles.statusRow}>
+          <span style={pageStyles.statusBadge}>当前状态：{status}</span>
+          <span style={hasBlockingRows ? { ...pageStyles.statusBadge, ...pageStyles.statusDanger } : { ...pageStyles.statusBadge, ...pageStyles.statusSuccess }}>
+            学院确认：{reviewStatus}
+          </span>
         </div>
-        <div className="bos-table-card-body">
+
+        <div style={pageStyles.filterPanel}>
+          <div style={pageStyles.filterRow}>
+            <label style={pageStyles.filterField}>
+              <span>学年</span>
+              <select value={filters.academicYear} onChange={(event) => setFilters((current) => ({ ...current, academicYear: event.target.value }))}>
+                {ACADEMIC_YEAR_OPTIONS.map((year) => <option key={year} value={year}>{year}</option>)}
+              </select>
+            </label>
+            <label style={pageStyles.filterField}>
+              <span>学期</span>
+              <select value={filters.semester} onChange={(event) => setFilters((current) => ({ ...current, semester: event.target.value }))}>
+                <option value="">全部</option>
+                <option value="秋季学期">秋季学期</option>
+                <option value="春季学期">春季学期</option>
+              </select>
+            </label>
+            <label style={pageStyles.filterField}>
+              <span>姓名</span>
+              <input value={filters.name} onChange={(event) => setFilters((current) => ({ ...current, name: event.target.value }))} placeholder="请输入姓名" />
+            </label>
+            <label style={pageStyles.filterField}>
+              <span>身份证号</span>
+              <input value={filters.idCard} onChange={(event) => setFilters((current) => ({ ...current, idCard: event.target.value }))} placeholder="请输入身份证号" />
+            </label>
+            <label style={pageStyles.filterField}>
+              <span>学校名称</span>
+              <input value={filters.schoolName} onChange={(event) => setFilters((current) => ({ ...current, schoolName: event.target.value }))} placeholder="请输入学校名称" />
+            </label>
+            <label style={pageStyles.filterField}>
+              <span>院系</span>
+              <input value={filters.department} onChange={(event) => setFilters((current) => ({ ...current, department: event.target.value }))} placeholder="请输入院系" />
+            </label>
+            <label style={pageStyles.filterField}>
+              <span>困难等级</span>
+              <select value={filters.difficultyLevel} onChange={(event) => setFilters((current) => ({ ...current, difficultyLevel: event.target.value }))}>
+                <option value="">全部</option>
+                <option value="特别困难">特别困难</option>
+                <option value="比较困难">比较困难</option>
+                <option value="一般困难">一般困难</option>
+              </select>
+            </label>
+            <label style={pageStyles.filterField}>
+              <span>性别</span>
+              <select value={filters.gender} onChange={(event) => setFilters((current) => ({ ...current, gender: event.target.value }))}>
+                <option value="">全部</option>
+                <option value="男">男</option>
+                <option value="女">女</option>
+              </select>
+            </label>
+            <label style={pageStyles.filterField}>
+              <span>状态</span>
+              <select value={filters.status} onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}>
+                <option value="">全部</option>
+                <option value="通过">通过</option>
+                <option value="不通过">不通过</option>
+                <option value="待审核">待审核</option>
+              </select>
+            </label>
+            <div style={pageStyles.filterButtons}>
+              <button style={pageStyles.queryButton} onClick={() => setFilters({ ...filters })}>查询</button>
+              <button style={pageStyles.resetButton} onClick={resetFilters}>重置</button>
+            </div>
+          </div>
+        </div>
+
+        <div style={pageStyles.toolbar}>
+          <button style={pageStyles.primaryButton} onClick={() => setActiveModal("import")}>数据导入</button>
+          <button style={pageStyles.exportButton} disabled={!hasProcessedRows} onClick={exportExcel}>导出通过名单</button>
+          <button style={pageStyles.exportButton} disabled={!hasProcessedRows} onClick={exportStudentErrorReport}>导出不通过名单</button>
+          {!hideSubmitAction && (
+            <>
+              <button style={reviewConfirmed ? pageStyles.successButton : pageStyles.warningButton} disabled={!canConfirm} onClick={confirmCollegeReview}>
+                {reviewConfirmed ? "学院已确认" : "学院确认审核"}
+              </button>
+              <button
+                style={hasProcessedRows && reviewConfirmed && !hasBlockingRows && !uploadedToSchool ? pageStyles.successButton : pageStyles.warningButton}
+                disabled={!hasProcessedRows || !reviewConfirmed || hasBlockingRows || uploadedToSchool}
+                onClick={addStudentResultToMergePool}
+              >
+                {uploadedToSchool ? "已上载学校端" : "上载到学校端"}
+              </button>
+            </>
+          )}
+          {onViewDifficultyStudents && <button style={pageStyles.defaultButton} onClick={onViewDifficultyStudents}>查看困难生明细</button>}
+        </div>
+      </div>
+
+      <div style={pageStyles.bottomPanel}>
+        <div style={pageStyles.tableHeader}>
+          <span>本专科困难生数据表</span>
+          <span style={pageStyles.tableCount}>显示 {filteredRows.length} / {processedData.length} 条</span>
+        </div>
+        <div style={pageStyles.tableBody}>
           {filteredRows.length === 0 ? (
-            <div style={pageStyles.empty}>暂无处理数据，请点击“数据导入”上传 Excel。</div>
+            <div style={pageStyles.empty}>暂无处理数据，请点击"数据导入"上传 Excel。</div>
           ) : (
             renderTable(filteredRows)
           )}
         </div>
-      </section>
+      </div>
 
       {activeModal === "import" && (
         <Modal title="数据导入" width="900px" headerTone="green" onClose={() => setActiveModal(null)}>
@@ -529,7 +544,7 @@ export default function StudentProcessPage({
           {disqualifiedRows.length === 0 ? <div style={pageStyles.empty}>暂无不通过数据</div> : renderTable(disqualifiedRows)}
         </ListModal>
       )}
-    </section>
+    </div>
   );
 }
 
@@ -544,13 +559,13 @@ function Info({ label, value }: { label: string; value: string }) {
 
 function Modal({ title, width = "80vw", headerTone, children, onClose }: { title: string; width?: string; headerTone?: "green"; children: ReactNode; onClose: () => void }) {
   return (
-    <div className="bos-modal-backdrop">
-      <section className={`bos-modal${width === "620px" ? " bos-modal--compact" : ""}`} style={{ width, maxWidth: "96vw", height: "auto", maxHeight: "90vh" }}>
+    <div style={pageStyles.modalBackdrop}>
+      <section style={{ ...pageStyles.modal, width, maxWidth: "96vw", maxHeight: "90vh" }}>
         <div style={headerTone === "green" ? pageStyles.modalHeaderGreen : pageStyles.modalHeader}>
           <h2 style={headerTone === "green" ? pageStyles.modalTitleWhite : pageStyles.modalTitle}>{title}</h2>
           <button style={headerTone === "green" ? pageStyles.modalCloseWhite : undefined} onClick={onClose}>关闭</button>
         </div>
-        <div className="bos-modal-body" style={{ overflow: "auto" }}>{children}</div>
+        <div style={pageStyles.modalBody}>{children}</div>
       </section>
     </div>
   );
@@ -585,38 +600,233 @@ const button = (background: string): CSSProperties => ({
   color: "#fff",
   border: "1px solid transparent",
   borderRadius: 6,
-  minHeight: 34,
-  padding: "8px 11px",
+  minHeight: 32,
+  padding: "6px 14px",
   fontSize: 12,
-  fontWeight: 800,
+  fontWeight: 600,
   cursor: "pointer",
   whiteSpace: "nowrap",
 });
 
 const pageStyles: Record<string, CSSProperties> = {
-  empty: { color: "#8190a4", padding: 18, textAlign: "center", width: "100%" },
-  modalHeader: { flex: "0 0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: "1px solid #d7e1ed", background: "#f8fafc" },
-  modalTitle: { margin: 0, color: "#172033", fontSize: 18 },
-  modalFooter: { flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: 8, padding: "11px 0 0", borderTop: "1px solid #e2e8f0", background: "#fff" },
-  modalTableScroll: { flex: 1, minHeight: 280, display: "flex", overflow: "auto", border: "1px solid #d7e1ed", borderRadius: 6 },
-  importHint: { display: "grid", gap: 6, padding: 12, borderRadius: 6, background: "#f0f9f4", border: "1px solid #b8e0c8", color: "#1a5c3a", fontSize: 12, lineHeight: 1.6 },
-  importDrop: { display: "grid", gap: 8, placeItems: "center", textAlign: "center", border: "1px dashed #7faed4", borderRadius: 8, background: "#f7fbff", padding: 24, cursor: "pointer", color: "#40526a" },
-  modalHeaderGreen: { flex: "0 0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: "1px solid #0a8f68", background: "#0a8f68" },
-  modalTitleWhite: { margin: 0, color: "#fff", fontSize: 18 },
-  modalCloseWhite: { border: "1px solid rgba(255,255,255,0.5)", borderRadius: 6, padding: "7px 10px", background: "transparent", color: "#fff", fontWeight: 800, cursor: "pointer" },
-  templateButton: { border: "1px solid #cbd8e6", borderRadius: 6, minHeight: 34, padding: "8px 11px", background: "#fff", color: "#26364e", fontSize: 12, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" },
-  modalInfoGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8 },
-  infoItem: { display: "grid", gap: 4, padding: 10, border: "1px solid #d7e1ed", borderRadius: 6, background: "#f8fbfe", color: "#63738a", fontSize: 12 },
-  modalLogBox: { minHeight: 80, maxHeight: 120, overflow: "auto", padding: 10, borderRadius: 6, background: "#0b1428", color: "#dceafe", fontFamily: "Consolas, monospace", fontSize: 12, lineHeight: 1.6 },
-  purpleButton: button("#5d5ab5"),
-  greenButton: button("#0a8f68"),
-  orangeButton: button("#c77a0a"),
-  disabledButton: { ...button("#a6b4c5"), cursor: "not-allowed" },
-  secondaryButton: { border: "1px solid #cbd8e6", borderRadius: 6, minHeight: 34, padding: "7px 11px", background: "#fff", color: "#26364e", fontSize: 12, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" },
-  importTabs: { display: "flex", gap: 8, borderBottom: "1px solid #e2e8f0" },
-  importTab: { padding: "10px 16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderBottom: "none", borderRadius: "6px 6px 0 0", color: "#64748b", fontSize: 13, fontWeight: 800, cursor: "pointer" },
-  importTabActive: { padding: "10px 16px", background: "#0a8f68", border: "1px solid #0a8f68", borderBottom: "none", borderRadius: "6px 6px 0 0", color: "#fff", fontSize: 13, fontWeight: 800, cursor: "pointer" },
-  importPreview: { border: "1px solid #e2e8f0", borderRadius: "0 6px 6px 6px", overflow: "hidden" },
-  importPreviewHeader: { display: "flex", justifyContent: "space-between", padding: "10px 12px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0", fontSize: 13, fontWeight: 800, color: "#334155" },
-  importPreviewBody: { maxHeight: 320, overflow: "auto", padding: 12 },
+  workspace: {
+    width: "100%",
+    flex: 1,
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    background: "#f0f2f5",
+  },
+  topPanel: {
+    flex: "0 0 auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+    padding: "10px 12px 8px",
+    background: "#fff",
+    borderBottom: "1px solid #e4e7ed",
+  },
+  topHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  breadcrumb: {
+    color: "#909399",
+    fontSize: 11,
+    marginBottom: 2,
+  },
+  pageTitle: {
+    margin: 0,
+    fontSize: 16,
+    fontWeight: 600,
+    color: "#303133",
+  },
+  topActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+  },
+  collegeBadge: {
+    padding: "4px 10px",
+    borderRadius: 4,
+    background: "#ecf5ff",
+    color: "#409eff",
+    fontSize: 12,
+    fontWeight: 600,
+  },
+  backButton: {
+    padding: "5px 12px",
+    border: "1px solid #dcdfe6",
+    borderRadius: 4,
+    background: "#fff",
+    color: "#606266",
+    fontSize: 12,
+    cursor: "pointer",
+  },
+  statsRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, 1fr)",
+    gap: 8,
+  },
+  statItem: {
+    padding: "10px 12px",
+    borderRadius: 6,
+    background: "#f5f7fa",
+    border: "1px solid #e4e7ed",
+    display: "flex",
+    flexDirection: "column",
+    gap: 3,
+  },
+  statGreen: { background: "#f0f9eb", borderColor: "#e1f3d8", color: "#67c23a" },
+  statRed: { background: "#fef0f0", borderColor: "#fbc4c4", color: "#f56c6c" },
+  statAmber: { background: "#fdf6ec", borderColor: "#faecd8", color: "#e6a23c" },
+  statusRow: {
+    display: "flex",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  statusBadge: {
+    padding: "3px 8px",
+    borderRadius: 3,
+    fontSize: 11,
+    background: "#ecf5ff",
+    color: "#409eff",
+    border: "1px solid #d9ecff",
+  },
+  statusSuccess: { background: "#f0f9eb", color: "#67c23a", borderColor: "#e1f3d8" },
+  statusDanger: { background: "#fef0f0", color: "#f56c6c", borderColor: "#fbc4c4" },
+  filterPanel: {
+    padding: "8px 10px",
+    border: "1px solid #e4e7ed",
+    borderRadius: 6,
+    background: "#fafafa",
+  },
+  filterRow: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+    gap: 8,
+    alignItems: "end",
+  },
+  filterField: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 4,
+    minWidth: 0,
+  },
+  filterButtons: {
+    display: "flex",
+    gap: 6,
+  },
+  queryButton: {
+    padding: "6px 15px",
+    border: "none",
+    borderRadius: 4,
+    background: "#409eff",
+    color: "#fff",
+    fontSize: 12,
+    cursor: "pointer",
+  },
+  resetButton: {
+    padding: "6px 15px",
+    border: "1px solid #dcdfe6",
+    borderRadius: 4,
+    background: "#fff",
+    color: "#606266",
+    fontSize: 12,
+    cursor: "pointer",
+  },
+  toolbar: {
+    display: "flex",
+    gap: 6,
+    flexWrap: "wrap",
+    paddingTop: 2,
+  },
+  primaryButton: { ...button("#409eff"), borderColor: "#409eff" },
+  exportButton: { ...button("#67c23a"), borderColor: "#67c23a" },
+  successButton: { ...button("#67c23a"), borderColor: "#67c23a" },
+  warningButton: { ...button("#e6a23c"), borderColor: "#e6a23c" },
+  defaultButton: {
+    ...button("#fff"),
+    color: "#606266",
+    border: "1px solid #dcdfe6",
+  },
+  bottomPanel: {
+    flex: 1,
+    minHeight: 0,
+    display: "flex",
+    flexDirection: "column",
+    margin: "8px 12px 12px",
+    border: "1px solid #e4e7ed",
+    borderRadius: 6,
+    background: "#fff",
+    overflow: "hidden",
+  },
+  tableHeader: {
+    flex: "0 0 auto",
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "10px 14px",
+    borderBottom: "1px solid #e4e7ed",
+    background: "#fafafa",
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#303133",
+  },
+  tableCount: {
+    fontSize: 12,
+    fontWeight: 400,
+    color: "#909399",
+  },
+  tableBody: {
+    flex: 1,
+    minHeight: 0,
+    overflow: "auto",
+    padding: 8,
+  },
+  empty: { color: "#909399", padding: 30, textAlign: "center", width: "100%" },
+  modalBackdrop: {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(0,0,0,0.5)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+  },
+  modal: {
+    background: "#fff",
+    borderRadius: 8,
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  },
+  modalHeader: { flex: "0 0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid #ebeef5", background: "#fafafa" },
+  modalTitle: { margin: 0, color: "#303133", fontSize: 16, fontWeight: 600 },
+  modalBody: { flex: 1, minHeight: 0, overflow: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 10 },
+  modalFooter: { flex: "0 0 auto", display: "flex", justifyContent: "flex-end", gap: 8, padding: "10px 0 0", borderTop: "1px solid #ebeef5", background: "#fff" },
+  modalTableScroll: { flex: 1, minHeight: 240, display: "flex", overflow: "auto", border: "1px solid #ebeef5", borderRadius: 4 },
+  importHint: { display: "grid", gap: 4, padding: 10, borderRadius: 6, background: "#f0f9eb", border: "1px solid #e1f3d8", color: "#529b2e", fontSize: 12, lineHeight: 1.6 },
+  importDrop: { display: "grid", gap: 6, placeItems: "center", textAlign: "center", border: "1px dashed #409eff", borderRadius: 6, background: "#ecf5ff", padding: 20, cursor: "pointer", color: "#409eff" },
+  modalHeaderGreen: { flex: "0 0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid #67c23a", background: "#67c23a" },
+  modalTitleWhite: { margin: 0, color: "#fff", fontSize: 16, fontWeight: 600 },
+  modalCloseWhite: { border: "1px solid rgba(255,255,255,0.5)", borderRadius: 4, padding: "5px 10px", background: "transparent", color: "#fff", fontSize: 12, cursor: "pointer" },
+  templateButton: { border: "1px solid #dcdfe6", borderRadius: 4, padding: "6px 14px", background: "#fff", color: "#606266", fontSize: 12, cursor: "pointer" },
+  modalInfoGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 6 },
+  infoItem: { display: "grid", gap: 3, padding: 8, border: "1px solid #ebeef5", borderRadius: 4, background: "#fafafa", color: "#909399", fontSize: 11 },
+  modalLogBox: { minHeight: 60, maxHeight: 100, overflow: "auto", padding: 8, borderRadius: 4, background: "#303133", color: "#c0c4cc", fontFamily: "Consolas, monospace", fontSize: 11, lineHeight: 1.5 },
+  purpleButton: button("#8e44ad"),
+  greenButton: button("#67c23a"),
+  orangeButton: button("#e6a23c"),
+  disabledButton: { ...button("#c0c4cc"), cursor: "not-allowed" },
+  secondaryButton: { border: "1px solid #dcdfe6", borderRadius: 4, padding: "6px 14px", background: "#fff", color: "#606266", fontSize: 12, cursor: "pointer" },
+  importTabs: { display: "flex", gap: 4, borderBottom: "1px solid #e4e7ed" },
+  importTab: { padding: "8px 16px", background: "#f5f7fa", border: "1px solid #e4e7ed", borderBottom: "none", borderRadius: "4px 4px 0 0", color: "#606266", fontSize: 12, cursor: "pointer" },
+  importTabActive: { padding: "8px 16px", background: "#fff", border: "1px solid #67c23a", borderBottom: "none", borderRadius: "4px 4px 0 0", color: "#67c23a", fontSize: 12, fontWeight: 600, cursor: "pointer" },
+  importPreview: { border: "1px solid #e4e7ed", borderRadius: "0 4px 4px 4px", overflow: "hidden" },
+  importPreviewHeader: { display: "flex", justifyContent: "space-between", padding: "8px 10px", background: "#f5f7fa", borderBottom: "1px solid #e4e7ed", fontSize: 12, fontWeight: 600, color: "#606266" },
+  importPreviewBody: { maxHeight: 240, overflow: "auto", padding: 8 },
 };
