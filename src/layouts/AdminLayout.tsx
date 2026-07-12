@@ -67,6 +67,15 @@ const difficultyMenuGroup: ExpandableMenuGroup = {
   ],
 };
 
+const grantMenuGroup: ExpandableMenuGroup = {
+  title: "国家助学金",
+  icon: "助",
+  items: [
+    { path: "/admin/grant", label: "助学金业务首页", mark: "助" },
+    { path: "/admin/grant/database", label: "助学金数据库", mark: "据" },
+  ],
+};
+
 const workspacePaths = new Set([
   "/admin/base-info",
   "/admin/departments",
@@ -79,11 +88,14 @@ const workspacePaths = new Set([
   "/admin/difficulty",
   "/admin/difficulty/database",
   "/admin/difficulty/enrolled",
+  "/admin/enrolled",
+  "/admin/grant",
+  "/admin/grant/database",
 ]);
 
 const pageTitles: Record<string, string> = {
   "/admin": "管理员首页",
-  ...Object.fromEntries([...baseInfoMenuGroup.items, ...accountMenuGroup.items, ...awardMenuGroup.items, ...difficultyMenuGroup.items].map((item) => [item.path, item.label])),
+  ...Object.fromEntries([...baseInfoMenuGroup.items, ...accountMenuGroup.items, ...awardMenuGroup.items, ...difficultyMenuGroup.items, ...grantMenuGroup.items].map((item) => [item.path, item.label])),
 };
 
 function MenuButton({
@@ -246,6 +258,12 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
 
           <ExpandableMenu
             group={difficultyMenuGroup}
+            currentPath={path}
+            onNavigate={onNavigate}
+          />
+
+          <ExpandableMenu
+            group={grantMenuGroup}
             currentPath={path}
             onNavigate={onNavigate}
           />

@@ -1,72 +1,47 @@
-import { useEffect, useState, type CSSProperties } from "react";
-import { getMergeBatches } from "../../db/localMergeDb";
-import type { CollegeProcessedBatch } from "../../services/types";
+import type { CSSProperties } from "react";
 
-type AdminDifficultyPageProps = {
+type AdminGrantPageProps = {
   onNavigate?: (to: string) => void;
 };
 
-export default function AdminDifficultyPage({ onNavigate }: AdminDifficultyPageProps) {
-  const [batches, setBatches] = useState<CollegeProcessedBatch[]>([]);
-  const [tab, setTab] = useState<"student" | "family">("student");
-
-  useEffect(() => {
-    getMergeBatches().then(setBatches);
-  }, []);
-
-  const studentBatches = batches.filter((b) => b.studentCount > 0);
-  const familyBatches = batches.filter((b) => b.familyCount > 0);
-  const studentTotal = studentBatches.reduce((sum, b) => sum + b.studentCount, 0);
-  const familyTotal = familyBatches.reduce((sum, b) => sum + b.familyCount, 0);
-  const collegeCount = new Set(batches.map((b) => b.collegeName)).size;
-
-  const currentBatches = tab === "student" ? studentBatches : familyBatches;
-  const currentTotal = tab === "student" ? studentTotal : familyTotal;
-
+export default function AdminGrantPage({ onNavigate }: AdminGrantPageProps) {
   return (
     <section>
       <div style={styles.hero}>
         <div>
-          <div style={styles.eyebrow}>学校管理员端 / 困难生业务</div>
-          <h1 style={styles.title}>困难生数据治理平台</h1>
-          <p style={styles.text}>管理全校困难生数据，统计学院上传情况，查看本专科信息与家庭成员信息汇总。</p>
+          <div style={styles.eyebrow}>学校管理员端 / 国家助学金</div>
+          <h1 style={styles.title}>国家助学金数据治理平台</h1>
+          <p style={styles.text}>管理全校国家助学金数据，统计学院上传情况，查看助学金申请与发放汇总。</p>
         </div>
-        <div style={styles.heroBadge}>困难生业务已启用</div>
+        <div style={styles.heroBadge}>助学金业务已启用</div>
       </div>
 
       <div style={styles.statsRow}>
         <div style={styles.statCard}>
           <span style={styles.statLabel}>已提交学院数</span>
-          <strong style={styles.statValue}>{collegeCount}</strong>
+          <strong style={styles.statValue}>0</strong>
         </div>
         <div style={{ ...styles.statCard, ...styles.statBlue }}>
-          <span style={styles.statLabel}>本专科信息</span>
-          <strong style={styles.statValue}>{studentTotal}</strong>
+          <span style={styles.statLabel}>一级助学金</span>
+          <strong style={styles.statValue}>0</strong>
         </div>
         <div style={{ ...styles.statCard, ...styles.statGreen }}>
-          <span style={styles.statLabel}>家庭成员信息</span>
-          <strong style={styles.statValue}>{familyTotal}</strong>
+          <span style={styles.statLabel}>二级助学金</span>
+          <strong style={styles.statValue}>0</strong>
+        </div>
+        <div style={{ ...styles.statCard, ...styles.statAmber }}>
+          <span style={styles.statLabel}>三级助学金</span>
+          <strong style={styles.statValue}>0</strong>
         </div>
       </div>
 
       <div style={styles.card}>
         <div style={styles.cardHeader}>
           <div style={styles.tabs}>
-            <button
-              style={tab === "student" ? styles.tabActive : styles.tab}
-              onClick={() => setTab("student")}
-            >
-              本专科信息（{studentBatches.length} 个学院，{studentTotal} 条）
-            </button>
-            <button
-              style={tab === "family" ? styles.tabActive : styles.tab}
-              onClick={() => setTab("family")}
-            >
-              家庭成员信息（{familyBatches.length} 个学院，{familyTotal} 条）
-            </button>
+            <button style={styles.tabActive}>助学金申请汇总</button>
           </div>
-          <button style={styles.primaryButton} onClick={() => onNavigate?.("/admin/difficulty/database")}>
-            进入困难生数据库
+          <button style={styles.primaryButton} onClick={() => onNavigate?.("/admin/grant/database")}>
+            进入助学金数据库
           </button>
         </div>
 
@@ -77,52 +52,21 @@ export default function AdminDifficultyPage({ onNavigate }: AdminDifficultyPageP
                 <th style={styles.th}>序号</th>
                 <th style={styles.th}>学院名称</th>
                 <th style={styles.th}>学年</th>
-                <th style={styles.th}>{tab === "student" ? "本专科信息条数" : "家庭成员信息条数"}</th>
+                <th style={styles.th}>一级助学金人数</th>
+                <th style={styles.th}>二级助学金人数</th>
+                <th style={styles.th}>三级助学金人数</th>
+                <th style={styles.th}>合计</th>
                 <th style={styles.th}>提交时间</th>
                 <th style={styles.th}>状态</th>
               </tr>
             </thead>
             <tbody>
-              {currentBatches.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={styles.empty}>
-                    暂无{tab === "student" ? "本专科信息" : "家庭成员信息"}提交数据
-                  </td>
-                </tr>
-              ) : (
-                currentBatches.map((batch, index) => (
-                  <tr key={batch.id || index}>
-                    <td style={styles.td}>{index + 1}</td>
-                    <td style={styles.td}>{batch.collegeName || "—"}</td>
-                    <td style={styles.td}>{batch.academicYear || "—"}</td>
-                    <td style={styles.td}>
-                      {tab === "student" ? batch.studentCount : batch.familyCount}
-                    </td>
-                    <td style={styles.td}>
-                      {batch.submittedAt
-                        ? new Date(batch.submittedAt).toLocaleString()
-                        : "—"}
-                    </td>
-                    <td style={styles.td}>
-                      <span style={styles.statusBadge}>已上载</span>
-                    </td>
-                  </tr>
-                ))
-              )}
+              <tr>
+                <td colSpan={9} style={styles.empty}>
+                  暂无助学金提交数据
+                </td>
+              </tr>
             </tbody>
-            {currentBatches.length > 0 && (
-              <tfoot>
-                <tr>
-                  <td colSpan={3} style={styles.tfootTd}>
-                    <strong>合计</strong>
-                  </td>
-                  <td style={styles.tfootTd}>
-                    <strong>{currentTotal}</strong>
-                  </td>
-                  <td colSpan={2} style={styles.tfootTd}></td>
-                </tr>
-              </tfoot>
-            )}
           </table>
         </div>
       </div>
@@ -141,21 +85,21 @@ export default function AdminDifficultyPage({ onNavigate }: AdminDifficultyPageP
             <span style={styles.infoNumber}>2</span>
             <div>
               <strong>学院端导入数据</strong>
-              <p>各学院上传困难生本专科信息和家庭成员信息，系统自动校验在校身份。</p>
+              <p>各学院上传国家助学金申请数据，系统自动校验在校身份和困难生资格。</p>
             </div>
           </div>
           <div style={styles.infoStep}>
             <span style={styles.infoNumber}>3</span>
             <div>
               <strong>学校端汇总统计</strong>
-              <p>在本页面查看各学院上传情况，切换标签页分别查看本专科和家庭成员数据。</p>
+              <p>在本页面查看各学院上传情况，按助学金等级统计人数。</p>
             </div>
           </div>
           <div style={styles.infoStep}>
             <span style={styles.infoNumber}>4</span>
             <div>
-              <strong>困难生数据库管理</strong>
-              <p>进入困难生数据库查看、导出和审核全校汇总数据。</p>
+              <strong>助学金数据库管理</strong>
+              <p>进入助学金数据库查看、导出和审核全校汇总数据。</p>
             </div>
           </div>
         </div>
@@ -206,6 +150,7 @@ const styles: Record<string, CSSProperties> = {
   },
   statBlue: { borderLeft: "4px solid #409eff" },
   statGreen: { borderLeft: "4px solid #67c23a" },
+  statAmber: { borderLeft: "4px solid #e6a23c" },
   statLabel: { color: "#63738a", fontSize: 13 },
   statValue: { color: "#172033", fontSize: 24 },
   card: {
@@ -223,16 +168,6 @@ const styles: Record<string, CSSProperties> = {
     borderBottom: "1px solid #e4e7ed",
   },
   tabs: { display: "flex", gap: 0 },
-  tab: {
-    padding: "8px 18px",
-    border: "1px solid #dcdfe6",
-    borderBottom: "none",
-    background: "#f5f7fa",
-    color: "#606266",
-    fontSize: 13,
-    cursor: "pointer",
-    borderRadius: "4px 4px 0 0",
-  },
   tabActive: {
     padding: "8px 18px",
     border: "1px solid #409eff",
@@ -241,7 +176,6 @@ const styles: Record<string, CSSProperties> = {
     color: "#409eff",
     fontSize: 13,
     fontWeight: 600,
-    cursor: "pointer",
     borderRadius: "4px 4px 0 0",
   },
   primaryButton: {
@@ -266,25 +200,6 @@ const styles: Record<string, CSSProperties> = {
     position: "sticky",
     top: 0,
     zIndex: 1,
-  },
-  td: {
-    border: "1px solid #cbd5e1",
-    padding: "8px 10px",
-    textAlign: "center",
-    whiteSpace: "nowrap",
-  },
-  tfootTd: {
-    border: "1px solid #cbd5e1",
-    padding: "8px 10px",
-    textAlign: "center",
-    background: "#f5f7fa",
-  },
-  statusBadge: {
-    padding: "3px 10px",
-    borderRadius: 3,
-    background: "#f0f9eb",
-    color: "#67c23a",
-    fontSize: 12,
   },
   empty: {
     padding: 40,
