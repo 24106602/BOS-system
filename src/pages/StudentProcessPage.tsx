@@ -311,7 +311,6 @@ export default function StudentProcessPage({
             </button>
           </>
         )}
-        {onViewDifficultyStudents && <button style={pageStyles.toolbarButton} onClick={onViewDifficultyStudents}>查看困难生明细</button>}
       </div>
 
       <div style={pageStyles.statusSection}>
