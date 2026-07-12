@@ -98,7 +98,14 @@ function ExpandableMenu({
   currentPath: string;
   onNavigate: (to: string) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(group.defaultOpen ?? false);
+  const storageKey = `menu_${group.title}_open`;
+  const [isOpen, setIsOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved !== null) return saved === "true";
+    } catch {}
+    return group.defaultOpen ?? false;
+  });
   const isActive = group.items.some(
     (item) =>
       currentPath === item.path ||
@@ -106,7 +113,11 @@ function ExpandableMenu({
   );
 
   const handleTitleClick = () => {
-    setIsOpen(!isOpen);
+    const next = !isOpen;
+    setIsOpen(next);
+    try {
+      localStorage.setItem(storageKey, String(next));
+    } catch {}
   };
 
   return (
