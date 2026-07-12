@@ -8,12 +8,14 @@ import {
   withAcademicYear,
 } from "./utils/academicYear";
 import DatabasePage from "./pages/DatabasePage";
+import EnrolledStudentDatabasePage from "./pages/EnrolledStudentDatabasePage";
 import MergePage from "./pages/MergePage";
 import StudentProcessPage from "./pages/StudentProcessPage";
 import FamilyProcessPage from "./pages/FamilyProcessPage";
 import { exportFamilyExcel, processFamilyRows } from "./services/familyProcessor";
 import { exportStudentExcel, processStudentRows } from "./services/studentProcessor";
 import { syncCollegeStudentsToSupabase } from "./services/difficultyStudentService";
+import { verifyEnrolledStudent, getEnrolledStudentCount } from "./db/localEnrolledStudentDb";
 
 import {
   findHeaderRowIndex,
@@ -209,11 +211,11 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   const [highlightCellMap, setHighlightCellMap] = useState<Record<string, HighlightInfo>>({});
   const [disqualifiedRows, setDisqualifiedRows] = useState<DisqualifiedRow[]>([]);
   const [logs, setLogs] = useState<LogItem[]>([]);
-  const [status, setStatus] = useState("请先上传模板表");
+  const [status, setStatus] = useState("请上传数据");
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysis, setAnalysis] = useState<Record<string, number>>({});
   const [aiReport, setAiReport] = useState("");
-  const [activeModule, setActiveModule] = useState<"processing" | "database" | "merge">("processing");
+  const [activeModule, setActiveModule] = useState<"processing" | "database" | "merge" | "enrolled">("processing");
   const [activeProcessingPanel, setActiveProcessingPanel] = useState<"student" | "family">(fixedProcessingPanel || "student");
   const [stats, setStats] = useState<ProcessingStats>(initialStats);
 
@@ -718,15 +720,15 @@ const askDeepSeek = async (prompt: string) => {
       return;
     }
     if (!studentTemplateInfo?.ok || !studentTemplateParseResult) {
-      alert("请先上传并通过校验的困难生本专科模板表");
+      alert("数据未正确解析，请重新上传");
       return;
     }
     if (!studentDataTemplateCheck?.ok) {
-      alert("数据表与模板表不匹配。请确认上传的是同一个困难生本专科信息模板。");
+      alert("数据格式校验未通过，请检查表头是否正确。");
       return;
     }
     if (activeTemplateFields.length === 0) {
-      alert("请先上传模板");
+      alert("字段列表为空，请重新上传");
       return;
     }
     if (activeSourceRows.length === 0) {
@@ -828,6 +830,52 @@ const askDeepSeek = async (prompt: string) => {
 
       if (collegeMismatchCount > 0) {
         pushLog("error", `检测到 ${collegeMismatchCount} 行学院与当前账号不一致，已进入不通过名单。`);
+      }
+
+      let enrolledMismatchCount = 0;
+      const idCardFieldIndex = activeTemplateFields.findIndex((field) => /身份证|身份证件|证件/.test(field));
+      const nameFieldIndex = activeTemplateFields.findIndex((field) => /姓名/.test(field));
+      const studentIdFieldIndex = activeTemplateFields.findIndex((field) => /学号|学籍号/.test(field));
+
+      if (idCardFieldIndex >= 0 || studentIdFieldIndex >= 0) {
+        if (getEnrolledStudentCount() > 0) {
+          result.processedData.forEach((row, index) => {
+            if (failedRowNumbers.has(index + 1)) return;
+            const studentId = studentIdFieldIndex >= 0 ? String(row[activeTemplateFields[studentIdFieldIndex]] ?? "").trim() : "";
+            const idCard = idCardFieldIndex >= 0 ? String(row[activeTemplateFields[idCardFieldIndex]] ?? "").trim() : "";
+            const name = nameFieldIndex >= 0 ? String(row[activeTemplateFields[nameFieldIndex]] ?? "").trim() : "";
+            const verification = verifyEnrolledStudent(studentId, idCard, name);
+            if (!verification.verified) {
+              enrolledMismatchCount += 1;
+              const highlightCol = idCardFieldIndex >= 0 ? idCardFieldIndex : 0;
+              nextHighlightCellMap[`${index}_${highlightCol}`] = {
+                color: "red",
+                reason: verification.reason || "未在在校生数据库中找到",
+              };
+              nextErrorReports.push({
+                rowIndex: index + 1,
+                fieldName: idCardFieldIndex >= 0 ? activeTemplateFields[idCardFieldIndex] : activeTemplateFields[0],
+                originalValue: idCard || studentId || "",
+                fixedValue: idCard || studentId || "",
+                issueType: "在校生校验失败",
+                action: verification.reason || "未在在校生数据库中找到",
+              });
+              if (!failedRowNumbers.has(index + 1)) {
+                failedRowNumbers.add(index + 1);
+                nextDisqualifiedRows.push({
+                  rowNumber: index + 1,
+                  name: nameFieldIndex >= 0 ? String(row[activeTemplateFields[nameFieldIndex]] ?? "") : "",
+                  idCard: idCard,
+                  income: "",
+                  reason: verification.reason || "未在在校生数据库中找到，请核对学号或身份证号+姓名",
+                });
+              }
+            }
+          });
+          pushLog("info", `在校生校验：通过 ${result.processedData.length - enrolledMismatchCount} 人，未通过 ${enrolledMismatchCount} 人`);
+        } else {
+          pushLog("warning", "在校生数据库未配置，已跳过在校生校验");
+        }
       }
 
       const finalFailRows = nextDisqualifiedRows;
@@ -1465,6 +1513,13 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
             </button>
 
             <button
+              onClick={() => setActiveModule("enrolled")}
+              style={activeModule === "enrolled" ? styles.activeModule : styles.inactiveModule}
+            >
+              在校生数据库
+            </button>
+
+            <button
               onClick={() => setActiveModule("merge")}
               style={activeModule === "merge" ? styles.activeModule : styles.inactiveModule}
             >
@@ -1477,6 +1532,8 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
       </div>
 
       {activeModule === "database" && <DatabasePage />}
+
+      {activeModule === "enrolled" && <EnrolledStudentDatabasePage />}
 
       {activeModule === "merge" && <MergePage />}
 
