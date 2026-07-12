@@ -9,6 +9,9 @@ import AdminBaseInfoPage from "./pages/admin/AdminBaseInfoPage";
 import AdminCollegesPage from "./pages/admin/AdminCollegesPage";
 import AdminDepartmentsPage from "./pages/admin/AdminDepartmentsPage";
 import AdminDifficultyPage from "./pages/admin/AdminDifficultyPage";
+import AdminStudentInfoPage from "./pages/admin/AdminStudentInfoPage";
+import AdminFamilyInfoPage from "./pages/admin/AdminFamilyInfoPage";
+import AdminDifficultyGuidePage from "./pages/admin/AdminDifficultyGuidePage";
 import AdminGrantPage from "./pages/admin/AdminGrantPage";
 import AdminGrantDatabasePage from "./pages/admin/AdminGrantDatabasePage";
 import DatabasePage from "./pages/DatabasePage";
@@ -52,7 +55,10 @@ const normalizePath = (path: string) => {
     "/admin/awards/inspirational",
     "/admin/awards/shanghai",
     "/admin/difficulty",
+    "/admin/difficulty/student",
+    "/admin/difficulty/family",
     "/admin/difficulty/database",
+    "/admin/difficulty/guide",
     "/admin/difficulty/enrolled",
     "/admin/enrolled",
     "/admin/grant",
@@ -260,6 +266,12 @@ function AppContent() {
           <AdminShanghaiScholarshipPage />
         ) : pagePath === "/admin/difficulty" ? (
           <AdminDifficultyPage onNavigate={navigate} />
+        ) : pagePath === "/admin/difficulty/student" ? (
+          <AdminStudentInfoPage onNavigate={navigate} />
+        ) : pagePath === "/admin/difficulty/family" ? (
+          <AdminFamilyInfoPage onNavigate={navigate} />
+        ) : pagePath === "/admin/difficulty/guide" ? (
+          <AdminDifficultyGuidePage onNavigate={navigate} />
         ) : pagePath === "/admin/difficulty/database" ? (
           <DatabasePage />
         ) : pagePath === "/admin/difficulty/enrolled" || pagePath === "/admin/enrolled" ? (

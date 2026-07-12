@@ -63,7 +63,10 @@ const difficultyMenuGroup: ExpandableMenuGroup = {
   icon: "困",
   items: [
     { path: "/admin/difficulty", label: "困难生业务首页", mark: "困" },
+    { path: "/admin/difficulty/student", label: "本专科信息", mark: "本" },
+    { path: "/admin/difficulty/family", label: "家庭成员信息", mark: "家" },
     { path: "/admin/difficulty/database", label: "困难生数据库", mark: "库" },
+    { path: "/admin/difficulty/guide", label: "业务手册", mark: "手" },
   ],
 };
 
@@ -86,7 +89,10 @@ const workspacePaths = new Set([
   "/admin/awards/inspirational",
   "/admin/awards/shanghai",
   "/admin/difficulty",
+  "/admin/difficulty/student",
+  "/admin/difficulty/family",
   "/admin/difficulty/database",
+  "/admin/difficulty/guide",
   "/admin/difficulty/enrolled",
   "/admin/enrolled",
   "/admin/grant",
