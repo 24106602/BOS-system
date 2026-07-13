@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ChangeEvent } from "react";
 import * as XLSX from "xlsx-js-style";
 import type { EnrolledStudentRecord } from "../types/enrolledStudent";
 import {
@@ -19,6 +19,7 @@ const columnAliases = {
   className: ["班级", "行政班", "班级名称"],
   gender: ["性别", "学生性别"],
   grade: ["年级", "入学年级", "届别"],
+  academicYear: ["学年", "学年度", "academic_year", "学年学期"],
 };
 
 function normalizeHeader(value: string) {
@@ -43,11 +44,20 @@ function pickCell(row: Record<string, unknown>, aliases: string[]) {
   return String(fuzzy?.[1] ?? "").trim();
 }
 
+function getCurrentAcademicYear(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  return month >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+}
+
 function parseEnrolledStudentsFromRows(
   rows: Record<string, unknown>[],
-  sourceFile: string
+  sourceFile: string,
+  defaultAcademicYear?: string
 ): EnrolledStudentRecord[] {
   const importedAt = new Date().toLocaleString();
+  const currentYear = defaultAcademicYear || getCurrentAcademicYear();
   return rows
     .map((row) => {
       const base = {
@@ -60,6 +70,7 @@ function parseEnrolledStudentsFromRows(
         className: pickCell(row, columnAliases.className),
         gender: pickCell(row, columnAliases.gender),
         grade: pickCell(row, columnAliases.grade),
+        academicYear: pickCell(row, columnAliases.academicYear) || currentYear,
         sourceFile,
         importedAt,
       };
@@ -69,9 +80,14 @@ function parseEnrolledStudentsFromRows(
     .filter(Boolean) as EnrolledStudentRecord[];
 }
 
+const PAGE_SIZE = 50;
+
 export default function EnrolledStudentDatabasePage() {
   const fileRef = useRef<HTMLInputElement>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [students, setStudents] = useState<EnrolledStudentRecord[]>([]);
+  const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear());
+  const [page, setPage] = useState(1);
   const [filters, setFilters] = useState({
     name: "",
     studentId: "",
@@ -85,14 +101,35 @@ export default function EnrolledStudentDatabasePage() {
     getAllEnrolledStudents().then(setStudents);
   }, []);
 
-  const filtered = students.filter((s) => {
-    if (filters.name && !s.name.includes(filters.name)) return false;
-    if (filters.studentId && !s.studentId.includes(filters.studentId)) return false;
-    if (filters.idCard && !s.idCard.includes(filters.idCard)) return false;
-    if (filters.college && !s.college.includes(filters.college)) return false;
-    if (filters.major && !s.major.includes(filters.major)) return false;
-    return true;
-  });
+  useEffect(() => {
+    setPage(1);
+  }, [academicYear, filters.name, filters.studentId, filters.idCard, filters.college, filters.major]);
+
+  const yearOptions = useMemo(() => {
+    const years = new Set(students.map((s) => s.academicYear).filter(Boolean));
+    const current = getCurrentAcademicYear();
+    if (!years.has(current)) years.add(current);
+    return Array.from(years).sort().reverse();
+  }, [students]);
+
+  const filtered = useMemo(() => {
+    return students.filter((s) => {
+      if (academicYear && s.academicYear !== academicYear) return false;
+      if (filters.name && !s.name.includes(filters.name)) return false;
+      if (filters.studentId && !s.studentId.includes(filters.studentId)) return false;
+      if (filters.idCard && !s.idCard.includes(filters.idCard)) return false;
+      if (filters.college && !s.college.includes(filters.college)) return false;
+      if (filters.major && !s.major.includes(filters.major)) return false;
+      return true;
+    });
+  }, [students, academicYear, filters]);
+
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const start = total === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const end = Math.min(currentPage * PAGE_SIZE, total);
+  const pageData = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
@@ -109,15 +146,15 @@ export default function EnrolledStudentDatabasePage() {
         setImportStatus("");
         return;
       }
-      const parsed = parseEnrolledStudentsFromRows(rows, file.name);
+      const parsed = parseEnrolledStudentsFromRows(rows, file.name, academicYear);
       if (parsed.length === 0) {
         alert("未能识别到有效学生数据，请检查表头");
         setImportStatus("");
         return;
       }
-      const total = await addEnrolledStudents(parsed);
+      const totalCount = await addEnrolledStudents(parsed);
       setStudents(await getAllEnrolledStudents());
-      setImportStatus(`已导入 ${parsed.length} 条，现有 ${total} 条`);
+      setImportStatus(`已导入 ${parsed.length} 条，现有 ${totalCount} 条`);
       alert(`导入成功！新增 ${parsed.length} 条在校生数据`);
     } catch (err) {
       console.error(err);
@@ -129,7 +166,7 @@ export default function EnrolledStudentDatabasePage() {
   };
 
   const handleClear = async () => {
-    if (!confirm("确定要清空在校生数据库吗？此操作不可撤销。")) return;
+    if (!confirm("确定要清空当前学年的在校生数据吗？此操作不可撤销。")) return;
     await clearEnrolledStudents();
     setStudents([]);
     setImportStatus("");
@@ -144,26 +181,35 @@ export default function EnrolledStudentDatabasePage() {
       学号: s.studentId,
       姓名: s.name,
       身份证号: s.idCard,
+      性别: s.gender,
       学院: s.college,
       院系: s.department,
       专业: s.major,
       班级: s.className,
-      性别: s.gender,
       年级: s.grade,
+      学年: s.academicYear,
     }));
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "在校生");
-    XLSX.writeFile(workbook, "在校生数据库.xlsx");
+    XLSX.writeFile(workbook, `在校生数据库_${academicYear}.xlsx`);
   };
 
   const handleVerify = async () => {
-    const total = await getEnrolledStudentCount();
-    if (total === 0) {
+    const count = await getEnrolledStudentCount();
+    if (count === 0) {
       alert("在校生数据库为空，请先导入在校生数据");
       return;
     }
-    alert(`在校生数据库共有 ${total} 条记录\n\n校验规则：\n1. 优先按学号匹配\n2. 其次按身份证号+姓名匹配\n3. 匹配成功且姓名一致才视为在校\n\n学院端导入困难生数据时将自动校验`);
+    alert(`在校生数据库共有 ${count} 条记录\n\n校验规则：\n1. 优先按学号匹配\n2. 其次按身份证号+姓名匹配\n3. 匹配成功且姓名一致才视为在校\n\n学院端导入困难生数据时将自动校验`);
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!tableRef.current) return;
+    const target = tableRef.current;
+    if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      target.scrollLeft += e.deltaY;
+    }
   };
 
   return (
@@ -175,7 +221,7 @@ export default function EnrolledStudentDatabasePage() {
           <p style={styles.desc}>维护全校在校生基础信息，学院端导入困难生数据时将自动校验学生是否在校</p>
         </div>
         <div style={styles.headerActions}>
-          <span style={styles.countBadge}>共 {students.length} 条</span>
+          <span style={styles.countBadge}>共 {total} 人</span>
         </div>
       </div>
 
@@ -212,6 +258,17 @@ export default function EnrolledStudentDatabasePage() {
         )}
 
         <div style={styles.filterRow}>
+          <label style={styles.filterField}>
+            <span>学年度</span>
+            <select
+              value={academicYear}
+              onChange={(e) => setAcademicYear(e.target.value)}
+            >
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </label>
           <label style={styles.filterField}>
             <span>姓名</span>
             <input
@@ -254,50 +311,94 @@ export default function EnrolledStudentDatabasePage() {
           </label>
         </div>
 
-        <div style={styles.tableWrap}>
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={styles.th}>学号</th>
-                <th style={styles.th}>姓名</th>
-                <th style={styles.th}>身份证号</th>
-                <th style={styles.th}>性别</th>
-                <th style={styles.th}>学院</th>
-                <th style={styles.th}>院系</th>
-                <th style={styles.th}>专业</th>
-                <th style={styles.th}>班级</th>
-                <th style={styles.th}>年级</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
+        <div style={styles.tableContainer}>
+          <div
+            ref={tableRef}
+            style={styles.tableWrap}
+            onWheel={handleWheel}
+          >
+            <table style={styles.table}>
+              <thead>
                 <tr>
-                  <td colSpan={9} style={styles.empty}>
-                    {students.length === 0
-                      ? "暂无在校生数据，请点击上方按钮导入"
-                      : "没有匹配的结果"}
-                  </td>
+                  <th style={styles.th}>学号</th>
+                  <th style={styles.th}>姓名</th>
+                  <th style={styles.th}>身份证号</th>
+                  <th style={styles.th}>性别</th>
+                  <th style={styles.th}>学院</th>
+                  <th style={styles.th}>院系</th>
+                  <th style={styles.th}>专业</th>
+                  <th style={styles.th}>班级</th>
+                  <th style={styles.th}>年级</th>
+                  <th style={styles.th}>学年</th>
                 </tr>
-              ) : (
-                filtered.slice(0, 100).map((student, index) => (
-                  <tr key={index}>
-                    <td style={styles.td}>{student.studentId}</td>
-                    <td style={styles.td}>{student.name}</td>
-                    <td style={styles.td}>{student.idCard}</td>
-                    <td style={styles.td}>{student.gender}</td>
-                    <td style={styles.td}>{student.college}</td>
-                    <td style={styles.td}>{student.department}</td>
-                    <td style={styles.td}>{student.major}</td>
-                    <td style={styles.td}>{student.className}</td>
-                    <td style={styles.td}>{student.grade}</td>
+              </thead>
+              <tbody>
+                {pageData.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} style={styles.empty}>
+                      {students.length === 0
+                        ? "暂无在校生数据，请点击上方按钮导入"
+                        : "没有匹配的结果"}
+                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-          {filtered.length > 100 && (
-            <div style={styles.moreInfo}>共 {filtered.length} 条，仅显示前 100 条，请使用筛选条件缩小范围</div>
-          )}
+                ) : (
+                  pageData.map((student, index) => (
+                    <tr key={(currentPage - 1) * PAGE_SIZE + index}>
+                      <td style={styles.td}>{student.studentId}</td>
+                      <td style={styles.td}>{student.name}</td>
+                      <td style={styles.td}>{student.idCard}</td>
+                      <td style={styles.td}>{student.gender}</td>
+                      <td style={styles.td}>{student.college}</td>
+                      <td style={styles.td}>{student.department}</td>
+                      <td style={styles.td}>{student.major}</td>
+                      <td style={styles.td}>{student.className}</td>
+                      <td style={styles.td}>{student.grade}</td>
+                      <td style={styles.td}>{student.academicYear}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div style={styles.paginationBar}>
+            <div style={styles.paginationInfo}>
+              共 {total} 人，当前显示第 {start} 到 {end} 人
+            </div>
+            <div style={styles.paginationControls}>
+              <button
+                style={styles.pageButton}
+                onClick={() => setPage(1)}
+                disabled={currentPage <= 1}
+              >
+                首页
+              </button>
+              <button
+                style={styles.pageButton}
+                onClick={() => setPage(currentPage - 1)}
+                disabled={currentPage <= 1}
+              >
+                上一页
+              </button>
+              <span style={styles.pageText}>
+                第 {currentPage} / {totalPages} 页
+              </span>
+              <button
+                style={styles.pageButton}
+                onClick={() => setPage(currentPage + 1)}
+                disabled={currentPage >= totalPages}
+              >
+                下一页
+              </button>
+              <button
+                style={styles.pageButton}
+                onClick={() => setPage(totalPages)}
+                disabled={currentPage >= totalPages}
+              >
+                末页
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -353,6 +454,10 @@ const styles: Record<string, CSSProperties> = {
     borderRadius: 6,
     border: "1px solid #e4e7ed",
     overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
+    height: "calc(100vh - 180px)",
+    minHeight: 400,
   },
   cardHeader: {
     display: "flex",
@@ -361,6 +466,7 @@ const styles: Record<string, CSSProperties> = {
     padding: "12px 16px",
     background: "#f5f7fa",
     borderBottom: "1px solid #e4e7ed",
+    flexShrink: 0,
   },
   cardTitle: {
     fontSize: 14,
@@ -405,6 +511,7 @@ const styles: Record<string, CSSProperties> = {
     color: "#67c23a",
     fontSize: 12,
     borderBottom: "1px solid #e1f3d8",
+    flexShrink: 0,
   },
   filterRow: {
     display: "flex",
@@ -412,6 +519,7 @@ const styles: Record<string, CSSProperties> = {
     padding: "12px 16px",
     borderBottom: "1px solid #e4e7ed",
     flexWrap: "wrap",
+    flexShrink: 0,
   },
   filterField: {
     display: "flex",
@@ -421,10 +529,17 @@ const styles: Record<string, CSSProperties> = {
     color: "#606266",
     minWidth: 140,
   },
+  tableContainer: {
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
+    minHeight: 0,
+    overflow: "hidden",
+  },
   tableWrap: {
+    flex: 1,
     overflow: "auto",
-    maxHeight: "calc(100vh - 380px)",
-    minHeight: 300,
+    minHeight: 0,
   },
   table: {
     width: "100%",
@@ -439,7 +554,7 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
     position: "sticky",
     top: 0,
-    zIndex: 1,
+    zIndex: 2,
   },
   td: {
     border: "1px solid #cbd5e1",
@@ -452,12 +567,37 @@ const styles: Record<string, CSSProperties> = {
     textAlign: "center",
     color: "#909399",
   },
-  moreInfo: {
+  paginationBar: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: "10px 16px",
-    textAlign: "center",
-    color: "#909399",
-    fontSize: 12,
-    borderTop: "1px solid #e4e7ed",
     background: "#f5f7fa",
+    borderTop: "1px solid #e4e7ed",
+    flexShrink: 0,
+  },
+  paginationInfo: {
+    fontSize: 12,
+    color: "#606266",
+    fontWeight: 500,
+  },
+  paginationControls: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+  },
+  pageButton: {
+    padding: "4px 10px",
+    border: "1px solid #dcdfe6",
+    borderRadius: 3,
+    background: "#fff",
+    color: "#606266",
+    fontSize: 12,
+    cursor: "pointer",
+  },
+  pageText: {
+    fontSize: 12,
+    color: "#606266",
+    padding: "0 6px",
   },
 };

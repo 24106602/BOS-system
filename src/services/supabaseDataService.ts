@@ -46,6 +46,7 @@ export async function saveEnrolledStudentsToCloud(
     class_name: s.className || null,
     gender: s.gender || null,
     grade: s.grade || null,
+    academic_year: s.academicYear || null,
     source_file: s.sourceFile || null,
   }));
 
@@ -77,6 +78,7 @@ export async function addEnrolledStudentsToCloud(
       class_name: s.className || null,
       gender: s.gender || null,
       grade: s.grade || null,
+      academic_year: s.academicYear || null,
       source_file: s.sourceFile || null,
     }));
 
@@ -346,6 +348,7 @@ function mapEnrolledRow(row: Record<string, unknown>): EnrolledStudentRecord {
     className: String(row.class_name ?? ""),
     gender: String(row.gender ?? ""),
     grade: String(row.grade ?? ""),
+    academicYear: String(row.academic_year ?? ""),
     sourceFile: String(row.source_file ?? ""),
     importedAt: String(row.created_at ?? ""),
   };

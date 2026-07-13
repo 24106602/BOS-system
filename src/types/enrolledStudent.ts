@@ -8,6 +8,7 @@ export type EnrolledStudentRecord = {
   className: string;
   gender: string;
   grade: string;
+  academicYear: string;
   sourceFile: string;
   importedAt: string;
 };
