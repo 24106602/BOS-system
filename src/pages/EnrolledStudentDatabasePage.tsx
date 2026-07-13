@@ -82,7 +82,7 @@ export default function EnrolledStudentDatabasePage() {
   const [importStatus, setImportStatus] = useState("");
 
   useEffect(() => {
-    setStudents(getAllEnrolledStudents());
+    getAllEnrolledStudents().then(setStudents);
   }, []);
 
   const filtered = students.filter((s) => {
@@ -115,8 +115,8 @@ export default function EnrolledStudentDatabasePage() {
         setImportStatus("");
         return;
       }
-      const total = addEnrolledStudents(parsed);
-      setStudents(getAllEnrolledStudents());
+      const total = await addEnrolledStudents(parsed);
+      setStudents(await getAllEnrolledStudents());
       setImportStatus(`已导入 ${parsed.length} 条，现有 ${total} 条`);
       alert(`导入成功！新增 ${parsed.length} 条在校生数据`);
     } catch (err) {
@@ -128,9 +128,9 @@ export default function EnrolledStudentDatabasePage() {
     }
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
     if (!confirm("确定要清空在校生数据库吗？此操作不可撤销。")) return;
-    clearEnrolledStudents();
+    await clearEnrolledStudents();
     setStudents([]);
     setImportStatus("");
   };
@@ -157,8 +157,8 @@ export default function EnrolledStudentDatabasePage() {
     XLSX.writeFile(workbook, "在校生数据库.xlsx");
   };
 
-  const handleVerify = () => {
-    const total = getEnrolledStudentCount();
+  const handleVerify = async () => {
+    const total = await getEnrolledStudentCount();
     if (total === 0) {
       alert("在校生数据库为空，请先导入在校生数据");
       return;
