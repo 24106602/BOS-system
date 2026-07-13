@@ -33,7 +33,7 @@ type StudentProcessPageProps = {
   onAcademicYearChange: (year: string) => void;
   studentCollegeName: string;
   stats: ProcessingStats;
-  renderTable: (rows: Record<string, unknown>[] | DisqualifiedRow[], dataType: "student" | "family", academicYear?: string, collegeName?: string) => ReactNode;
+  renderTable: (rows: Record<string, unknown>[] | DisqualifiedRow[], dataType: "student" | "family", academicYear?: string, collegeName?: string, pagination?: { currentPage: number; pageSize: number; total: number }) => ReactNode;
   processedData: Record<string, unknown>[];
   disqualifiedRows: DisqualifiedRow[];
   logs: LogItem[];
@@ -334,14 +334,15 @@ export default function StudentProcessPage({
         </div>
         <div style={pageStyles.tableBody}>
           <div style={pageStyles.tableScrollWrapper}>
-            {renderTable(paginatedRows, "student", academicYear, studentCollegeName)}
+            {renderTable(filteredRows, "student", academicYear, studentCollegeName, {
+              currentPage,
+              pageSize,
+              total: filteredRows.length,
+            })}
           </div>
         </div>
         {filteredRows.length > 0 && (
           <div style={pageStyles.tableFooter}>
-            <span style={pageStyles.paginationInfo}>
-              共 {filteredRows.length} 条，当前显示第 {(currentPage - 1) * pageSize + 1} 到 {Math.min(currentPage * pageSize, filteredRows.length)} 条
-            </span>
             <div style={pageStyles.pagination}>
               <button
                 style={currentPage === 1 ? pageStyles.paginationButtonDisabled : pageStyles.paginationButton}

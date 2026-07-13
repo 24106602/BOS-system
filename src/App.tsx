@@ -1472,46 +1472,83 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
     data: Record<string, unknown>[] | DisqualifiedRow[] | FamilyReviewRow[],
     dataType: "student" | "family" = "student",
     academicYearValue?: string,
-    collegeNameValue?: string
+    collegeNameValue?: string,
+    pagination?: {
+      currentPage: number;
+      pageSize: number;
+      total: number;
+    }
   ) => {
     const templateFields = dataType === "student" ? DIFFICULTY_STUDENT_TEMPLATE_FIELDS : DIFFICULTY_FAMILY_TEMPLATE_FIELDS;
     const extraColumns = ["学年", "学院"];
     const columns = [...extraColumns, ...templateFields];
 
+    const displayData = pagination
+      ? data.slice((pagination.currentPage - 1) * pagination.pageSize, pagination.currentPage * pagination.pageSize)
+      : data.slice(0, 30);
+
+    const total = pagination?.total || data.length;
+    const currentPage = pagination?.currentPage || 1;
+    const pageSize = pagination?.pageSize || 30;
+    const startNum = (currentPage - 1) * pageSize + 1;
+    const endNum = Math.min(currentPage * pageSize, total);
+
     return (
-      <div style={styles.tableWrap}>
-        <table style={styles.table}>
-          <thead>
-            <tr>
-              {columns.map((col) => (
-                <th key={col} style={styles.th}>{col}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.length === 0 ? (
+      <div style={styles.tableContainer}>
+        <div style={styles.tableWrap}>
+          <table style={styles.table}>
+            <thead>
               <tr>
-                <td colSpan={columns.length} style={styles.empty}>暂无数据</td>
+                {columns.map((col) => (
+                  <th key={col} style={styles.th}>{col}</th>
+                ))}
               </tr>
-            ) : (
-              data.slice(0, 30).map((row, index) => {
-                const rowData = row as Record<string, unknown>;
-                return (
-                  <tr key={index}>
-                    <td style={styles.td}>{rowData["学年"] || rowData["academic_year"] || academicYearValue || academicYear || "-"}</td>
-                    <td style={styles.td}>{rowData["学院"] || rowData["college_name"] || rowData["_college"] || collegeNameValue || "-"}</td>
-                    {templateFields.map((field) => {
-                      const value = dataType === "student"
-                        ? getDifficultyTemplateValue(rowData, field)
-                        : getFamilyTemplateValue(rowData, field);
-                      return <td key={field} style={styles.td}>{value || "-"}</td>;
-                    })}
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {data.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.length} style={styles.emptyContainer}>
+                    <div style={styles.emptyContent}>
+                      <div style={styles.emptyIcon}>
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+                          <polyline points="14 2 14 8 20 8"/>
+                          <line x1="16" y1="13" x2="8" y2="13"/>
+                          <line x1="16" y1="17" x2="8" y2="17"/>
+                          <polyline points="10 9 9 9 8 9"/>
+                        </svg>
+                      </div>
+                      <div style={styles.emptyText}>暂无数据</div>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                displayData.map((row, index) => {
+                  const rowData = row as Record<string, unknown>;
+                  return (
+                    <tr key={index}>
+                      <td style={styles.td}>{rowData["学年"] || rowData["academic_year"] || academicYearValue || academicYear || "-"}</td>
+                      <td style={styles.td}>{rowData["学院"] || rowData["college_name"] || rowData["_college"] || collegeNameValue || "-"}</td>
+                      {templateFields.map((field) => {
+                        const value = dataType === "student"
+                          ? getDifficultyTemplateValue(rowData, field)
+                          : getFamilyTemplateValue(rowData, field);
+                        return <td key={field} style={styles.td}>{value || "-"}</td>;
+                      })}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+        {data.length > 0 && (
+          <div style={styles.tableFooter}>
+            <span style={styles.paginationInfo}>
+              共 {total} 条，当前显示第 {startNum} 到 {endNum} 条
+            </span>
+          </div>
+        )}
       </div>
     );
   };
@@ -1940,6 +1977,42 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "8px 10px",
     textAlign: "center",
     whiteSpace: "nowrap",
+  },
+  tableContainer: {
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
+    minHeight: "300px",
+  },
+  emptyContainer: {
+    padding: "60px 20px",
+    textAlign: "center",
+    background: "#fafafa",
+  },
+  emptyContent: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyIcon: {
+    marginBottom: "16px",
+    opacity: 0.6,
+  },
+  emptyText: {
+    color: "#909399",
+    fontSize: "14px",
+  },
+  tableFooter: {
+    padding: "10px 12px",
+    background: "#f8fafc",
+    borderTop: "1px solid #cbd5e1",
+    borderBottomLeftRadius: "6px",
+    borderBottomRightRadius: "6px",
+  },
+  paginationInfo: {
+    color: "#64748b",
+    fontSize: "12px",
   },
   problemItem: {
     background: "#fff1f2",

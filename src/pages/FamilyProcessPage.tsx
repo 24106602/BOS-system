@@ -21,7 +21,7 @@ type FamilyProcessPageProps = {
   onAcademicYearChange: (year: string) => void;
   familyCollegeName: string;
   familyStats: FamilyProcessingStats;
-  renderTable: (rows: Record<string, unknown>[] | FamilyReviewRow[], dataType: "student" | "family", academicYear?: string, collegeName?: string) => ReactNode;
+  renderTable: (rows: Record<string, unknown>[] | FamilyReviewRow[], dataType: "student" | "family", academicYear?: string, collegeName?: string, pagination?: { currentPage: number; pageSize: number; total: number }) => ReactNode;
   familyProcessedData: Record<string, unknown>[];
   familyReviewRows: FamilyReviewRow[];
   familyLogs: LogItem[];
@@ -56,6 +56,9 @@ export default function FamilyProcessPage({
 }: FamilyProcessPageProps) {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [importFileName, setImportFileName] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 30;
+  const totalPages = Math.max(1, Math.ceil(familyProcessedData.length / pageSize));
 
   const failedRowNumbers = new Set(familyReviewRows.map((row) => row.rowNumber));
   const passedRows = familyProcessedData.filter((_, index) => !failedRowNumbers.has(index + 1));
@@ -158,10 +161,33 @@ export default function FamilyProcessPage({
 
       <section className="bos-table-card">
         <div className="bos-table-card-body">
-          {renderTable(familyProcessedData, "family", academicYear, familyCollegeName)}
+          {renderTable(familyProcessedData, "family", academicYear, familyCollegeName, {
+            currentPage,
+            pageSize,
+            total: familyProcessedData.length,
+          })}
         </div>
         <div className="bos-table-card-foot">
           <span>显示 {familyProcessedData.length} 条数据</span>
+          {familyProcessedData.length > 0 && (
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginLeft: "auto" }}>
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(currentPage - 1)}
+                style={{ padding: "4px 12px", border: "1px solid #dcdfe6", borderRadius: "4px", cursor: currentPage === 1 ? "not-allowed" : "pointer", fontSize: "12px" }}
+              >
+                上一页
+              </button>
+              <span style={{ fontSize: "12px", color: "#606266" }}>第 {currentPage} / {totalPages} 页</span>
+              <button
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(currentPage + 1)}
+                style={{ padding: "4px 12px", border: "1px solid #dcdfe6", borderRadius: "4px", cursor: currentPage === totalPages ? "not-allowed" : "pointer", fontSize: "12px" }}
+              >
+                下一页
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
