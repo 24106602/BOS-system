@@ -145,8 +145,7 @@ export default function FamilyProcessPage({
         </div>
       </AdminCard>
 
-      {familyProcessedData.length > 0 && (
-        <section className="bos-table-card">
+      <section className="bos-table-card">
           <div className="bos-table-card-head">
             <h2>家庭成员数据表</h2>
             <span>显示 {familyProcessedData.length} 条</span>
@@ -155,7 +154,6 @@ export default function FamilyProcessPage({
             {renderTable(familyProcessedData, "family", academicYear, familyCollegeName)}
           </div>
         </section>
-      )}
 
       {familyReviewRows.length > 0 && (
         <AdminCard

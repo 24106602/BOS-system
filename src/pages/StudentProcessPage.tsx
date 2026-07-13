@@ -331,13 +331,9 @@ export default function StudentProcessPage({
           <span style={pageStyles.tableCount}>显示 {filteredRows.length} / {processedData.length} 条</span>
         </div>
         <div style={pageStyles.tableBody}>
-          {filteredRows.length === 0 ? (
-            <div style={pageStyles.empty}>暂无处理数据，请点击"数据导入"上传 Excel。</div>
-          ) : (
-            <div style={pageStyles.tableScrollWrapper}>
-              {renderTable(paginatedRows, "student", academicYear, studentCollegeName)}
-            </div>
-          )}
+          <div style={pageStyles.tableScrollWrapper}>
+            {renderTable(paginatedRows, "student", academicYear, studentCollegeName)}
+          </div>
         </div>
         {filteredRows.length > 0 && (
           <div style={pageStyles.tableFooter}>

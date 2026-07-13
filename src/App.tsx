@@ -1474,8 +1474,6 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
     academicYearValue?: string,
     collegeNameValue?: string
   ) => {
-    if (data.length === 0) return <div style={styles.empty}>暂无数据</div>;
-
     const templateFields = dataType === "student" ? DIFFICULTY_STUDENT_TEMPLATE_FIELDS : DIFFICULTY_FAMILY_TEMPLATE_FIELDS;
     const extraColumns = ["学年", "学院"];
     const columns = [...extraColumns, ...templateFields];
@@ -1491,21 +1489,27 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
             </tr>
           </thead>
           <tbody>
-            {data.slice(0, 30).map((row, index) => {
-              const rowData = row as Record<string, unknown>;
-              return (
-                <tr key={index}>
-                  <td style={styles.td}>{rowData["学年"] || rowData["academic_year"] || academicYearValue || academicYear || "-"}</td>
-                  <td style={styles.td}>{rowData["学院"] || rowData["college_name"] || rowData["_college"] || collegeNameValue || "-"}</td>
-                  {templateFields.map((field) => {
-                    const value = dataType === "student"
-                      ? getDifficultyTemplateValue(rowData, field)
-                      : getFamilyTemplateValue(rowData, field);
-                    return <td key={field} style={styles.td}>{value || "-"}</td>;
-                  })}
-                </tr>
-              );
-            })}
+            {data.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} style={styles.empty}>暂无数据</td>
+              </tr>
+            ) : (
+              data.slice(0, 30).map((row, index) => {
+                const rowData = row as Record<string, unknown>;
+                return (
+                  <tr key={index}>
+                    <td style={styles.td}>{rowData["学年"] || rowData["academic_year"] || academicYearValue || academicYear || "-"}</td>
+                    <td style={styles.td}>{rowData["学院"] || rowData["college_name"] || rowData["_college"] || collegeNameValue || "-"}</td>
+                    {templateFields.map((field) => {
+                      const value = dataType === "student"
+                        ? getDifficultyTemplateValue(rowData, field)
+                        : getFamilyTemplateValue(rowData, field);
+                      return <td key={field} style={styles.td}>{value || "-"}</td>;
+                    })}
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
       </div>
