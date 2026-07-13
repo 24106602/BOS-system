@@ -1477,16 +1477,16 @@ button:not(:disabled):hover {
 }
 
 .bos-sidebar-modern {
-  color: #bfcbd9;
-  background: #304156;
-  border-right: 0;
-  box-shadow: none;
+  color: #606266;
+  background: #fff;
+  border-right: 1px solid #ebeef5;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
 }
 
 .bos-sidebar-brand {
   min-height: 64px;
   padding: 12px 16px;
-  border-bottom-color: rgba(255, 255, 255, 0.08);
+  border-bottom-color: #ebeef5;
 }
 
 .bos-sidebar-logo {
@@ -1500,10 +1500,11 @@ button:not(:disabled):hover {
 
 .bos-sidebar-brand strong {
   font-size: 14px;
+  color: #303133;
 }
 
 .bos-sidebar-brand small {
-  color: #8fa8c0;
+  color: #909399;
   letter-spacing: 0.04em;
 }
 
@@ -1511,9 +1512,9 @@ button:not(:disabled):hover {
 .bos-sidebar-role--admin {
   margin: 10px 12px 4px;
   padding: 9px 10px;
-  border: 0;
+  border: 1px solid #ebeef5;
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.12);
+  background: #f5f7fa;
 }
 
 .bos-role-dot,
@@ -1524,7 +1525,7 @@ button:not(:disabled):hover {
 
 .bos-sidebar-nav {
   padding: 8px 0 16px;
-  scrollbar-color: #52677e transparent;
+  scrollbar-color: #dcdfe6 transparent;
 }
 
 .bos-nav-group + .bos-nav-group {
@@ -1533,7 +1534,7 @@ button:not(:disabled):hover {
 
 .bos-nav-group-title {
   padding: 8px 20px 5px;
-  color: #71879e;
+  color: #909399;
   font-size: 9px;
 }
 
@@ -1544,18 +1545,18 @@ button:not(:disabled):hover {
   padding: 8px 18px;
   border: 0;
   border-radius: 0;
-  color: #bfcbd9;
+  color: #606266;
 }
 
 .bos-nav-item:hover {
-  color: #fff;
-  background: #263445;
+  color: #409eff;
+  background: #f5f7fa;
 }
 
 .bos-nav-item.is-active {
   color: #409eff;
   border: 0;
-  background: #263445;
+  background: #ecf5ff;
   box-shadow: inset 3px 0 0 #409eff;
 }
 
@@ -1564,37 +1565,38 @@ button:not(:disabled):hover {
   height: 25px;
   flex-basis: 25px;
   border-radius: 4px;
-  color: #bfcbd9;
-  background: rgba(255, 255, 255, 0.06);
+  color: #909399;
+  background: #f5f7fa;
 }
 
 .bos-nav-item.is-active .bos-nav-mark {
   color: #409eff;
-  background: rgba(64, 158, 255, 0.12);
+  background: #ecf5ff;
 }
 
 .bos-nav-copy strong {
   font-size: 13px;
   font-weight: 500;
+  color: #303133;
 }
 
 .bos-nav-copy small {
-  color: #71879e;
+  color: #c0c4cc;
 }
 
 .bos-nav-item.is-active .bos-nav-copy small {
-  color: #7bbdff;
+  color: #a0cfff;
 }
 
 .bos-sidebar-foot {
-  border-top-color: rgba(255, 255, 255, 0.08);
+  border-top-color: #ebeef5;
 }
 
 .bos-sidebar-foot button {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: #ebeef5;
   border-radius: 4px;
-  color: #bfcbd9;
-  background: rgba(0, 0, 0, 0.12);
+  color: #606266;
+  background: #f5f7fa;
 }
 
 .bos-shell-workspace {
