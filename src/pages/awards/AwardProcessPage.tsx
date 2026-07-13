@@ -11,7 +11,7 @@ import {
   processAwardWorkbook,
   saveAwardSubmission,
 } from "../../services/awardProcessor";
-import { awardTypeLabels, awardTypes, getAwardTemplateValidationError } from "../../services/awardConfig";
+import { awardTypeLabels, getAwardTemplateValidationError } from "../../services/awardConfig";
 import { normalizeHeaderName } from "../../services/awardFieldResolver";
 import { resolveCollegeUpload } from "../../utils/collegeDetector";
 import type {
@@ -22,7 +22,6 @@ import type {
   AwardType,
 } from "../../types/award";
 import PageHeader from "../../components/ui/PageHeader";
-import StatCard from "../../components/ui/StatCard";
 import Toolbar from "../../components/ui/Toolbar";
 import "./awards.css";
 
@@ -32,12 +31,6 @@ type ImportLog = { tone: "info" | "success" | "error"; message: string };
 type AwardProcessPageProps = {
   awardType: AwardType;
   onNavigate?: (to: string) => void;
-};
-
-const awardPaths: Record<AwardType, string> = {
-  national: "/college/awards/national",
-  inspirational: "/college/awards/inspirational",
-  shanghai: "/college/awards/shanghai",
 };
 
 const findField = (fields: string[], aliases: string[]) => {
@@ -378,39 +371,12 @@ export default function AwardProcessPage({ awardType, onNavigate }: AwardProcess
         actions={<span className="bos-status-badge">{awardName}</span>}
       />
 
-      <div className="award-switcher" aria-label="三大奖类型选择">
-        {awardTypes.map((type) => (
-          <button
-            key={type}
-            type="button"
-            className={type === awardType ? "is-active" : ""}
-            onClick={() => onNavigate?.(awardPaths[type])}
-          >
-            {awardTypeLabels[type]}
-          </button>
-        ))}
-      </div>
-
-      <div className="bos-stat-grid">
-        <StatCard label="申报人数" value={visibleProcessedRows.length} />
-        <StatCard label="通过人数" value={visiblePassedRows.length} tone="green" />
-        <StatCard label="不通过人数" value={visibleFailedRows.length} tone="red" />
-        <StatCard label="异常问题数" value={visibleIssues.length} tone="amber" />
-      </div>
-
       <section className="bos-filter-card">
         <div className="award-advanced-filter-grid">
           <label className="bos-filter-field">
             学年
             <select value={academicYear} onChange={(event) => changeAcademicYear(event.target.value)}>
               {getAwardAcademicYearOptions().map((year) => <option key={year}>{year}</option>)}
-            </select>
-          </label>
-          <label className="bos-filter-field">
-            学院
-            <select value={collegeFilter} onChange={(event) => setCollegeFilter(event.target.value)}>
-              <option value="">全部学院</option>
-              {availableColleges.map((college) => <option key={college}>{college}</option>)}
             </select>
           </label>
           <label className="bos-filter-field">
@@ -476,28 +442,12 @@ export default function AwardProcessPage({ awardType, onNavigate }: AwardProcess
         <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedFromView}>
           删除{selectedKeys.size > 0 ? `（${selectedKeys.size}）` : ""}
         </button>
-        <button disabled={!result} onClick={() => setModal("passed")}>通过数据（{visiblePassedRows.length}）</button>
-        <button disabled={!result} onClick={() => setModal("failed")}>不通过数据（{visibleFailedRows.length}）</button>
         <button disabled={!result} onClick={() => setModal("issues")}>问题分析（{visibleIssues.length}）</button>
         <button className="is-purple" disabled={!result?.issues.length} onClick={exportIssues}>导出问题说明</button>
         <button className="is-warning" disabled={!canConfirm} onClick={confirmReview}>
           {confirmed ? "学院已确认" : "学院确认审核"}
         </button>
       </Toolbar>
-
-      <div className="bos-status-row">
-        <span className={`bos-status-badge${collegeError ? " is-danger" : result ? " is-success" : ""}`}>
-          学院：{collegeError || collegeName}
-        </span>
-        <span className={`bos-status-badge${result?.failedRows.length ? " is-danger" : result ? " is-success" : ""}`}>
-          治理：{result ? (result.failedRows.length ? "存在不通过数据" : "全部通过") : "待导入"}
-        </span>
-        <span className={`bos-status-badge${confirmed ? " is-success" : ""}`}>审核：{confirmed ? "学院已确认" : "待确认"}</span>
-        <span className={`bos-status-badge${submitted ? " is-success" : ""}`}>上载：{submitted ? "已上载" : "待上载"}</span>
-        <span className="bos-status-badge">存储：后端数据库</span>
-      </div>
-
-      <div className="award-message">{statusMessage}</div>
 
       <section className="bos-table-card">
         <div className="bos-table-card-head">
@@ -518,7 +468,8 @@ export default function AwardProcessPage({ awardType, onNavigate }: AwardProcess
         </div>
         <div className="bos-table-card-foot">
           <span>文件：{fileName || "未导入"}</span>
-          <span>三大奖数据当前暂存本地，后续接入 Supabase</span>
+          {confirmed && <span>学院已确认审核</span>}
+          {submitted && <span>已上载学校端</span>}
         </div>
       </section>
 

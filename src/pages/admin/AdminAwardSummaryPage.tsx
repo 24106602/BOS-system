@@ -10,7 +10,6 @@ import { awardTypeLabels } from "../../services/awardConfig";
 import { normalizeHeaderName } from "../../services/awardFieldResolver";
 import type { AwardAdminRecord, AwardType } from "../../types/award";
 import PageHeader from "../../components/ui/PageHeader";
-import StatCard from "../../components/ui/StatCard";
 import Toolbar from "../../components/ui/Toolbar";
 import "../awards/awards.css";
 
@@ -167,13 +166,6 @@ export default function AdminAwardSummaryPage({ awardType }: AdminAwardSummaryPa
         actions={<span className="bos-status-badge">{awardName}</span>}
       />
 
-      <div className="bos-stat-grid">
-        <StatCard label="申报人数" value={filteredRecords.length} />
-        <StatCard label="通过人数" value={passedRecords.length} tone="green" />
-        <StatCard label="不通过人数" value={failedRecords.length} tone="red" />
-        <StatCard label="异常问题数" value={failedRecords.length} tone="amber" />
-      </div>
-
       <section className="bos-filter-card">
         <div className="award-advanced-filter-grid">
           <label className="bos-filter-field">
@@ -231,16 +223,12 @@ export default function AdminAwardSummaryPage({ awardType }: AdminAwardSummaryPa
 
       <Toolbar className="award-toolbar">
         <button onClick={refreshRecords}>刷新</button>
-        <button disabled title="请在学院端三奖页面导入 Excel">导入</button>
         <button className="is-purple" disabled={passedRecords.length === 0} onClick={() => exportRecords(passedRecords, "通过名单")}>导出通过名单</button>
         <button className="is-purple" disabled={failedRecords.length === 0} onClick={() => exportRecords(failedRecords, "不通过名单")}>导出不通过名单</button>
-        <button className="is-success" disabled title="管理员汇总页只读取学院已上载数据">上载学校端</button>
         <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedFromView}>
           删除{selectedKeys.size > 0 ? `（${selectedKeys.size}）` : ""}
         </button>
       </Toolbar>
-
-      <div className="award-admin-note">三大奖数据存储于后端数据库，删除仅影响当前页面展示。</div>
 
       <section className="bos-table-card">
         <div className="bos-table-card-head">
