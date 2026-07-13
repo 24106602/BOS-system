@@ -253,6 +253,8 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
                       onChange={toggleAllRows}
                     />
                   </th>
+                  <th style={styles.th}>学年</th>
+                  <th style={styles.th}>学院</th>
                   {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
                     <th key={field} style={styles.th}>{field}</th>
                   ))}
@@ -261,11 +263,11 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td style={styles.empty} colSpan={41}>正在加载困难生明细...</td>
+                    <td style={styles.empty} colSpan={43}>正在加载困难生明细...</td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td style={styles.empty} colSpan={41}>暂无当前学年困难生明细</td>
+                    <td style={styles.empty} colSpan={43}>暂无当前学年困难生明细</td>
                   </tr>
                 ) : (
                   filteredRows.map((row, index) => (
@@ -281,6 +283,8 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
                           onChange={() => toggleRow(row)}
                         />
                       </td>
+                      <td style={styles.td}>{row.academic_year}</td>
+                      <td style={styles.td}>{row.college_name}</td>
                       {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
                         <td key={field} style={field === "姓名(*)" ? styles.nameCell : styles.td}>
                           {field === "姓名(*)" ? (

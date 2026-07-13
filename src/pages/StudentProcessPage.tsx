@@ -33,7 +33,7 @@ type StudentProcessPageProps = {
   onAcademicYearChange: (year: string) => void;
   studentCollegeName: string;
   stats: ProcessingStats;
-  renderTable: (rows: Record<string, unknown>[] | DisqualifiedRow[]) => ReactNode;
+  renderTable: (rows: Record<string, unknown>[] | DisqualifiedRow[], dataType: "student" | "family", academicYear?: string, collegeName?: string) => ReactNode;
   processedData: Record<string, unknown>[];
   disqualifiedRows: DisqualifiedRow[];
   logs: LogItem[];
@@ -63,6 +63,7 @@ export default function StudentProcessPage({
   status,
   academicYear,
   onAcademicYearChange,
+  studentCollegeName,
   stats,
   renderTable,
   processedData,
@@ -334,7 +335,7 @@ export default function StudentProcessPage({
             <div style={pageStyles.empty}>暂无处理数据，请点击"数据导入"上传 Excel。</div>
           ) : (
             <div style={pageStyles.tableScrollWrapper}>
-              {renderTable(paginatedRows)}
+              {renderTable(paginatedRows, "student", academicYear, studentCollegeName)}
             </div>
           )}
         </div>
@@ -407,7 +408,7 @@ export default function StudentProcessPage({
                       <div style={pageStyles.empty}>暂无成功数据</div>
                     ) : (
                       <div style={pageStyles.tableScrollWrapper}>
-                        {renderSuccessTable(passedRows)}
+                        {renderSuccessTable(passedRows, academicYear, studentCollegeName)}
                       </div>
                     )
                   ) : (
@@ -472,9 +473,11 @@ export default function StudentProcessPage({
   );
 }
 
-function renderSuccessTable(rows: Record<string, unknown>[]) {
+function renderSuccessTable(rows: Record<string, unknown>[], academicYear?: string, collegeName?: string) {
   if (rows.length === 0) return null;
-  const columns = Object.keys(rows[0]);
+  const extraColumns = ["学年", "学院"];
+  const dataColumns = Object.keys(rows[0]).filter((col) => !extraColumns.includes(col));
+  const columns = [...extraColumns, ...dataColumns];
   return (
     <table style={styles.successTable}>
       <thead>
@@ -487,7 +490,9 @@ function renderSuccessTable(rows: Record<string, unknown>[]) {
       <tbody>
         {rows.map((row, index) => (
           <tr key={index}>
-            {columns.map((col) => (
+            <td style={styles.successTd}>{String(row["学年"] || row["academic_year"] || academicYear || "-")}</td>
+            <td style={styles.successTd}>{String(row["学院"] || row["college_name"] || row["_college"] || collegeName || "-")}</td>
+            {dataColumns.map((col) => (
               <td key={col} style={styles.successTd}>{String(row[col] ?? "")}</td>
             ))}
           </tr>

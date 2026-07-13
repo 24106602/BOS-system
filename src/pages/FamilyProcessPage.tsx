@@ -21,7 +21,7 @@ type FamilyProcessPageProps = {
   onAcademicYearChange: (year: string) => void;
   familyCollegeName: string;
   familyStats: FamilyProcessingStats;
-  renderTable: (rows: Record<string, unknown>[] | FamilyReviewRow[]) => ReactNode;
+  renderTable: (rows: Record<string, unknown>[] | FamilyReviewRow[], dataType: "student" | "family", academicYear?: string, collegeName?: string) => ReactNode;
   familyProcessedData: Record<string, unknown>[];
   familyReviewRows: FamilyReviewRow[];
   familyLogs: LogItem[];
@@ -152,7 +152,7 @@ export default function FamilyProcessPage({
             <span>显示 {familyProcessedData.length} 条</span>
           </div>
           <div className="bos-table-card-body">
-            {renderTable(familyProcessedData)}
+            {renderTable(familyProcessedData, "family", academicYear, familyCollegeName)}
           </div>
         </section>
       )}
@@ -230,7 +230,7 @@ export default function FamilyProcessPage({
           onClose={() => setActiveModal(null)}
           onExport={exportFamilyResult}
         >
-          {passedRows.length === 0 ? <div style={pageStyles.empty}>暂无通过数据</div> : renderTable(passedRows)}
+          {passedRows.length === 0 ? <div style={pageStyles.empty}>暂无通过数据</div> : renderTable(passedRows, "family", academicYear, familyCollegeName)}
         </ListModal>
       )}
 
@@ -241,7 +241,7 @@ export default function FamilyProcessPage({
           onClose={() => setActiveModal(null)}
           onExport={exportFamilyErrorReport}
         >
-          {familyReviewRows.length === 0 ? <div style={pageStyles.empty}>暂无不通过数据</div> : renderTable(familyReviewRows)}
+          {familyReviewRows.length === 0 ? <div style={pageStyles.empty}>暂无不通过数据</div> : renderTable(familyReviewRows, "family", academicYear, familyCollegeName)}
         </ListModal>
       )}
     </section>

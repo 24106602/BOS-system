@@ -25,7 +25,12 @@ import {
   validateDataAgainstTemplate,
   validateTemplateFile,
 } from "./services/templateParser";
-import { resolveDifficultyFieldBinding } from "./constants/difficultyStudentTemplate";
+import {
+  DIFFICULTY_STUDENT_TEMPLATE_FIELDS,
+  DIFFICULTY_FAMILY_TEMPLATE_FIELDS,
+  getDifficultyTemplateValue,
+  getFamilyTemplateValue,
+} from "./constants/difficultyStudentTemplate";
 import { isSameSubmissionCollege, normalizeSubmissionCollegeName, resolveCollegeUpload } from "./utils/collegeDetector";
 import type {
   DisqualifiedRow,
@@ -1463,9 +1468,17 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
     exportFamilyList("failed");
   };
 
-  const renderTable = (data: Record<string, unknown>[] | DisqualifiedRow[] | FamilyReviewRow[]) => {
+  const renderTable = (
+    data: Record<string, unknown>[] | DisqualifiedRow[] | FamilyReviewRow[],
+    dataType: "student" | "family" = "student",
+    academicYearValue?: string,
+    collegeNameValue?: string
+  ) => {
     if (data.length === 0) return <div style={styles.empty}>暂无数据</div>;
-    const columns = Object.keys(data[0]);
+
+    const templateFields = dataType === "student" ? DIFFICULTY_STUDENT_TEMPLATE_FIELDS : DIFFICULTY_FAMILY_TEMPLATE_FIELDS;
+    const extraColumns = ["学年", "学院"];
+    const columns = [...extraColumns, ...templateFields];
 
     return (
       <div style={styles.tableWrap}>
@@ -1478,13 +1491,21 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
             </tr>
           </thead>
           <tbody>
-            {data.slice(0, 30).map((row, index) => (
-              <tr key={index}>
-                {columns.map((col) => (
-                  <td key={col} style={styles.td}>{String((row as Record<string, unknown>)[col] ?? "")}</td>
-                ))}
-              </tr>
-            ))}
+            {data.slice(0, 30).map((row, index) => {
+              const rowData = row as Record<string, unknown>;
+              return (
+                <tr key={index}>
+                  <td style={styles.td}>{rowData["学年"] || rowData["academic_year"] || academicYearValue || academicYear || "-"}</td>
+                  <td style={styles.td}>{rowData["学院"] || rowData["college_name"] || rowData["_college"] || collegeNameValue || "-"}</td>
+                  {templateFields.map((field) => {
+                    const value = dataType === "student"
+                      ? getDifficultyTemplateValue(rowData, field)
+                      : getFamilyTemplateValue(rowData, field);
+                    return <td key={field} style={styles.td}>{value || "-"}</td>;
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

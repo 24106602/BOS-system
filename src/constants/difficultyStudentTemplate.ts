@@ -217,3 +217,8 @@ export const makeDifficultyRowKey = (
   studentId: string,
   index: number
 ) => [academicYear, collegeName, idCard || studentId || index].join("::");
+
+export {
+  DIFFICULTY_FAMILY_TEMPLATE_FIELDS,
+  getFamilyTemplateValue,
+} from "./difficultyFamilyTemplate";
