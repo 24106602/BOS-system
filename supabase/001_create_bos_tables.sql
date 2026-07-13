@@ -200,3 +200,101 @@ create trigger set_hardship_students_updated_at
 create trigger set_college_batches_updated_at
   before update on public.college_batches
   for each row execute function public.handle_updated_at();
+
+-- -----------------------------------------------------------
+-- 7. 三大奖提交批次表
+-- 存储学院端上传的三大奖数据批次元信息（国家奖学金/励志奖学金/上海市奖学金）
+-- -----------------------------------------------------------
+create table if not exists public.award_batches (
+  id              uuid primary key default gen_random_uuid(),
+  college_name    text not null,              -- 学院名称
+  award_type      text not null,              -- 'national' | 'inspirational' | 'shanghai'
+  academic_year   text,                       -- 学年 如 '2025-2026'
+  row_count       integer not null default 0, -- 数据条数
+  review_status   text not null default 'draft', -- draft | confirmed
+  submit_status   text not null default 'pending', -- pending | submitted
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+
+  -- 同一学院 + 同奖项类型 + 同学年只保留最新批次
+  constraint award_batches_uq unique (college_name, award_type, academic_year)
+);
+
+create index if not exists idx_award_batches_college on public.award_batches (college_name);
+create index if not exists idx_award_batches_type on public.award_batches (award_type);
+create index if not exists idx_award_batches_year on public.award_batches (academic_year);
+
+-- -----------------------------------------------------------
+-- 8. 三大奖批次明细数据表
+-- 存储每个三大奖批次的具体行数据（JSON 格式，灵活适配不同模板字段）
+-- -----------------------------------------------------------
+create table if not exists public.award_batch_rows (
+  id          uuid primary key default gen_random_uuid(),
+  batch_id    uuid not null references public.award_batches(id) on delete cascade,
+  row_data    jsonb not null default '{}',    -- 行数据（字段名→值）
+  row_index   integer not null default 0,     -- 行号
+  created_at  timestamptz not null default now(),
+
+  constraint award_batch_rows_batch_id_fkey foreign key (batch_id) references public.award_batches(id) on delete cascade
+);
+
+create index if not exists idx_award_batch_rows_batch_id on public.award_batch_rows (batch_id);
+
+-- -----------------------------------------------------------
+-- 9. 三大奖 RLS 行级安全策略
+-- -----------------------------------------------------------
+alter table public.award_batches enable row level security;
+alter table public.award_batch_rows enable row level security;
+
+-- 管理员：完全访问三大奖表
+create policy "admin_full_access_award_batches" on public.award_batches
+  for all using (
+    exists (select 1 from public.user_profiles where auth_user_id = auth.uid() and role = 'admin')
+  );
+
+create policy "admin_full_access_award_batch_rows" on public.award_batch_rows
+  for all using (
+    exists (select 1 from public.user_profiles where auth_user_id = auth.uid() and role = 'admin')
+  );
+
+-- 学院端：只能查看自己学院的三大奖数据
+create policy "college_read_own_award_batches" on public.award_batches
+  for select using (
+    exists (
+      select 1 from public.user_profiles
+      where auth_user_id = auth.uid() and role = 'college' and college_name = award_batches.college_name
+    )
+  );
+
+create policy "college_insert_own_award_batches" on public.award_batches
+  for insert with check (
+    exists (
+      select 1 from public.user_profiles
+      where auth_user_id = auth.uid() and role = 'college' and college_name = award_batches.college_name
+    )
+  );
+
+create policy "college_read_own_award_batch_rows" on public.award_batch_rows
+  for select using (
+    exists (
+      select 1 from public.award_batches b
+      join public.user_profiles p on p.auth_user_id = auth.uid() and p.role = 'college' and p.college_name = b.college_name
+      where b.id = award_batch_rows.batch_id
+    )
+  );
+
+create policy "college_insert_own_award_batch_rows" on public.award_batch_rows
+  for insert with check (
+    exists (
+      select 1 from public.award_batches b
+      join public.user_profiles p on p.auth_user_id = auth.uid() and p.role = 'college' and p.college_name = b.college_name
+      where b.id = award_batch_rows.batch_id
+    )
+  );
+
+-- -----------------------------------------------------------
+-- 10. 三大奖 updated_at 触发器
+-- -----------------------------------------------------------
+create trigger set_award_batches_updated_at
+  before update on public.award_batches
+  for each row execute function public.handle_updated_at();

@@ -2,7 +2,7 @@
 import { applyHighlightStyle, cloneWorksheet } from "./excelExport";
 import type { WorkbookData } from "./types";
 import { parseTemplateRules } from "./templateRuleParser";
-import { awardStorageKeys, awardTypeLabels } from "./awardConfig";
+import { awardTypeLabels } from "./awardConfig";
 import {
   createAwardFieldResolver,
   getMissingAwardFields,
@@ -11,6 +11,11 @@ import {
   type AwardStandardField,
 } from "./awardFieldResolver";
 import { normalizeSubmissionCollegeName } from "../utils/collegeDetector";
+import {
+  getAwardSubmissions as getAwardSubmissionsDb,
+  getAllAwardSubmissions as getAllAwardSubmissionsDb,
+  saveAwardSubmission as saveAwardSubmissionDb,
+} from "../db/localAwardDb";
 import type {
   AwardDateFormat,
   AwardFieldRule,
@@ -1389,43 +1394,17 @@ const normalizeAwardSubmission = (
   };
 };
 
-export const getAwardSubmissions = (awardType: AwardType): AwardSubmission[] => {
-  try {
-    const stored = JSON.parse(localStorage.getItem(awardStorageKeys[awardType]) || "[]") as Array<
-      Partial<AwardSubmission> & Pick<AwardSubmission, "id" | "awardType" | "collegeName" | "createdAt" | "rows">
-    >;
-    return stored.map((submission) => normalizeAwardSubmission({ ...submission, awardType }));
-  } catch {
-    return [];
-  }
+export const getAwardSubmissions = async (awardType: AwardType): Promise<AwardSubmission[]> => {
+  return getAwardSubmissionsDb(awardType);
 };
 
-export const saveAwardSubmission = (awardType: AwardType, submission: AwardSubmission) => {
-  const submissions = getAwardSubmissions(awardType);
-  const normalized = normalizeAwardSubmission({
-    ...submission,
-    awardType,
-    collegeName: normalizeSubmissionCollegeName(submission.collegeName),
-  });
-  const duplicateIndex = submissions.findIndex(
-    (item) =>
-      item.academicYear === normalized.academicYear &&
-      item.collegeName === normalized.collegeName
-  );
-  const nextSubmissions =
-    duplicateIndex >= 0
-      ? submissions.map((item, index) => (index === duplicateIndex ? normalized : item))
-      : [...submissions, normalized];
-  localStorage.setItem(
-    awardStorageKeys[awardType],
-    JSON.stringify(nextSubmissions)
-  );
+export const saveAwardSubmission = async (awardType: AwardType, submission: AwardSubmission) => {
+  await saveAwardSubmissionDb(awardType, submission);
 };
 
-export const getAllAwardSubmissions = () =>
-  (["national", "inspirational", "shanghai"] as AwardType[]).flatMap((awardType) =>
-    getAwardSubmissions(awardType)
-  );
+export const getAllAwardSubmissions = async () => {
+  return getAllAwardSubmissionsDb();
+};
 
 const pickAwardRowValue = (row: Record<string, unknown>, aliases: string[]) => {
   const normalizedAliases = aliases.map(normalizeHeaderName);
@@ -1438,8 +1417,8 @@ const pickAwardRowValue = (row: Record<string, unknown>, aliases: string[]) => {
   return toText(match?.[1]);
 };
 
-export const getAwardAdminRecords = (awardType?: AwardType): AwardAdminRecord[] => {
-  const submissions = awardType ? getAwardSubmissions(awardType) : getAllAwardSubmissions();
+export const getAwardAdminRecords = async (awardType?: AwardType): Promise<AwardAdminRecord[]> => {
+  const submissions = awardType ? await getAwardSubmissions(awardType) : await getAllAwardSubmissions();
   return submissions.flatMap((submission) =>
     submission.rows.map((rawData, rowIndex) => ({
       id: `${submission.id}_${rowIndex}`,

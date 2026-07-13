@@ -296,7 +296,7 @@ export default function AwardProcessPage({ awardType, onNavigate }: AwardProcess
     setStatusMessage(`学院确认审核完成：${academicYear} 学年 ${awardName} 共 ${result.passedRows.length} 条。`);
   };
 
-  const uploadToSchool = () => {
+  const uploadToSchool = async () => {
     if (!template || !result || !confirmed) {
       alert("请先完成学院确认审核");
       return;
@@ -305,7 +305,7 @@ export default function AwardProcessPage({ awardType, onNavigate }: AwardProcess
       alert(collegeError || "存在不通过数据，不能上载学校端");
       return;
     }
-    saveAwardSubmission(
+    await saveAwardSubmission(
       awardType,
       makeAwardSubmission({
         awardType,
@@ -346,7 +346,7 @@ export default function AwardProcessPage({ awardType, onNavigate }: AwardProcess
 
   const deleteSelectedFromView = () => {
     if (selectedKeys.size === 0) return;
-    if (!window.confirm(`确定从当前页面隐藏选中的 ${selectedKeys.size} 条数据吗？此操作不会删除 localStorage 或 Supabase 数据。`)) {
+    if (!window.confirm(`确定从当前页面隐藏选中的 ${selectedKeys.size} 条数据吗？此操作不会删除数据库数据。`)) {
       return;
     }
     setHiddenKeys((current) => new Set([...current, ...selectedKeys]));
@@ -494,7 +494,7 @@ export default function AwardProcessPage({ awardType, onNavigate }: AwardProcess
         </span>
         <span className={`bos-status-badge${confirmed ? " is-success" : ""}`}>审核：{confirmed ? "学院已确认" : "待确认"}</span>
         <span className={`bos-status-badge${submitted ? " is-success" : ""}`}>上载：{submitted ? "已上载" : "待上载"}</span>
-        <span className="bos-status-badge">存储：localStorage 本地暂存</span>
+        <span className="bos-status-badge">存储：后端数据库</span>
       </div>
 
       <div className="award-message">{statusMessage}</div>

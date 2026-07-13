@@ -56,7 +56,7 @@ export default function AwardsHomePage({ onNavigate }: AwardsHomePageProps) {
       </div>
 
       <div className="award-admin-note">
-        三大奖数据当前暂存本地 localStorage，后续接入 Supabase；困难生业务数据与页面不受影响。
+        三大奖数据存储于后端数据库，困难生业务数据与页面不受影响。
       </div>
     </section>
   );

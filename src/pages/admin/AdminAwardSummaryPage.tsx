@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, useEffect, type ReactNode } from "react";
 import {
   exportAwardAdminRecords,
   getAwardAcademicYearOptions,
@@ -35,9 +35,9 @@ const isFailedRecord = (record: AwardAdminRecord) => /(不通过|退回|驳回|�
 
 export default function AdminAwardSummaryPage({ awardType }: AdminAwardSummaryPageProps) {
   const awardName = awardTypeLabels[awardType];
-  const [records, setRecords] = useState<AwardAdminRecord[]>(() => getAwardAdminRecords(awardType));
-  const [submissions, setSubmissions] = useState(() => getAwardSubmissions(awardType));
-  const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear);
+  const [records, setRecords] = useState<AwardAdminRecord[]>([]);
+  const [submissions, setSubmissions] = useState<AwardAdminRecord[]>([]);
+  const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear());
   const [collegeFilter, setCollegeFilter] = useState("");
   const [nameFilter, setNameFilter] = useState("");
   const [studentIdFilter, setStudentIdFilter] = useState("");
@@ -48,6 +48,14 @@ export default function AdminAwardSummaryPage({ awardType }: AdminAwardSummaryPa
   const [selectedRecord, setSelectedRecord] = useState<AwardAdminRecord | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    refreshRecords();
+  }, []);
+
+  useEffect(() => {
+    setSelectedKeys(new Set());
+  }, [academicYear, collegeFilter, nameFilter, studentIdFilter, idCardFilter, majorFilter, classFilter, statusFilter]);
 
   const templateFields = useMemo(() => {
     const orderedFields: string[] = [];
@@ -133,16 +141,17 @@ export default function AdminAwardSummaryPage({ awardType }: AdminAwardSummaryPa
     setStatusFilter("all");
   };
 
-  const refreshRecords = () => {
-    setRecords(getAwardAdminRecords(awardType));
-    setSubmissions(getAwardSubmissions(awardType));
+  const refreshRecords = async () => {
+    const [recs, subs] = await Promise.all([getAwardAdminRecords(awardType), getAwardSubmissions(awardType)]);
+    setRecords(recs);
+    setSubmissions(subs);
     setHiddenKeys(new Set());
     setSelectedKeys(new Set());
   };
 
   const deleteSelectedFromView = () => {
     if (selectedKeys.size === 0) return;
-    if (!window.confirm(`确定从当前页面隐藏选中的 ${selectedKeys.size} 条数据吗？此操作不会删除 localStorage 或 Supabase 数据。`)) {
+    if (!window.confirm(`确定从当前页面隐藏选中的 ${selectedKeys.size} 条数据吗？此操作不会删除数据库数据。`)) {
       return;
     }
     setHiddenKeys((current) => new Set([...current, ...selectedKeys]));
@@ -231,7 +240,7 @@ export default function AdminAwardSummaryPage({ awardType }: AdminAwardSummaryPa
         </button>
       </Toolbar>
 
-      <div className="award-admin-note">三大奖数据当前暂存本地 localStorage，项目中尚未发现 award_records Supabase 表；删除仅影响当前页面展示。</div>
+      <div className="award-admin-note">三大奖数据存储于后端数据库，删除仅影响当前页面展示。</div>
 
       <section className="bos-table-card">
         <div className="bos-table-card-head">
@@ -249,7 +258,7 @@ export default function AdminAwardSummaryPage({ awardType }: AdminAwardSummaryPa
         </div>
         <div className="bos-table-card-foot">
           <span>模板字段 {templateFields.length} 列</span>
-          <span>数据源：localStorage 本地暂存</span>
+          <span>数据源：后端数据库</span>
         </div>
       </section>
 
