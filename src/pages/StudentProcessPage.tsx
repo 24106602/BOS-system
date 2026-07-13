@@ -314,16 +314,18 @@ export default function StudentProcessPage({
         )}
       </div>
 
-      <div style={pageStyles.statusSection}>
-        <span style={pageStyles.statusBadge}>当前状态：{status}</span>
-        <span style={hasBlockingRows ? { ...pageStyles.statusBadge, ...pageStyles.statusDanger } : { ...pageStyles.statusBadge, ...pageStyles.statusSuccess }}>
-          学院确认：{reviewStatus}
-        </span>
-        <span style={pageStyles.statusBadge}>上传总数：{importTotalCount}</span>
-        <span style={{ ...pageStyles.statusBadge, ...pageStyles.statusSuccess }}>成功人数：{importSuccessCount}</span>
-        <span style={{ ...pageStyles.statusBadge, ...pageStyles.statusDanger }}>失败人数：{importFailedCount}</span>
-        <span style={{ ...pageStyles.statusBadge, ...pageStyles.statusAmber }}>自动修复数：{stats.repaired}</span>
-      </div>
+      {importTotalCount > 0 && (
+        <div style={pageStyles.statusSection}>
+          <span style={pageStyles.statusBadge}>当前状态：{status}</span>
+          <span style={hasBlockingRows ? { ...pageStyles.statusBadge, ...pageStyles.statusDanger } : { ...pageStyles.statusBadge, ...pageStyles.statusSuccess }}>
+            学院确认：{reviewStatus}
+          </span>
+          <span style={pageStyles.statusBadge}>上传总数：{importTotalCount}</span>
+          <span style={{ ...pageStyles.statusBadge, ...pageStyles.statusSuccess }}>成功人数：{importSuccessCount}</span>
+          <span style={{ ...pageStyles.statusBadge, ...pageStyles.statusDanger }}>失败人数：{importFailedCount}</span>
+          <span style={{ ...pageStyles.statusBadge, ...pageStyles.statusAmber }}>自动修复数：{stats.repaired}</span>
+        </div>
+      )}
 
       <div style={pageStyles.tableSection}>
         <div style={pageStyles.tableHeader}>

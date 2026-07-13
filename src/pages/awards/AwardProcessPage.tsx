@@ -365,9 +365,7 @@ export default function AwardProcessPage({ awardType, onNavigate }: AwardProcess
   return (
     <section className="bos-processing-frame award-workspace">
       <PageHeader
-        breadcrumb="三大奖业务 / 学院端数据治理"
         title={`${awardName}数据处理`}
-        description="识别官方模板与 Sheet，完成数据治理、学院确认和学校端上载。"
         actions={<span className="bos-status-badge">{awardName}</span>}
       />
 

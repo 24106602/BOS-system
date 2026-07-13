@@ -93,12 +93,10 @@ export default function FamilyProcessPage({
   return (
     <section className="bos-table-page difficulty-workspace">
       <PageHeader
-        breadcrumb="困难生业务 / 家庭成员信息"
         title="家庭成员信息处理"
-        description="上传家庭成员信息 Excel，完成格式校验、自动修复和学院上载。"
         actions={(
           <div className="bos-status-row">
-          <span className="bos-status-badge">{familyCollegeName}</span>
+          {familyCollegeName && familyCollegeName !== "未知学院" && <span className="bos-status-badge">{familyCollegeName}</span>}
           {onBackToDifficulty && <button className="bos-button" onClick={onBackToDifficulty}>返回业务首页</button>}
           </div>
         )}
@@ -147,14 +145,16 @@ export default function FamilyProcessPage({
         </button>
       </div>
 
-      <div className="bos-status-row">
-        <span className="bos-status-badge">当前状态：{familyStatus}</span>
-        <span className={`bos-status-badge${hasBlockingRows ? " is-danger" : " is-success"}`}>学院确认：{reviewStatus}</span>
-        <span className="bos-status-badge">上传总数：{familyStats.total}</span>
-        <span className="bos-status-badge is-success">成功人数：{passedRows.length}</span>
-        <span className="bos-status-badge is-danger">失败人数：{familyReviewRows.length}</span>
-        <span className="bos-status-badge">自动修复数：{familyStats.repaired}</span>
-      </div>
+      {familyStats.total > 0 && (
+        <div className="bos-status-row">
+          <span className="bos-status-badge">当前状态：{familyStatus}</span>
+          <span className={`bos-status-badge${hasBlockingRows ? " is-danger" : " is-success"}`}>学院确认：{reviewStatus}</span>
+          <span className="bos-status-badge">上传总数：{familyStats.total}</span>
+          <span className="bos-status-badge is-success">成功人数：{passedRows.length}</span>
+          <span className="bos-status-badge is-danger">失败人数：{familyReviewRows.length}</span>
+          <span className="bos-status-badge">自动修复数：{familyStats.repaired}</span>
+        </div>
+      )}
 
       <section className="bos-table-card">
         <div className="bos-table-card-body">
