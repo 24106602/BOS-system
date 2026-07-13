@@ -6,6 +6,7 @@ import { getBatchAcademicYear } from "../../utils/academicYear";
 import PageHeader from "../../components/ui/PageHeader";
 import AdminCard from "../../components/ui/AdminCard";
 import DataFilterPanel from "../../components/ui/DataFilterPanel";
+import { DIFFICULTY_STUDENT_TEMPLATE_FIELDS, getDifficultyTemplateValue } from "../../constants/difficultyStudentTemplate";
 
 type AdminStudentInfoPageProps = {
   onNavigate?: (to: string) => void;
@@ -149,8 +150,8 @@ export default function AdminStudentInfoPage({ onNavigate }: AdminStudentInfoPag
     }
     const rows = filteredRows.map((row) => {
       const obj: Record<string, string> = {};
-      studentColumns.forEach((col) => {
-        obj[col.label] = getText(row, col.aliases);
+      DIFFICULTY_STUDENT_TEMPLATE_FIELDS.forEach((field) => {
+        obj[field] = getDifficultyTemplateValue(row, field);
       });
       obj["来源学院"] = row._college;
       obj["学年"] = getBatchAcademicYear(row._batch);
@@ -159,7 +160,7 @@ export default function AdminStudentInfoPage({ onNavigate }: AdminStudentInfoPag
     });
     const workbook = XLSX.utils.book_new();
     const sheet = XLSX.utils.json_to_sheet(rows);
-    sheet["!cols"] = studentColumns.map(() => ({ wch: 16 })).concat([{ wch: 18 }, { wch: 12 }, { wch: 22 }]);
+    sheet["!cols"] = DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map(() => ({ wch: 16 })).concat([{ wch: 18 }, { wch: 12 }, { wch: 22 }]);
     XLSX.utils.book_append_sheet(workbook, sheet, "本专科信息");
     XLSX.writeFile(workbook, `本专科信息_${Date.now()}.xlsx`);
   };
@@ -207,8 +208,8 @@ export default function AdminStudentInfoPage({ onNavigate }: AdminStudentInfoPag
           <table style={styles.table}>
             <thead>
               <tr>
-                {studentColumns.map((col) => (
-                  <th key={col.key} style={styles.th}>{col.label}</th>
+                {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
+                  <th key={field} style={styles.th}>{field}</th>
                 ))}
                 <th style={styles.th}>来源学院</th>
                 <th style={styles.th}>学年</th>
@@ -217,14 +218,14 @@ export default function AdminStudentInfoPage({ onNavigate }: AdminStudentInfoPag
             <tbody>
               {filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={studentColumns.length + 2} style={styles.empty}>暂无本专科信息数据</td>
+                  <td colSpan={DIFFICULTY_STUDENT_TEMPLATE_FIELDS.length + 2} style={styles.empty}>暂无本专科信息数据</td>
                 </tr>
               ) : (
                 filteredRows.map((row, index) => (
                   <tr key={`${row._idCard}-${row._studentId}-${index}`}>
-                    {studentColumns.map((col) => (
-                      <td key={col.key} style={styles.td}>
-                        {getText(row, col.aliases) || "-"}
+                    {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
+                      <td key={field} style={styles.td}>
+                        {getDifficultyTemplateValue(row, field) || "-"}
                       </td>
                     ))}
                     <td style={styles.td}>{row._college}</td>
