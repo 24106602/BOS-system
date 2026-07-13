@@ -221,16 +221,55 @@ export default function AdminAwardsOverviewPage() {
       <PageHeader
         breadcrumb="三大奖业务 / 学校端总览"
         title="三奖提交总览"
-        description="统一查看三类奖学金学院上载记录，并按奖项动态展示模板字段。"
+        description="查看各学院三类奖学金提交人数汇总。"
         actions={<span className="bos-status-badge">{currentAwardLabel}</span>}
       />
 
-      <div className="bos-stat-grid">
-        <StatCard label="申报人数" value={filteredRecords.length} />
-        <StatCard label="通过人数" value={passedRecords.length} tone="green" />
-        <StatCard label="不通过人数" value={failedRecords.length} tone="red" />
-        <StatCard label="异常问题数" value={failedRecords.length} tone="amber" />
-      </div>
+      <section className="bos-filter-card">
+        <div className="award-advanced-filter-grid">
+          <label className="bos-filter-field">
+            学年
+            <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
+              {getAwardAcademicYearOptions(submissions).map((year) => <option key={year}>{year}</option>)}
+            </select>
+          </label>
+          <label className="bos-filter-field">
+            奖项类型
+            <select value={awardTypeFilter} onChange={(event) => setAwardTypeFilter(event.target.value as "all" | AwardType)}>
+              <option value="all">全部三奖</option>
+              {awardTypes.map((type) => <option key={type} value={type}>{awardTypeLabels[type]}</option>)}
+            </select>
+          </label>
+          <label className="bos-filter-field">
+            学院
+            <select value={collegeFilter} onChange={(event) => setCollegeFilter(event.target.value)}>
+              <option value="">全部学院</option>
+              {colleges.map((college) => <option key={college}>{college}</option>)}
+            </select>
+          </label>
+          <button onClick={resetFilters}>重置筛选</button>
+          <button className="is-purple" disabled={collegeStats.length === 0} onClick={() => {
+            const rows = collegeStats.map((s) => ({
+              学院名称: s.collegeName,
+              [awardTypeLabels.national]: s.national,
+              [awardTypeLabels.inspirational]: s.inspirational,
+              [awardTypeLabels.shanghai]: s.shanghai,
+              合计: s.total,
+            }));
+            rows.push({
+              学院名称: "总计",
+              [awardTypeLabels.national]: totalStats.national,
+              [awardTypeLabels.inspirational]: totalStats.inspirational,
+              [awardTypeLabels.shanghai]: totalStats.shanghai,
+              合计: totalStats.total,
+            });
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "学院提交统计");
+            XLSX.writeFile(wb, `${academicYear}_学院提交统计.xlsx`);
+          }}>导出统计</button>
+        </div>
+      </section>
 
       <section className="bos-table-card">
         <div className="bos-table-card-head">
@@ -255,14 +294,12 @@ export default function AdminAwardsOverviewPage() {
                   <th style={{ minWidth: 100, background: "#eef2ff", color: "#4f46e5" }}>
                     合计
                   </th>
-                  <th style={{ minWidth: 90, color: "#0a8a4a" }}>通过</th>
-                  <th style={{ minWidth: 90, color: "#c2414d" }}>不通过</th>
                 </tr>
               </thead>
               <tbody>
                 {collegeStats.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: "40px 20px", color: "#909399" }}>
+                    <td colSpan={5} style={{ textAlign: "center", padding: "40px 20px", color: "#909399" }}>
                       当前筛选条件下暂无学院提交数据
                     </td>
                   </tr>
@@ -274,8 +311,6 @@ export default function AdminAwardsOverviewPage() {
                       <td style={{ color: "#0a8a4a", fontWeight: 600 }}>{stat.inspirational}</td>
                       <td style={{ color: "#d97706", fontWeight: 600 }}>{stat.shanghai}</td>
                       <td style={{ color: "#4f46e5", fontWeight: 700 }}>{stat.total}</td>
-                      <td style={{ color: "#0a8a4a" }}>{stat.passed}</td>
-                      <td style={{ color: "#c2414d" }}>{stat.failed}</td>
                     </tr>
                   ))
                 )}
@@ -288,8 +323,6 @@ export default function AdminAwardsOverviewPage() {
                     <td style={{ color: "#0a8a4a" }}>{totalStats.inspirational}</td>
                     <td style={{ color: "#d97706" }}>{totalStats.shanghai}</td>
                     <td style={{ color: "#4f46e5" }}>{totalStats.total}</td>
-                    <td style={{ color: "#0a8a4a" }}>{totalStats.passed}</td>
-                    <td style={{ color: "#c2414d" }}>{totalStats.failed}</td>
                   </tr>
                 </tfoot>
               )}
@@ -297,113 +330,6 @@ export default function AdminAwardsOverviewPage() {
           </div>
         </div>
       </section>
-
-      <section className="bos-filter-card">
-        <div className="award-advanced-filter-grid">
-          <label className="bos-filter-field">
-            学年
-            <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)}>
-              {getAwardAcademicYearOptions(submissions).map((year) => <option key={year}>{year}</option>)}
-            </select>
-          </label>
-          <label className="bos-filter-field">
-            奖项类型
-            <select value={awardTypeFilter} onChange={(event) => setAwardTypeFilter(event.target.value as "all" | AwardType)}>
-              <option value="all">全部三奖</option>
-              {awardTypes.map((type) => <option key={type} value={type}>{awardTypeLabels[type]}</option>)}
-            </select>
-          </label>
-          <label className="bos-filter-field">
-            学院
-            <select value={collegeFilter} onChange={(event) => setCollegeFilter(event.target.value)}>
-              <option value="">全部学院</option>
-              {colleges.map((college) => <option key={college}>{college}</option>)}
-            </select>
-          </label>
-          <label className="bos-filter-field">
-            姓名
-            <input value={nameFilter} onChange={(event) => setNameFilter(event.target.value)} placeholder="学生姓名" />
-          </label>
-          <label className="bos-filter-field">
-            学号
-            <input value={studentIdFilter} onChange={(event) => setStudentIdFilter(event.target.value)} placeholder="学生学号" />
-          </label>
-          <label className="bos-filter-field">
-            身份证号
-            <input value={idCardFilter} onChange={(event) => setIdCardFilter(event.target.value)} placeholder="身份证号" />
-          </label>
-          <label className="bos-filter-field">
-            专业
-            <select value={majorFilter} onChange={(event) => setMajorFilter(event.target.value)}>
-              <option value="">全部专业</option>
-              {majors.map((major) => <option key={major}>{major}</option>)}
-            </select>
-          </label>
-          <label className="bos-filter-field">
-            班级
-            <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
-              <option value="">全部班级</option>
-              {classes.map((className) => <option key={className}>{className}</option>)}
-            </select>
-          </label>
-          <label className="bos-filter-field">
-            审核状态
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">全部状态</option>
-              <option value="passed">通过</option>
-              <option value="failed">不通过</option>
-              <option value="confirmed">学院已确认</option>
-              <option value="submitted">已上载学校端</option>
-            </select>
-          </label>
-          <button onClick={resetFilters}>重置筛选</button>
-        </div>
-      </section>
-
-      <Toolbar className="award-toolbar">
-        <button onClick={refreshRecords}>刷新</button>
-        <button disabled title="请在学院端三奖页面导入 Excel">导入</button>
-        <button className="is-purple" disabled={passedRecords.length === 0} onClick={() => exportRecords(passedRecords, "通过名单")}>导出通过名单</button>
-        <button className="is-purple" disabled={failedRecords.length === 0} onClick={() => exportRecords(failedRecords, "不通过名单")}>导出不通过名单</button>
-        <button className="is-success" disabled title="管理员总览只读取学院已上载数据">上载学校端</button>
-        <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedFromView}>
-          删除{selectedKeys.size > 0 ? `（${selectedKeys.size}）` : ""}
-        </button>
-      </Toolbar>
-
-      <div className="award-admin-note">三大奖数据存储于后端数据库，删除仅影响当前页面展示。</div>
-
-      <section className="bos-table-card">
-        <div className="bos-table-card-head">
-          <h2>{academicYear} 学年三奖上载数据</h2>
-          <span>{filteredSubmissions.length} 个学院奖项批次 · {filteredRecords.length} 名学生</span>
-        </div>
-        <div className="bos-table-card-body">
-          <OverviewRecordTable
-            records={filteredRecords}
-            templateFields={displayTemplateFields}
-            selectedKeys={selectedKeys}
-            onSelectionChange={setSelectedKeys}
-            onDetail={setSelectedRecord}
-          />
-        </div>
-        <div className="bos-table-card-foot">
-          <span>动态模板字段 {templateFields.length} 列</span>
-          <span>数据源：后端数据库</span>
-        </div>
-      </section>
-
-      {selectedRecord && (
-        <AdminAwardModal title={`${selectedRecord.name || "学生"}详情`} onClose={() => setSelectedRecord(null)}>
-          <div className="award-detail-grid">
-            <DetailItem label="学年" value={selectedRecord.academicYear} />
-            <DetailItem label="奖项" value={awardTypeLabels[selectedRecord.awardType]} />
-            <DetailItem label="学院" value={selectedRecord.collegeName} />
-            <DetailItem label="上载时间" value={new Date(selectedRecord.submittedAt).toLocaleString()} />
-            {Object.entries(selectedRecord.rawData).map(([field, value]) => <DetailItem key={field} label={field} value={value} />)}
-          </div>
-        </AdminAwardModal>
-      )}
     </section>
   );
 }
