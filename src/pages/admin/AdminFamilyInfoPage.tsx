@@ -5,6 +5,7 @@ import type { CollegeProcessedBatch } from "../../types/merge";
 import { getBatchAcademicYear } from "../../utils/academicYear";
 import PageHeader from "../../components/ui/PageHeader";
 import AdminCard from "../../components/ui/AdminCard";
+import DataFilterPanel from "../../components/ui/DataFilterPanel";
 
 type AdminFamilyInfoPageProps = {
   onNavigate?: (to: string) => void;
@@ -38,11 +39,23 @@ const familyColumns = [
 
 export default function AdminFamilyInfoPage({ onNavigate }: AdminFamilyInfoPageProps) {
   const [batches, setBatches] = useState<CollegeProcessedBatch[]>([]);
-  const [searchKeyword, setSearchKeyword] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({
+    academicYear: "",
+    college: "",
+    keyword: "",
+  });
 
   useEffect(() => {
     getMergeBatches().then(setBatches);
   }, []);
+
+  const handleFilterChange = (key: string, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleFilterReset = () => {
+    setFilters({ academicYear: "", college: "", keyword: "" });
+  };
 
   const familyBatches = batches.filter((b) => b.dataType === "family");
 
@@ -54,19 +67,36 @@ export default function AdminFamilyInfoPage({ onNavigate }: AdminFamilyInfoPageP
         _studentIdCard: getText(row, ["学生身份证号*", "学生身份证号", "student_id_card"]),
         _memberName: getText(row, ["家庭成员姓名*", "家庭成员姓名", "member_name"]),
         _college: batch.collegeName,
+        _academicYear: getBatchAcademicYear(batch),
       }))
     );
   }, [familyBatches]);
 
   const filteredRows = useMemo(() => {
-    if (!searchKeyword.trim()) return allRows;
-    const keyword = searchKeyword.toLowerCase().trim();
-    return allRows.filter((row) =>
-      row._memberName.toLowerCase().includes(keyword) ||
-      row._studentIdCard.toLowerCase().includes(keyword) ||
-      row._college.toLowerCase().includes(keyword)
-    );
-  }, [allRows, searchKeyword]);
+    let result = allRows;
+    
+    // 学年筛选
+    if (filters.academicYear) {
+      result = result.filter((row) => row._academicYear === filters.academicYear);
+    }
+    
+    // 学院筛选
+    if (filters.college) {
+      result = result.filter((row) => row._college === filters.college);
+    }
+    
+    // 关键词搜索
+    if (filters.keyword.trim()) {
+      const keyword = filters.keyword.toLowerCase().trim();
+      result = result.filter((row) =>
+        row._memberName.toLowerCase().includes(keyword) ||
+        row._studentIdCard.toLowerCase().includes(keyword) ||
+        row._college.toLowerCase().includes(keyword)
+      );
+    }
+    
+    return result;
+  }, [allRows, filters]);
 
   const collegeStats = useMemo(() => {
     const stats: Record<string, { count: number; year: string }> = {};
@@ -127,13 +157,17 @@ export default function AdminFamilyInfoPage({ onNavigate }: AdminFamilyInfoPageP
           </div>
         </div>
 
+        <DataFilterPanel
+          filters={filters}
+          onChange={handleFilterChange}
+          onReset={handleFilterReset}
+          showAcademicYear={true}
+          showCollege={true}
+          showSearch={true}
+          searchPlaceholder="搜索家庭成员姓名、学生身份证号、学院"
+        />
+
         <div style={styles.toolbar}>
-          <input
-            style={styles.searchInput}
-            placeholder="搜索家庭成员姓名、学生身份证号、学院"
-            value={searchKeyword}
-            onChange={(e) => setSearchKeyword(e.target.value)}
-          />
           <button style={styles.exportButton} onClick={exportData}>导出数据</button>
         </div>
 
@@ -216,14 +250,6 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     marginBottom: 16,
     alignItems: "center",
-  },
-  searchInput: {
-    flex: 1,
-    minWidth: 200,
-    padding: "8px 12px",
-    border: "1px solid #dcdfe6",
-    borderRadius: 4,
-    fontSize: 14,
   },
   exportButton: {
     padding: "8px 16px",

@@ -8,6 +8,7 @@ import {
   getEnrolledStudentCount,
   verifyEnrolledStudent,
 } from "../db/localEnrolledStudentDb";
+import DataFilterPanel from "../components/ui/DataFilterPanel";
 
 const columnAliases = {
   studentId: ["学号", "学生学号", "学籍号", "学生编号"],
@@ -257,59 +258,37 @@ export default function EnrolledStudentDatabasePage() {
           </div>
         )}
 
-        <div style={styles.filterRow}>
-          <label style={styles.filterField}>
-            <span>学年度</span>
-            <select
-              value={academicYear}
-              onChange={(e) => setAcademicYear(e.target.value)}
-            >
-              {yearOptions.map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
-          </label>
-          <label style={styles.filterField}>
-            <span>姓名</span>
-            <input
-              value={filters.name}
-              onChange={(e) => setFilters({ ...filters, name: e.target.value })}
-              placeholder="请输入姓名"
-            />
-          </label>
-          <label style={styles.filterField}>
-            <span>学号</span>
-            <input
-              value={filters.studentId}
-              onChange={(e) => setFilters({ ...filters, studentId: e.target.value })}
-              placeholder="请输入学号"
-            />
-          </label>
-          <label style={styles.filterField}>
-            <span>身份证号</span>
-            <input
-              value={filters.idCard}
-              onChange={(e) => setFilters({ ...filters, idCard: e.target.value })}
-              placeholder="请输入身份证号"
-            />
-          </label>
-          <label style={styles.filterField}>
-            <span>学院</span>
-            <input
-              value={filters.college}
-              onChange={(e) => setFilters({ ...filters, college: e.target.value })}
-              placeholder="请输入学院"
-            />
-          </label>
-          <label style={styles.filterField}>
-            <span>专业</span>
-            <input
-              value={filters.major}
-              onChange={(e) => setFilters({ ...filters, major: e.target.value })}
-              placeholder="请输入专业"
-            />
-          </label>
-        </div>
+        <DataFilterPanel
+          filters={{
+            academicYear,
+            name: filters.name,
+            studentId: filters.studentId,
+            idCard: filters.idCard,
+            college: filters.college,
+            major: filters.major,
+          }}
+          onChange={(key, value) => {
+            if (key === "academicYear") {
+              setAcademicYear(value);
+            } else {
+              setFilters((prev) => ({ ...prev, [key]: value }));
+            }
+          }}
+          onReset={() => {
+            setAcademicYear(getCurrentAcademicYear());
+            setFilters({ name: "", studentId: "", idCard: "", college: "", major: "" });
+          }}
+          showAcademicYear={true}
+          showCollege={false}
+          showSearch={false}
+          customFields={[
+            { key: "name", label: "姓名", type: "text", placeholder: "请输入姓名", width: 120 },
+            { key: "studentId", label: "学号", type: "text", placeholder: "请输入学号", width: 120 },
+            { key: "idCard", label: "身份证号", type: "text", placeholder: "请输入身份证号", width: 160 },
+            { key: "college", label: "学院", type: "text", placeholder: "请输入学院", width: 140 },
+            { key: "major", label: "专业", type: "text", placeholder: "请输入专业", width: 140 },
+          ]}
+        />
 
         <div style={styles.tableContainer}>
           <div

@@ -13,6 +13,7 @@ import {
   DIFFICULTY_STUDENT_TEMPLATE_FIELDS,
   getDifficultyTemplateValue,
 } from "../../constants/difficultyStudentTemplate";
+import DataFilterPanel from "../../components/ui/DataFilterPanel";
 
 type DifficultyBatchSummaryPageProps = {
   dataType: "student" | "family";
@@ -182,25 +183,29 @@ export default function DifficultyBatchSummaryPage({
       </div>
 
       <section className="bos-filter-card">
-        <div className="difficulty-summary-filter">
-          <label className="bos-filter-field">
-            学院/学部
-            <select value={collegeFilter} onChange={(event) => setCollegeFilter(event.target.value)}>
-              <option value="">全部学院</option>
-              {colleges.map((college) => <option key={college}>{college}</option>)}
-            </select>
-          </label>
-          <label className="bos-filter-field">
-            关键词
-            <input
-              value={keyword}
-              onChange={(event) => setKeyword(event.target.value)}
-              placeholder="姓名 / 学号 / 身份证号等"
-            />
-          </label>
-          <button className="is-primary" onClick={() => setAppliedKeyword(keyword)}>查询</button>
-          <button onClick={resetFilters}>重置</button>
-        </div>
+        <DataFilterPanel
+          filters={{
+            academicYear,
+            college: collegeFilter,
+            keyword: appliedKeyword,
+          }}
+          onChange={(key, value) => {
+            if (key === "academicYear") setAcademicYear(value);
+            else if (key === "college") setCollegeFilter(value);
+            else if (key === "keyword") {
+              setKeyword(value);
+              setAppliedKeyword(value);
+            }
+          }}
+          onReset={resetFilters}
+          showAcademicYear={true}
+          showCollege={false}
+          showSearch={true}
+          searchPlaceholder="姓名 / 学号 / 身份证号等"
+          customFields={[
+            { key: "college", label: "学院", type: "select", placeholder: "全部学院", options: colleges, width: 160 },
+          ]}
+        />
       </section>
 
       <div className="bos-action-toolbar">

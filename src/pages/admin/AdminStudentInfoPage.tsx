@@ -5,6 +5,7 @@ import type { CollegeProcessedBatch } from "../../types/merge";
 import { getBatchAcademicYear } from "../../utils/academicYear";
 import PageHeader from "../../components/ui/PageHeader";
 import AdminCard from "../../components/ui/AdminCard";
+import DataFilterPanel from "../../components/ui/DataFilterPanel";
 
 type AdminStudentInfoPageProps = {
   onNavigate?: (to: string) => void;
@@ -68,11 +69,23 @@ const studentColumns = [
 
 export default function AdminStudentInfoPage({ onNavigate }: AdminStudentInfoPageProps) {
   const [batches, setBatches] = useState<CollegeProcessedBatch[]>([]);
-  const [searchKeyword, setSearchKeyword] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({
+    academicYear: "",
+    college: "",
+    keyword: "",
+  });
 
   useEffect(() => {
     getMergeBatches().then(setBatches);
   }, []);
+
+  const handleFilterChange = (key: string, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleFilterReset = () => {
+    setFilters({ academicYear: "", college: "", keyword: "" });
+  };
 
   const studentBatches = batches.filter((b) => b.dataType === "student");
 
@@ -83,21 +96,39 @@ export default function AdminStudentInfoPage({ onNavigate }: AdminStudentInfoPag
         _batch: batch,
         _name: getText(row, ["姓名(*)", "姓名", "name"]),
         _idCard: getText(row, ["身份证号(*)", "身份证号", "id_card"]),
+        _studentId: getText(row, ["学号", "student_id"]),
         _college: getText(row, ["学院", "college"]) || batch.collegeName,
+        _academicYear: getBatchAcademicYear(batch),
       }))
     );
   }, [studentBatches]);
 
   const filteredRows = useMemo(() => {
-    if (!searchKeyword.trim()) return allRows;
-    const keyword = searchKeyword.toLowerCase().trim();
-    return allRows.filter((row) =>
-      row._name.toLowerCase().includes(keyword) ||
-      row._studentId.toLowerCase().includes(keyword) ||
-      row._idCard.toLowerCase().includes(keyword) ||
-      row._college.toLowerCase().includes(keyword)
-    );
-  }, [allRows, searchKeyword]);
+    let result = allRows;
+    
+    // 学年筛选
+    if (filters.academicYear) {
+      result = result.filter((row) => row._academicYear === filters.academicYear);
+    }
+    
+    // 学院筛选
+    if (filters.college) {
+      result = result.filter((row) => row._college === filters.college);
+    }
+    
+    // 关键词搜索
+    if (filters.keyword.trim()) {
+      const keyword = filters.keyword.toLowerCase().trim();
+      result = result.filter((row) =>
+        row._name.toLowerCase().includes(keyword) ||
+        (row._studentId && row._studentId.toLowerCase().includes(keyword)) ||
+        row._idCard.toLowerCase().includes(keyword) ||
+        row._college.toLowerCase().includes(keyword)
+      );
+    }
+    
+    return result;
+  }, [allRows, filters]);
 
   const collegeStats = useMemo(() => {
     const stats: Record<string, { count: number; year: string }> = {};
@@ -158,13 +189,17 @@ export default function AdminStudentInfoPage({ onNavigate }: AdminStudentInfoPag
           </div>
         </div>
 
+        <DataFilterPanel
+          filters={filters}
+          onChange={handleFilterChange}
+          onReset={handleFilterReset}
+          showAcademicYear={true}
+          showCollege={true}
+          showSearch={true}
+          searchPlaceholder="搜索姓名、学号、身份证号、学院"
+        />
+
         <div style={styles.toolbar}>
-          <input
-            style={styles.searchInput}
-            placeholder="搜索姓名、学号、身份证号、学院"
-            value={searchKeyword}
-            onChange={(e) => setSearchKeyword(e.target.value)}
-          />
           <button style={styles.exportButton} onClick={exportData}>导出数据</button>
         </div>
 
@@ -247,14 +282,6 @@ const styles: Record<string, CSSProperties> = {
     gap: 12,
     marginBottom: 16,
     alignItems: "center",
-  },
-  searchInput: {
-    flex: 1,
-    minWidth: 200,
-    padding: "8px 12px",
-    border: "1px solid #dcdfe6",
-    borderRadius: 4,
-    fontSize: 14,
   },
   exportButton: {
     padding: "8px 16px",
