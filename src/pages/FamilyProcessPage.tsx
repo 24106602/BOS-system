@@ -104,19 +104,34 @@ export default function FamilyProcessPage({
         )}
       />
 
-      <div className="bos-stat-grid">
-        <StatCard label="数据总量" value={familyStats.total} />
-        <StatCard label="通过人数" value={passedRows.length} tone="green" />
-        <StatCard label="不通过人数" value={familyReviewRows.length} tone="red" />
-        <StatCard label="自动修复数" value={familyStats.repaired} tone="amber" />
+      <div className="bos-filter-card">
+        <div className="bos-filter-grid">
+          <label className="bos-filter-field">
+            学年
+            <select value={academicYear} onChange={(e) => onAcademicYearChange(e.target.value)}>
+              {["2025-2026", "2024-2025", "2023-2024"].map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </label>
+          <label className="bos-filter-field">
+            姓名
+            <input placeholder="学生姓名" />
+          </label>
+          <label className="bos-filter-field">
+            身份证号
+            <input placeholder="学生身份证号" />
+          </label>
+          <label className="bos-filter-field">
+            院系
+            <input placeholder="院系名称" />
+          </label>
+          <button className="is-primary">查询</button>
+          <button>重置</button>
+        </div>
       </div>
 
-      <div className="bos-status-row">
-        <span className="bos-status-badge">当前状态：{familyStatus}</span>
-        <span className={`bos-status-badge${hasBlockingRows ? " is-danger" : " is-success"}`}>学院确认：{reviewStatus}</span>
-      </div>
-
-      <Toolbar>
+      <div className="bos-action-toolbar">
         <button className="is-primary" onClick={() => setActiveModal("import")}>数据导入</button>
         <button className="is-purple" disabled={!hasProcessedRows} onClick={exportFamilyResult}>导出通过名单</button>
         <button className="is-purple" disabled={!hasProcessedRows} onClick={exportFamilyErrorReport}>导出不通过名单</button>
@@ -130,30 +145,25 @@ export default function FamilyProcessPage({
         >
           {uploadedToSchool ? "已上载学校端" : "上载到学校端"}
         </button>
-      </Toolbar>
+      </div>
 
-      <AdminCard title="处理日志" description="格式修复与处理过程记录。">
-        <div className="bos-log-scroll" aria-label="家庭成员信息处理日志">
-          {familyLogs.length === 0
-            ? <div className="bos-log-empty">等待导入 Excel</div>
-            : familyLogs.map((item, index) => (
-              <div key={`${item.time}_${index}`} className="bos-log-item">
-                <time>{item.time}</time><span>{item.message}</span>
-              </div>
-            ))}
-          <div ref={familyLogEndRef} />
-        </div>
-      </AdminCard>
+      <div className="bos-status-row">
+        <span className="bos-status-badge">当前状态：{familyStatus}</span>
+        <span className={`bos-status-badge${hasBlockingRows ? " is-danger" : " is-success"}`}>学院确认：{reviewStatus}</span>
+        <span className="bos-status-badge">上传总数：{familyStats.total}</span>
+        <span className="bos-status-badge is-success">成功人数：{passedRows.length}</span>
+        <span className="bos-status-badge is-danger">失败人数：{familyReviewRows.length}</span>
+        <span className="bos-status-badge">自动修复数：{familyStats.repaired}</span>
+      </div>
 
       <section className="bos-table-card">
-          <div className="bos-table-card-head">
-            <h2>家庭成员数据表</h2>
-            <span>显示 {familyProcessedData.length} 条</span>
-          </div>
-          <div className="bos-table-card-body">
-            {renderTable(familyProcessedData, "family", academicYear, familyCollegeName)}
-          </div>
-        </section>
+        <div className="bos-table-card-body">
+          {renderTable(familyProcessedData, "family", academicYear, familyCollegeName)}
+        </div>
+        <div className="bos-table-card-foot">
+          <span>显示 {familyProcessedData.length} 条数据</span>
+        </div>
+      </section>
 
       {familyReviewRows.length > 0 && (
         <AdminCard
