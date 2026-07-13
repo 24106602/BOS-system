@@ -129,6 +129,53 @@ export default function AdminAwardsOverviewPage() {
       }),
     [academicYear, awardTypeFilter, collegeFilter, submissions]
   );
+
+  // 学院提交统计数据
+  const collegeStats = useMemo(() => {
+    const statsMap = new Map<string, {
+      collegeName: string;
+      national: number;
+      inspirational: number;
+      shanghai: number;
+      total: number;
+      passed: number;
+      failed: number;
+    }>();
+
+    filteredRecords.forEach((record) => {
+      const key = record.collegeName || "未知学院";
+      if (!statsMap.has(key)) {
+        statsMap.set(key, {
+          collegeName: key,
+          national: 0,
+          inspirational: 0,
+          shanghai: 0,
+          total: 0,
+          passed: 0,
+          failed: 0,
+        });
+      }
+      const stat = statsMap.get(key)!;
+      stat.total++;
+      if (record.awardType === "national") stat.national++;
+      if (record.awardType === "inspirational") stat.inspirational++;
+      if (record.awardType === "shanghai") stat.shanghai++;
+      if (isFailedRecord(record)) stat.failed++;
+      else stat.passed++;
+    });
+
+    return Array.from(statsMap.values()).sort((a, b) => b.total - a.total);
+  }, [filteredRecords]);
+
+  const totalStats = useMemo(() => ({
+    national: collegeStats.reduce((sum, s) => sum + s.national, 0),
+    inspirational: collegeStats.reduce((sum, s) => sum + s.inspirational, 0),
+    shanghai: collegeStats.reduce((sum, s) => sum + s.shanghai, 0),
+    total: collegeStats.reduce((sum, s) => sum + s.total, 0),
+    passed: collegeStats.reduce((sum, s) => sum + s.passed, 0),
+    failed: collegeStats.reduce((sum, s) => sum + s.failed, 0),
+  }), [collegeStats]);
+
   const failedRecords = useMemo(() => filteredRecords.filter(isFailedRecord), [filteredRecords]);
   const passedRecords = useMemo(() => filteredRecords.filter((record) => !isFailedRecord(record)), [filteredRecords]);
   const currentAwardLabel = awardTypeFilter === "all" ? "全部三奖" : awardTypeLabels[awardTypeFilter];
@@ -184,6 +231,72 @@ export default function AdminAwardsOverviewPage() {
         <StatCard label="不通过人数" value={failedRecords.length} tone="red" />
         <StatCard label="异常问题数" value={failedRecords.length} tone="amber" />
       </div>
+
+      <section className="bos-table-card">
+        <div className="bos-table-card-head">
+          <h2>学院提交统计</h2>
+          <span>{collegeStats.length} 个学院提交 · {totalStats.total} 名学生</span>
+        </div>
+        <div className="bos-table-card-body">
+          <div className="award-table-scroll">
+            <table className="award-data-table">
+              <thead>
+                <tr>
+                  <th style={{ minWidth: 160 }}>学院名称</th>
+                  <th style={{ minWidth: 110, background: "#e8f1fb", color: "#0077d4" }}>
+                    {awardTypeLabels.national}
+                  </th>
+                  <th style={{ minWidth: 110, background: "#e8f7ee", color: "#0a8a4a" }}>
+                    {awardTypeLabels.inspirational}
+                  </th>
+                  <th style={{ minWidth: 110, background: "#fdf2e8", color: "#d97706" }}>
+                    {awardTypeLabels.shanghai}
+                  </th>
+                  <th style={{ minWidth: 100, background: "#eef2ff", color: "#4f46e5" }}>
+                    合计
+                  </th>
+                  <th style={{ minWidth: 90, color: "#0a8a4a" }}>通过</th>
+                  <th style={{ minWidth: 90, color: "#c2414d" }}>不通过</th>
+                </tr>
+              </thead>
+              <tbody>
+                {collegeStats.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: "center", padding: "40px 20px", color: "#909399" }}>
+                      当前筛选条件下暂无学院提交数据
+                    </td>
+                  </tr>
+                ) : (
+                  collegeStats.map((stat) => (
+                    <tr key={stat.collegeName}>
+                      <td style={{ fontWeight: 500, textAlign: "left" }}>{stat.collegeName}</td>
+                      <td style={{ color: "#0077d4", fontWeight: 600 }}>{stat.national}</td>
+                      <td style={{ color: "#0a8a4a", fontWeight: 600 }}>{stat.inspirational}</td>
+                      <td style={{ color: "#d97706", fontWeight: 600 }}>{stat.shanghai}</td>
+                      <td style={{ color: "#4f46e5", fontWeight: 700 }}>{stat.total}</td>
+                      <td style={{ color: "#0a8a4a" }}>{stat.passed}</td>
+                      <td style={{ color: "#c2414d" }}>{stat.failed}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {collegeStats.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: "#f1f5f9", fontWeight: 700 }}>
+                    <td style={{ textAlign: "left" }}>总计</td>
+                    <td style={{ color: "#0077d4" }}>{totalStats.national}</td>
+                    <td style={{ color: "#0a8a4a" }}>{totalStats.inspirational}</td>
+                    <td style={{ color: "#d97706" }}>{totalStats.shanghai}</td>
+                    <td style={{ color: "#4f46e5" }}>{totalStats.total}</td>
+                    <td style={{ color: "#0a8a4a" }}>{totalStats.passed}</td>
+                    <td style={{ color: "#c2414d" }}>{totalStats.failed}</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      </section>
 
       <section className="bos-filter-card">
         <div className="award-advanced-filter-grid">
