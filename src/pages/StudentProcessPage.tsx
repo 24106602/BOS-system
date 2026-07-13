@@ -341,8 +341,7 @@ export default function StudentProcessPage({
             })}
           </div>
         </div>
-        {filteredRows.length > 0 && (
-          <div style={pageStyles.tableFooter}>
+        <div style={pageStyles.tableFooter}>
             <div style={pageStyles.pagination}>
               <button
                 style={currentPage === 1 ? pageStyles.paginationButtonDisabled : pageStyles.paginationButton}
@@ -363,7 +362,6 @@ export default function StudentProcessPage({
               </button>
             </div>
           </div>
-        )}
       </div>
 
       {activeModal === "import" && (
