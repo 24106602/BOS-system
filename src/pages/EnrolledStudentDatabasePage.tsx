@@ -526,14 +526,16 @@ const styles: Record<string, CSSProperties> = {
     flex: 1,
     minHeight: 0,
     padding: 16,
-    overflow: "hidden",
     background: "#f5f7fa",
+    display: "flex",
+    flexDirection: "column",
+    gap: 14,
   },
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 14,
+    flexShrink: 0,
   },
   breadcrumb: {
     color: "#909399",
@@ -659,7 +661,6 @@ const styles: Record<string, CSSProperties> = {
     flexDirection: "column",
     flex: 1,
     minHeight: 0,
-    overflow: "hidden",
     position: "relative",
   },
   tableWrap: {
