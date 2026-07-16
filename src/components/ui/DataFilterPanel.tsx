@@ -98,51 +98,53 @@ export default function DataFilterPanel({
 
   return (
     <div className="bos-filter-panel" style={{ ...styles.panel, ...style }}>
-      <div style={styles.grid}>
-        {displayFields.map((field) => (
-          <label key={field.key} style={{ ...styles.field, width: field.width || 140 }}>
-            <span style={styles.label}>{field.label}</span>
-            {field.type === "text" ? (
-              <input
-                type="text"
-                style={styles.input}
-                placeholder={field.placeholder || ""}
-                value={filters[field.key] || ""}
-                onChange={(e) => onChange(field.key, e.target.value)}
-              />
-            ) : field.type === "year" ? (
-              <select
-                style={styles.select}
-                value={filters[field.key] || ""}
-                onChange={(e) => onChange(field.key, e.target.value)}
-              >
-                <option value="">{field.placeholder || "全部学年"}</option>
-                {yearOptions.map((year) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-            ) : field.type === "select" && field.options ? (
-              <select
-                style={styles.select}
-                value={filters[field.key] || ""}
-                onChange={(e) => onChange(field.key, e.target.value)}
-              >
-                <option value="">{field.placeholder || "全部"}</option>
-                {field.options.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            ) : null}
-          </label>
-        ))}
-      </div>
-      {onReset && (
-        <div style={styles.actions}>
-          <button className="bos-button is-secondary" onClick={handleReset} style={styles.resetButton}>
-            重置筛选
-          </button>
+      <div style={styles.container}>
+        <div style={styles.grid}>
+          {displayFields.map((field) => (
+            <label key={field.key} style={{ ...styles.field, width: field.width || 140 }}>
+              <span style={styles.label}>{field.label}</span>
+              {field.type === "text" ? (
+                <input
+                  type="text"
+                  style={styles.input}
+                  placeholder={field.placeholder || ""}
+                  value={filters[field.key] || ""}
+                  onChange={(e) => onChange(field.key, e.target.value)}
+                />
+              ) : field.type === "year" ? (
+                <select
+                  style={styles.select}
+                  value={filters[field.key] || ""}
+                  onChange={(e) => onChange(field.key, e.target.value)}
+                >
+                  <option value="">{field.placeholder || "全部学年"}</option>
+                  {yearOptions.map((year) => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              ) : field.type === "select" && field.options ? (
+                <select
+                  style={styles.select}
+                  value={filters[field.key] || ""}
+                  onChange={(e) => onChange(field.key, e.target.value)}
+                >
+                  <option value="">{field.placeholder || "全部"}</option>
+                  {field.options.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              ) : null}
+            </label>
+          ))}
         </div>
-      )}
+        {onReset && (
+          <div style={styles.actions}>
+            <button className="bos-button is-secondary" onClick={handleReset} style={styles.resetButton}>
+              重置筛选
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -155,11 +157,18 @@ const styles: Record<string, CSSProperties> = {
     marginBottom: 16,
     boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
   },
+  container: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+  },
   grid: {
     display: "flex",
     flexWrap: "wrap",
     gap: 12,
     alignItems: "flex-end",
+    flex: 1,
   },
   field: {
     display: "flex",
@@ -193,9 +202,8 @@ const styles: Record<string, CSSProperties> = {
     transition: "border-color 0.2s, background 0.2s",
   },
   actions: {
-    marginTop: 12,
-    display: "flex",
-    justifyContent: "flex-end",
+    marginLeft: 16,
+    flexShrink: 0,
   },
   resetButton: {
     padding: "6px 16px",

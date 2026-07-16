@@ -580,14 +580,14 @@ const styles: Record<string, CSSProperties> = {
     cursor: "pointer",
   },
   downloadButton: {
-    padding: "6px 16px",
+    padding: "4px 10px",
     border: "1px solid #dcdfe6",
-    borderRadius: 4,
+    borderRadius: 3,
     background: "#fff",
     color: "#606266",
     fontSize: 12,
     cursor: "pointer",
-    marginRight: 8,
+    marginRight: 6,
   },
   statusBar: {
     padding: "8px 16px",
