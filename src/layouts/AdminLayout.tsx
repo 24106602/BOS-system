@@ -79,6 +79,15 @@ const grantMenuGroup: ExpandableMenuGroup = {
   ],
 };
 
+const announcementMenuGroup: ExpandableMenuGroup = {
+  title: "通知公告管理",
+  icon: "告",
+  items: [
+    { path: "/admin/announcement", label: "通知公告", mark: "告" },
+  ],
+  defaultOpen: true,
+};
+
 const workspacePaths = new Set([
   "/admin/base-info",
   "/admin/departments",
@@ -97,11 +106,12 @@ const workspacePaths = new Set([
   "/admin/enrolled",
   "/admin/grant",
   "/admin/grant/database",
+  "/admin/announcement",
 ]);
 
 const pageTitles: Record<string, string> = {
   "/admin": "管理员首页",
-  ...Object.fromEntries([...baseInfoMenuGroup.items, ...accountMenuGroup.items, ...awardMenuGroup.items, ...difficultyMenuGroup.items, ...grantMenuGroup.items].map((item) => [item.path, item.label])),
+  ...Object.fromEntries([...baseInfoMenuGroup.items, ...accountMenuGroup.items, ...awardMenuGroup.items, ...difficultyMenuGroup.items, ...grantMenuGroup.items, ...announcementMenuGroup.items].map((item) => [item.path, item.label])),
 };
 
 function MenuButton({
@@ -270,6 +280,12 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
 
           <ExpandableMenu
             group={grantMenuGroup}
+            currentPath={path}
+            onNavigate={onNavigate}
+          />
+
+          <ExpandableMenu
+            group={announcementMenuGroup}
             currentPath={path}
             onNavigate={onNavigate}
           />

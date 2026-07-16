@@ -1,7 +1,9 @@
-import { useState, useEffect, type CSSProperties } from "react";
+import { useState, useMemo, useEffect, type CSSProperties } from "react";
 import {
-  getAnnouncements,
+  queryAnnouncements,
+  formatAnnouncementDate,
   formatAnnouncementTime,
+  priorityLabel,
   type Announcement,
   type AnnouncementPriority,
 } from "../../services/announcementService";
@@ -11,69 +13,104 @@ type CollegeHomePageProps = {
 };
 
 export default function CollegeHomePage({ onNavigate }: CollegeHomePageProps) {
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [collapsed, setCollapsed] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [keyword, setKeyword] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState<AnnouncementPriority | "">("");
+  const [detailItem, setDetailItem] = useState<Announcement | null>(null);
+
+  const allAnnouncements = useMemo(() => queryAnnouncements({}), [refreshKey]);
+
+  const filteredList = useMemo(() => {
+    return queryAnnouncements({
+      keyword,
+      startDate,
+      endDate,
+      priority: priorityFilter,
+    });
+  }, [allAnnouncements, keyword, startDate, endDate, priorityFilter]);
 
   useEffect(() => {
-    setAnnouncements(getAnnouncements());
+    setRefreshKey((k) => k + 1);
   }, []);
 
-  const priorityLabel: Record<AnnouncementPriority, string> = {
-    normal: "通知",
-    important: "重要",
-    urgent: "紧急",
+  const resetFilters = () => {
+    setKeyword("");
+    setStartDate("");
+    setEndDate("");
+    setPriorityFilter("");
   };
 
-  const hasAnnouncements = announcements.length > 0;
-  const current = hasAnnouncements ? announcements[Math.min(activeIndex, announcements.length - 1)] : null;
+  const hasAnnouncements = allAnnouncements.length > 0;
 
   return (
     <section>
-      {hasAnnouncements && current && !collapsed && (
-        <div className="bos-announcement-bar" data-priority={current.priority}>
-          <div className="bos-announcement-tag">{priorityLabel[current.priority]}</div>
-          <div className="bos-announcement-body">
-            <div className="bos-announcement-title">{current.title}</div>
-            <div className="bos-announcement-content">{current.content}</div>
-            <div className="bos-announcement-meta">
-              <span>{current.publisher}</span>
-              <span>{formatAnnouncementTime(current.publishedAt)}</span>
-            </div>
-          </div>
-          <div className="bos-announcement-actions">
-            {announcements.length > 1 && (
-              <>
-                <button
-                  className="bos-announcement-nav"
-                  disabled={activeIndex === 0}
-                  onClick={() => setActiveIndex(activeIndex - 1)}
-                >
-                  ‹
-                </button>
-                <span className="bos-announcement-pager">
-                  {activeIndex + 1} / {announcements.length}
-                </span>
-                <button
-                  className="bos-announcement-nav"
-                  disabled={activeIndex >= announcements.length - 1}
-                  onClick={() => setActiveIndex(activeIndex + 1)}
-                >
-                  ›
-                </button>
-              </>
-            )}
-            <button className="bos-announcement-close" onClick={() => setCollapsed(true)}>
-              ×
-            </button>
-          </div>
-        </div>
-      )}
-
       <div style={styles.hero}>
         <div>
           <h1 style={styles.title}>学部（院）业务工作台</h1>
           <p style={styles.text}>请选择需要办理的业务模块，进入对应工作区进行数据处理。</p>
+        </div>
+      </div>
+
+      <div style={styles.noticeCard}>
+        <div style={styles.noticeHead}>
+          <h2 style={styles.noticeTitle}>通知公告</h2>
+          <span style={styles.noticeCount}>共 {filteredList.length} 条通知</span>
+        </div>
+
+        <div style={styles.noticeFilter}>
+          <label style={styles.filterField}>
+            公告名称
+            <input
+              style={styles.input}
+              placeholder="输入公告标题或内容关键词"
+              value={keyword}
+              onChange={(e) => setKeyword(e.target.value)}
+            />
+          </label>
+          <label style={styles.filterField}>
+            开始日期
+            <input style={styles.input} type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </label>
+          <label style={styles.filterField}>
+            结束日期
+            <input style={styles.input} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </label>
+          <label style={styles.filterField}>
+            优先级
+            <select style={styles.input} value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value as AnnouncementPriority | "")}>
+              <option value="">全部</option>
+              <option value="normal">通知</option>
+              <option value="important">重要</option>
+              <option value="urgent">紧急</option>
+            </select>
+          </label>
+          <button style={styles.resetBtn} onClick={resetFilters}>重置</button>
+        </div>
+
+        <div style={styles.noticeList}>
+          {!hasAnnouncements ? (
+            <div style={styles.noticeEmpty}>暂无通知公告</div>
+          ) : filteredList.length === 0 ? (
+            <div style={styles.noticeEmpty}>未找到符合条件的通知</div>
+          ) : (
+            filteredList.map((item) => (
+              <button key={item.id} style={styles.noticeItem} onClick={() => setDetailItem(item)}>
+                <span style={{ ...styles.priorityTag, ...priorityStyles[item.priority] }}>
+                  {priorityLabel[item.priority]}
+                </span>
+                <div style={styles.noticeItemBody}>
+                  <div style={styles.noticeItemTitle}>{item.title}</div>
+                  <div style={styles.noticeItemDesc}>
+                    <span>{item.publisher}</span>
+                    <span style={styles.noticeItemTime}>{formatAnnouncementTime(item.publishedAt)}</span>
+                  </div>
+                </div>
+                <span style={styles.noticeItemDate}>{formatAnnouncementDate(item.publishedAt)}</span>
+              </button>
+            ))
+          )}
         </div>
       </div>
 
@@ -99,6 +136,10 @@ export default function CollegeHomePage({ onNavigate }: CollegeHomePageProps) {
           onClick={() => onNavigate?.("/college/awards")}
         />
       </div>
+
+      {detailItem && (
+        <DetailModal item={detailItem} onClose={() => setDetailItem(null)} />
+      )}
     </section>
   );
 }
@@ -142,6 +183,38 @@ function BusinessCard({
   );
 }
 
+function DetailModal({ item, onClose }: { item: Announcement; onClose: () => void }) {
+  return (
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={styles.modalBox} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalHead}>
+          <h2 style={styles.modalTitle}>通知详情</h2>
+          <button style={styles.modalClose} onClick={onClose}>×</button>
+        </div>
+        <div style={styles.modalBody}>
+          <div style={styles.detailTag}>
+            <span style={{ ...styles.priorityTag, ...priorityStyles[item.priority] }}>
+              {priorityLabel[item.priority]}
+            </span>
+            <span style={styles.detailMeta}>{item.publisher} · {formatAnnouncementDate(item.publishedAt)}</span>
+          </div>
+          <h3 style={styles.detailTitle}>{item.title}</h3>
+          <div style={styles.detailContent}>{item.content}</div>
+        </div>
+        <div style={styles.modalFoot}>
+          <button style={styles.primaryBtn} onClick={onClose}>关闭</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const priorityStyles: Record<AnnouncementPriority, CSSProperties> = {
+  normal: { color: "#409eff", background: "#ecf5ff" },
+  important: { color: "#e6a23c", background: "#fdf6ec" },
+  urgent: { color: "#f56c6c", background: "#fef0f0" },
+};
+
 const styles: Record<string, CSSProperties> = {
   hero: {
     display: "flex",
@@ -156,6 +229,49 @@ const styles: Record<string, CSSProperties> = {
   },
   title: { margin: "5px 0 7px", color: "#172033", fontSize: 26 },
   text: { margin: 0, color: "#63738a", fontSize: 14, lineHeight: 1.7 },
+  noticeCard: {
+    marginTop: 14,
+    background: "#fff",
+    border: "1px solid #d7e1ed",
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  noticeHead: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 18px", borderBottom: "1px solid #ebeef5" },
+  noticeTitle: { margin: 0, fontSize: 16, color: "#172033" },
+  noticeCount: { fontSize: 12, color: "#909399" },
+  noticeFilter: { display: "flex", flexWrap: "wrap", gap: 12, padding: "14px 18px", borderBottom: "1px solid #f5f5f5", alignItems: "flex-end" },
+  filterField: { display: "flex", flexDirection: "column", gap: 5, fontSize: 12, color: "#63738a" },
+  input: {
+    padding: "7px 10px",
+    border: "1px solid #dcdfe6",
+    borderRadius: 4,
+    fontSize: 13,
+    outline: "none",
+    minWidth: 150,
+    color: "#172033",
+  },
+  resetBtn: { padding: "7px 14px", border: "1px solid #dcdfe6", borderRadius: 4, background: "#fff", color: "#606266", fontSize: 13, cursor: "pointer" },
+  noticeList: { maxHeight: 380, overflowY: "auto" },
+  noticeEmpty: { padding: "40px 20px", textAlign: "center", color: "#909399", fontSize: 14 },
+  noticeItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    width: "100%",
+    padding: "12px 18px",
+    border: "none",
+    borderBottom: "1px solid #f5f5f5",
+    background: "transparent",
+    cursor: "pointer",
+    textAlign: "left",
+    transition: "background 0.15s ease",
+  },
+  priorityTag: { padding: "2px 8px", borderRadius: 4, fontSize: 12, fontWeight: 700, flex: "0 0 auto" },
+  noticeItemBody: { flex: 1, minWidth: 0 },
+  noticeItemTitle: { fontSize: 14, fontWeight: 500, color: "#172033", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  noticeItemDesc: { display: "flex", gap: 10, marginTop: 3, fontSize: 12, color: "#a0a8b3" },
+  noticeItemTime: { color: "#c0c4cc" },
+  noticeItemDate: { flex: "0 0 auto", fontSize: 12, color: "#a0a8b3" },
   businessGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
@@ -180,4 +296,23 @@ const styles: Record<string, CSSProperties> = {
   metricPill: { padding: "5px 8px", borderRadius: 999, background: "#f3f8fd", color: "#52647b", fontSize: 12 },
   primaryButton: { width: "100%", border: "none", borderRadius: 6, padding: "10px 12px", background: "#0077d4", color: "#fff", fontWeight: 800, cursor: "pointer" },
   disabledButton: { width: "100%", border: "none", borderRadius: 6, padding: "10px 12px", background: "#a7b3c2", color: "#fff", fontWeight: 800, cursor: "not-allowed" },
+  modalOverlay: {
+    position: "fixed",
+    top: 0, left: 0, right: 0, bottom: 0,
+    background: "rgba(0,0,0,0.4)",
+    display: "grid",
+    placeItems: "center",
+    zIndex: 1000,
+  },
+  modalBox: { background: "#fff", borderRadius: 8, width: "min(560px, 90vw)", maxHeight: "85vh", display: "flex", flexDirection: "column" },
+  modalHead: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #ebeef5" },
+  modalTitle: { margin: 0, fontSize: 17, color: "#172033" },
+  modalClose: { border: "none", background: "none", fontSize: 22, color: "#909399", cursor: "pointer", lineHeight: 1 },
+  modalBody: { padding: 20, overflowY: "auto" },
+  detailTag: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 },
+  detailMeta: { fontSize: 12, color: "#909399" },
+  detailTitle: { margin: "0 0 12px", fontSize: 18, color: "#172033" },
+  detailContent: { fontSize: 14, color: "#4a5568", lineHeight: 1.8, whiteSpace: "pre-wrap" },
+  modalFoot: { display: "flex", justifyContent: "flex-end", gap: 10, padding: "12px 20px", borderTop: "1px solid #ebeef5" },
+  primaryBtn: { padding: "8px 18px", border: "none", borderRadius: 4, background: "#409eff", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" },
 };

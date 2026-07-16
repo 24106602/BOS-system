@@ -14,6 +14,7 @@ import AdminFamilyInfoPage from "./pages/admin/AdminFamilyInfoPage";
 import AdminDifficultyGuidePage from "./pages/admin/AdminDifficultyGuidePage";
 import AdminGrantPage from "./pages/admin/AdminGrantPage";
 import AdminGrantDatabasePage from "./pages/admin/AdminGrantDatabasePage";
+import AdminAnnouncementPage from "./pages/admin/AdminAnnouncementPage";
 import DatabasePage from "./pages/DatabasePage";
 import EnrolledStudentDatabasePage from "./pages/EnrolledStudentDatabasePage";
 
@@ -63,6 +64,7 @@ const normalizePath = (path: string) => {
     "/admin/enrolled",
     "/admin/grant",
     "/admin/grant/database",
+    "/admin/announcement",
     "/college",
     "/college/difficulty",
     "/college/difficulty/student",
@@ -96,6 +98,7 @@ const pageTitles: Record<string, string> = {
   "/admin/enrolled": "在校生数据库",
   "/admin/grant": "助学金业务首页",
   "/admin/grant/database": "助学金数据库",
+  "/admin/announcement": "通知公告",
   "/college": "平台首页",
   "/college/difficulty": "困难生业务",
   "/college/difficulty/student": "本专科信息处理",
@@ -125,6 +128,7 @@ const pageIcons: Record<string, string> = {
   "/admin/enrolled": "在",
   "/admin/grant": "助",
   "/admin/grant/database": "据",
+  "/admin/announcement": "告",
   "/college": "首",
   "/college/difficulty": "困",
   "/college/difficulty/student": "本",
@@ -280,6 +284,8 @@ function AppContent() {
           <AdminGrantPage onNavigate={navigate} />
         ) : pagePath === "/admin/grant/database" ? (
           <AdminGrantDatabasePage />
+        ) : pagePath === "/admin/announcement" ? (
+          <AdminAnnouncementPage />
         ) : (
           <AdminHomePage onNavigate={navigate} />
         );

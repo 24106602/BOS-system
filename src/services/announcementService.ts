@@ -9,6 +9,13 @@ export type Announcement = {
   publishedAt: string;
 };
 
+export type AnnouncementQuery = {
+  keyword?: string;
+  startDate?: string;
+  endDate?: string;
+  priority?: AnnouncementPriority | "";
+};
+
 const STORAGE_KEY = "bos_announcements";
 
 const defaultAnnouncements: Announcement[] = [
@@ -40,6 +47,38 @@ export function getAnnouncements(): Announcement[] {
   }
 }
 
+export function queryAnnouncements(query: AnnouncementQuery): Announcement[] {
+  let list = getAnnouncements();
+
+  if (query.keyword) {
+    const kw = query.keyword.trim().toLowerCase();
+    if (kw) {
+      list = list.filter(
+        (a) =>
+          a.title.toLowerCase().includes(kw) ||
+          a.content.toLowerCase().includes(kw) ||
+          a.publisher.toLowerCase().includes(kw)
+      );
+    }
+  }
+
+  if (query.priority) {
+    list = list.filter((a) => a.priority === query.priority);
+  }
+
+  if (query.startDate) {
+    const start = new Date(query.startDate + "T00:00:00").getTime();
+    list = list.filter((a) => new Date(a.publishedAt).getTime() >= start);
+  }
+
+  if (query.endDate) {
+    const end = new Date(query.endDate + "T23:59:59").getTime();
+    list = list.filter((a) => new Date(a.publishedAt).getTime() <= end);
+  }
+
+  return list;
+}
+
 export function saveAnnouncement(announcement: Omit<Announcement, "id" | "publishedAt">): Announcement {
   const list = getAnnouncements();
   const item: Announcement = {
@@ -52,9 +91,21 @@ export function saveAnnouncement(announcement: Omit<Announcement, "id" | "publis
   return item;
 }
 
+export function updateAnnouncement(id: string, patch: Partial<Omit<Announcement, "id" | "publishedAt">>): void {
+  const list = getAnnouncements();
+  const idx = list.findIndex((a) => a.id === id);
+  if (idx === -1) return;
+  list[idx] = { ...list[idx], ...patch };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
 export function deleteAnnouncement(id: string): void {
   const list = getAnnouncements().filter((a) => a.id !== id);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+export function getAnnouncementById(id: string): Announcement | null {
+  return getAnnouncements().find((a) => a.id === id) || null;
 }
 
 export function formatAnnouncementTime(iso: string): string {
@@ -75,3 +126,19 @@ export function formatAnnouncementTime(iso: string): string {
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
+
+export function formatAnnouncementDate(iso: string): string {
+  const date = new Date(iso);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  const h = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+  return `${y}-${m}-${d} ${h}:${min}`;
+}
+
+export const priorityLabel: Record<AnnouncementPriority, string> = {
+  normal: "通知",
+  important: "重要",
+  urgent: "紧急",
+};
