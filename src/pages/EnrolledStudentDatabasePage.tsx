@@ -278,9 +278,7 @@ export default function EnrolledStudentDatabasePage() {
     <div style={styles.page}>
       <div style={styles.header}>
         <div>
-          <div style={styles.breadcrumb}>基础数据 / 在校生管理</div>
           <h2 style={styles.title}>在校生数据库</h2>
-          <p style={styles.desc}>维护全校在校生基础信息，学院端导入困难生数据时将自动校验学生是否在校</p>
         </div>
         <div style={styles.headerActions}>
           <span style={styles.countBadge}>共 {total} 人</span>
@@ -306,6 +304,13 @@ export default function EnrolledStudentDatabasePage() {
             </button>
             <button style={styles.dangerButton} onClick={handleClear} disabled={students.length === 0}>
               清空数据库
+            </button>
+            <button
+              style={styles.downloadButton}
+              onClick={handleExport}
+              disabled={filtered.length === 0}
+            >
+              下载
             </button>
           </div>
         </div>
@@ -411,20 +416,13 @@ export default function EnrolledStudentDatabasePage() {
               共 {total} 人，当前显示第 {start} 到 {end} 人
             </div>
             <div style={styles.paginationControls}>
-              <button
-                style={styles.downloadButton}
-                onClick={handleExport}
-                disabled={filtered.length === 0}
-              >
-                下载
-              </button>
-              <button
-                style={styles.pageButton}
-                onClick={() => setPage(1)}
-                disabled={currentPage <= 1}
-              >
-                首页
-              </button>
+            <button
+              style={styles.pageButton}
+              onClick={() => setPage(1)}
+              disabled={currentPage <= 1}
+            >
+              首页
+            </button>
               <button
                 style={styles.pageButton}
                 onClick={() => setPage(currentPage - 1)}
@@ -601,10 +599,26 @@ const styles: Record<string, CSSProperties> = {
   },
   tableWrap: {
     flex: 1,
-    overflow: "auto",
+    overflowY: "auto",
+    overflowX: "auto",
     minHeight: 0,
     scrollbarWidth: "thin",
-    scrollbarColor: "#cbd5e1 transparent",
+    scrollbarColor: "#409eff #e4e7ed",
+    "&::-webkit-scrollbar": {
+      width: "8px",
+      height: "8px",
+    },
+    "&::-webkit-scrollbar-track": {
+      background: "#e4e7ed",
+      borderRadius: "4px",
+    },
+    "&::-webkit-scrollbar-thumb": {
+      background: "#409eff",
+      borderRadius: "4px",
+    },
+    "&::-webkit-scrollbar-thumb:hover": {
+      background: "#66b1ff",
+    },
   },
   table: {
     width: "100%",
