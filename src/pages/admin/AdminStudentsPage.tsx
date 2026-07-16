@@ -20,6 +20,7 @@ import {
 import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
 import Toolbar from "../../components/ui/Toolbar";
+import { rejectStudentRecords } from "../../services/difficultyStudentService";
 
 type MergedDifficultyRow = {
   academicYear: string;
@@ -31,6 +32,9 @@ type MergedDifficultyRow = {
   gender: string;
   difficultyLevel: string;
   status: string;
+  rawStatus?: string;
+  rejectedReason?: string;
+  cloudId?: number | string;
   rawData: Record<string, unknown>;
   familyMembers: string[];
   relationStatus: string;
@@ -47,6 +51,7 @@ type CloudStudentRow = {
   gender?: string | null;
   difficulty_level?: string | null;
   status?: string | null;
+  rejected_reason?: string | null;
   raw_data?: Record<string, unknown> | null;
 };
 
@@ -104,6 +109,7 @@ const normalizeIdCard = (value: string) => value.replace(/\s|-/g, "").toUpperCas
 const statusText: Record<string, string> = {
   college_submitted: "学院已提交",
   pending_review: "待学校确认",
+  rejected: "已退回",
   archived: "管理员归档",
   local_uploaded: "本地已上载",
 };
@@ -224,6 +230,9 @@ const makeCloudMergedRows = (rows: CloudStudentRow[]): MergedDifficultyRow[] =>
     gender: String(row.gender || ""),
     difficultyLevel: String(row.difficulty_level || ""),
     status: displayStatus(String(row.status || "")),
+    rawStatus: String(row.status || ""),
+    rejectedReason: String(row.rejected_reason || ""),
+    cloudId: row.id,
     rawData: row.raw_data || {},
     familyMembers: [],
     relationStatus: row.status === "archived" ? "管理员归档" : "云端学生主信息",
@@ -391,6 +400,8 @@ export default function AdminStudentsPage() {
   const [selectedRow, setSelectedRow] = useState<MergedDifficultyRow | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getTemplateCell = (row: MergedDifficultyRow, field: DifficultyStudentTemplateField) => {
@@ -417,7 +428,7 @@ export default function AdminStudentsPage() {
 
     setIsLoadingDatabase(true);
     setLoadError("");
-    const fullSelect = "id,academic_year,college_name,student_id,name,id_card,grade,gender,difficulty_level,status,raw_data";
+    const fullSelect = "id,academic_year,college_name,student_id,name,id_card,grade,gender,difficulty_level,status,rejected_reason,raw_data";
     const { data, error } = await supabase
       .from("students")
       .select(fullSelect)
@@ -523,6 +534,28 @@ export default function AdminStudentsPage() {
     if (!confirm(`确认从当前页面移除已选中的 ${selectedKeys.size} 条记录？此操作不会删除 Supabase 数据。`)) return;
     setHiddenKeys((current) => new Set([...current, ...selectedKeys]));
     setSelectedKeys(new Set());
+  };
+
+  const handleReject = async () => {
+    if (selectedKeys.size === 0) return;
+    if (!rejectReason.trim()) {
+      alert("请填写退回原因");
+      return;
+    }
+
+    const rowsToReject = mergedRows.filter((row) => selectedKeys.has(getMergedRowKey(row)) && row.cloudId);
+    const ids = rowsToReject.map((row) => row.cloudId!);
+
+    const result = await rejectStudentRecords(ids, rejectReason);
+    if (result.success) {
+      alert(result.message);
+      setShowRejectModal(false);
+      setRejectReason("");
+      setSelectedKeys(new Set());
+      void loadCloudStudents();
+    } else {
+      alert(result.message);
+    }
   };
 
   const exportCurrentYearDatabase = () => {
@@ -734,6 +767,9 @@ export default function AdminStudentsPage() {
         <button className="is-primary" onClick={() => setShowImportModal(true)}>数据导入</button>
         <button onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>{isLoadingDatabase ? "刷新中..." : "刷新"}</button>
         <button className="is-purple" onClick={exportCurrentYearDatabase}>导出当前名单</button>
+        <button className="is-warning" disabled={selectedKeys.size === 0} onClick={() => setShowRejectModal(true)}>
+          退回选中（{selectedKeys.size}）
+        </button>
         <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedRows}>
           删除选中（{selectedKeys.size}）
         </button>
@@ -868,6 +904,32 @@ export default function AdminStudentsPage() {
             <button style={isImporting ? styles.disabledButton : styles.importButton} disabled={isImporting} onClick={importHistoricalData}>
               {isImporting ? "导入中..." : "开始导入"}
             </button>
+          </div>
+        </Modal>
+      )}
+
+      {showRejectModal && (
+        <Modal title="退回选中记录" onClose={() => setShowRejectModal(false)}>
+          <div style={styles.sectionHead}>
+            <div>
+              <h2 style={styles.subTitle}>填写退回原因</h2>
+              <p style={styles.description}>请填写退回原因，学院端将看到此原因并可重新编辑后提交。</p>
+            </div>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={styles.yearSelectLabel}>
+              退回原因 <span style={{ color: "#c2414d" }}>*</span>
+              <textarea
+                style={{ ...styles.yearSelect, height: 100, resize: "vertical" }}
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+                placeholder="请输入退回原因..."
+              />
+            </label>
+          </div>
+          <div style={styles.modalFooter}>
+            <button style={styles.secondaryButton} onClick={() => setShowRejectModal(false)}>取消</button>
+            <button style={styles.importButton} onClick={handleReject}>确认退回</button>
           </div>
         </Modal>
       )}

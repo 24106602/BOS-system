@@ -12,6 +12,7 @@ export type DifficultyStudentRow = {
   id_card: string;
   difficulty_level: string;
   status: string;
+  rejected_reason?: string;
   raw_data?: Record<string, unknown> | null;
   source: "supabase" | "local";
 };
@@ -27,6 +28,7 @@ type CloudStudentRow = {
   gender?: string | null;
   difficulty_level?: string | null;
   status?: string | null;
+  rejected_reason?: string | null;
   raw_data?: Record<string, unknown> | null;
 };
 
@@ -228,6 +230,7 @@ const toDifficultyStudent = (row: CloudStudentRow): DifficultyStudentRow => ({
   id_card: normalizeIdCard(String(row.id_card || "")),
   difficulty_level: String(row.difficulty_level || ""),
   status: String(row.status || "college_submitted"),
+  rejected_reason: String(row.rejected_reason || ""),
   raw_data: row.raw_data || null,
   source: "supabase",
 });
@@ -265,7 +268,7 @@ export const fetchCollegeDifficultyStudents = async (
   let errorMessage = "";
 
   if (isSupabaseConfigured) {
-    const fullSelect = "id,academic_year,college_name,student_id,name,id_card,grade,gender,difficulty_level,status,raw_data";
+    const fullSelect = "id,academic_year,college_name,student_id,name,id_card,grade,gender,difficulty_level,status,rejected_reason,raw_data";
     const { data, error } = await supabase
       .from("students")
       .select(fullSelect)
@@ -294,4 +297,43 @@ export const fetchCollegeDifficultyStudents = async (
 
   const localRows = await getLocalCollegeDifficultyStudents(academicYear, normalizedCollege);
   return { rows: localRows, source: "local", error: errorMessage };
+};
+
+export const rejectStudentRecords = async (
+  ids: (number | string)[],
+  reason: string
+): Promise<{ success: boolean; message: string }> => {
+  if (!isSupabaseConfigured) {
+    return { success: false, message: "Supabase 未配置，无法执行退回操作。" };
+  }
+
+  const { error } = await supabase
+    .from("students")
+    .update({ status: "rejected", rejected_reason: reason })
+    .in("id", ids);
+
+  if (error) {
+    return { success: false, message: `退回失败：${formatSupabaseError(error)}` };
+  }
+
+  return { success: true, message: `成功退回 ${ids.length} 条记录` };
+};
+
+export const resubmitStudentRecords = async (
+  ids: (number | string)[]
+): Promise<{ success: boolean; message: string }> => {
+  if (!isSupabaseConfigured) {
+    return { success: false, message: "Supabase 未配置，无法执行重新提交操作。" };
+  }
+
+  const { error } = await supabase
+    .from("students")
+    .update({ status: "pending_review", rejected_reason: "" })
+    .in("id", ids);
+
+  if (error) {
+    return { success: false, message: `重新提交失败：${formatSupabaseError(error)}` };
+  }
+
+  return { success: true, message: `成功重新提交 ${ids.length} 条记录` };
 };

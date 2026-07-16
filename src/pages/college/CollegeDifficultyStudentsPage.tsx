@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 import * as XLSX from "xlsx-js-style";
 import type { UserProfile } from "../../types/auth";
 import { ACADEMIC_YEAR_OPTIONS, getCurrentAcademicYear } from "../../utils/academicYear";
-import { normalizeIdCard, fetchCollegeDifficultyStudents, type DifficultyStudentRow } from "../../services/difficultyStudentService";
+import { normalizeIdCard, fetchCollegeDifficultyStudents, resubmitStudentRecords, type DifficultyStudentRow } from "../../services/difficultyStudentService";
 import { normalizeSubmissionCollegeName } from "../../utils/collegeDetector";
 import {
   DIFFICULTY_STUDENT_TEMPLATE_FIELDS,
@@ -18,6 +18,7 @@ type CollegeDifficultyStudentsPageProps = {
 const statusText: Record<string, string> = {
   college_submitted: "学院已提交",
   pending_review: "待学校确认",
+  rejected: "已退回",
   archived: "管理员归档",
   local_uploaded: "本地已上载",
 };
@@ -149,6 +150,21 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
     setSelectedKeys(new Set());
   };
 
+  const handleResubmit = async () => {
+    if (selectedKeys.size === 0) return;
+    const rowsToResubmit = rows.filter((row) => selectedKeys.has(getRowKey(row)) && row.id);
+    const ids = rowsToResubmit.map((row) => row.id!);
+
+    const result = await resubmitStudentRecords(ids);
+    if (result.success) {
+      alert(result.message);
+      setSelectedKeys(new Set());
+      void loadRows();
+    } else {
+      alert(result.message);
+    }
+  };
+
   const exportCurrentRows = () => {
     if (filteredRows.length === 0) {
       alert("当前筛选条件下暂无可导出的困难生明细");
@@ -219,6 +235,9 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
       <div className="bos-action-toolbar">
         <button className="is-primary" onClick={() => void loadRows()} disabled={isLoading}>{isLoading ? "刷新中..." : "刷新数据"}</button>
         <button className="is-purple" onClick={exportCurrentRows}>导出当前名单</button>
+        <button className="is-success" disabled={selectedKeys.size === 0 || !filteredRows.some(r => selectedKeys.has(getRowKey(r)) && r.status === "rejected")} onClick={handleResubmit}>
+          重新提交选中（{selectedKeys.size}）
+        </button>
         <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedRows}>
           删除选中（{selectedKeys.size}）
         </button>
@@ -258,6 +277,8 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
                   {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
                     <th key={field} style={styles.th}>{field}</th>
                   ))}
+                  <th style={styles.th}>状态</th>
+                  <th style={styles.th}>退回原因</th>
                 </tr>
               </thead>
               <tbody>
@@ -296,6 +317,8 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
                           )}
                         </td>
                       ))}
+                      <td style={styles.td}>{displayStatus(row.status)}</td>
+                      <td style={styles.td}>{row.rejected_reason || "-"}</td>
                     </tr>
                   ))
                 )}
