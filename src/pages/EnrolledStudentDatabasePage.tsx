@@ -358,36 +358,25 @@ export default function EnrolledStudentDatabasePage() {
               <thead>
                 <tr>
                   <th style={styles.th}>学年</th>
-                  <th style={styles.th}>学期</th>
-                  <th style={styles.th}>考生号</th>
                   <th style={styles.th}>学号</th>
                   <th style={styles.th}>学生姓名</th>
-                  <th style={styles.th}>身份证件类型</th>
                   <th style={styles.th}>身份证件号</th>
                   <th style={styles.th}>性别</th>
                   <th style={styles.th}>出生日期</th>
-                  <th style={styles.th}>政治面貌</th>
-                  <th style={styles.th}>民族</th>
-                  <th style={styles.th}>学生类型</th>
-                  <th style={styles.th}>学习形式</th>
                   <th style={styles.th}>院系名称</th>
-                  <th style={styles.th}>辅导员姓名</th>
                   <th style={styles.th}>年级</th>
                   <th style={styles.th}>班级</th>
-                  <th style={styles.th}>专业大类</th>
                   <th style={styles.th}>专业</th>
                   <th style={styles.th}>层次</th>
                   <th style={styles.th}>学制</th>
                   <th style={styles.th}>入学日期</th>
-                  <th style={styles.th}>是否农村学生</th>
-                  <th style={styles.th}>生源地区</th>
                   <th style={styles.th}>联系电话</th>
                 </tr>
               </thead>
               <tbody>
                 {pageData.length === 0 ? (
                   <tr>
-                    <td colSpan={25} style={styles.empty}>
+                    <td colSpan={14} style={styles.empty}>
                       {students.length === 0
                         ? "暂无在校生数据，请点击上方按钮导入"
                         : "没有匹配的结果"}
@@ -397,29 +386,18 @@ export default function EnrolledStudentDatabasePage() {
                   pageData.map((student, index) => (
                     <tr key={(currentPage - 1) * PAGE_SIZE + index}>
                       <td style={styles.td}>{student.academicYear}</td>
-                      <td style={styles.td}>{student.semester || "-"}</td>
-                      <td style={styles.td}>{student.examineeId || "-"}</td>
                       <td style={styles.td}>{student.studentId}</td>
                       <td style={styles.td}>{student.name}</td>
-                      <td style={styles.td}>{student.idCardType || "-"}</td>
                       <td style={styles.td}>{student.idCard}</td>
                       <td style={styles.td}>{student.gender || "-"}</td>
                       <td style={styles.td}>{student.birthDate || "-"}</td>
-                      <td style={styles.td}>{student.politicalStatus || "-"}</td>
-                      <td style={styles.td}>{student.nationality || "-"}</td>
-                      <td style={styles.td}>{student.studentType || "-"}</td>
-                      <td style={styles.td}>{student.studyForm || "-"}</td>
                       <td style={styles.td}>{student.department || "-"}</td>
-                      <td style={styles.td}>{student.counselorName || "-"}</td>
                       <td style={styles.td}>{student.grade || "-"}</td>
                       <td style={styles.td}>{student.className || "-"}</td>
-                      <td style={styles.td}>{student.majorCategory || "-"}</td>
                       <td style={styles.td}>{student.major || "-"}</td>
                       <td style={styles.td}>{student.level || "-"}</td>
                       <td style={styles.td}>{student.schoolSystem || "-"}</td>
                       <td style={styles.td}>{student.enrollmentDate || "-"}</td>
-                      <td style={styles.td}>{student.isRuralStudent || "-"}</td>
-                      <td style={styles.td}>{student.studentSource || "-"}</td>
                       <td style={styles.td}>{student.phone || "-"}</td>
                     </tr>
                   ))
@@ -530,8 +508,8 @@ const styles: Record<string, CSSProperties> = {
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
-    height: "calc(100vh - 180px)",
-    minHeight: 400,
+    flex: 1,
+    minHeight: 0,
   },
   cardHeader: {
     display: "flex",
