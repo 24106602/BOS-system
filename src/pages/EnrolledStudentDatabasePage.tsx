@@ -13,29 +13,29 @@ import DataFilterPanel from "../components/ui/DataFilterPanel";
 const columnAliases = {
   academicYear: ["学年", "学年度", "academic_year", "学年学期"],
   semester: ["学期", "semester"],
-  examineeId: ["考生号", "考试号", "考号"],
-  studentId: ["学号", "学生学号", "学籍号", "学生编号"],
-  name: ["姓名", "学生姓名"],
+  examineeId: ["考生号", "考试号", "考号", "考生编号"],
+  studentId: ["学号", "学生学号", "学籍号", "学生编号", "校号"],
+  name: ["姓名", "学生姓名", "名字"],
   idCardType: ["身份证件类型", "证件类型", "身份证类型"],
-  idCard: ["身份证号", "身份证号码", "身份证件号", "证件号", "学生身份证号"],
+  idCard: ["身份证号", "身份证号码", "身份证件号", "证件号", "学生身份证号", "身份证"],
   gender: ["性别", "学生性别"],
-  birthDate: ["出生日期", "生日"],
+  birthDate: ["出生日期", "生日", "出生年月"],
   politicalStatus: ["政治面貌", "政治"],
-  nationality: ["民族"],
-  studentType: ["学生类型", "类型"],
-  studyForm: ["学习形式", "学习方式"],
-  department: ["院系名称", "院系", "系部", "学部", "学院", "二级学院", "学院名称"],
+  nationality: ["民族", "名族"],
+  studentType: ["学生类型", "类型", "学历类型"],
+  studyForm: ["学习形式", "学习方式", "学习性质"],
+  department: ["院系名称", "院系", "系部", "学部", "学院", "二级学院", "学院名称", "系", "部门"],
   counselorName: ["辅导员姓名", "辅导员"],
-  grade: ["年级", "入学年级", "届别"],
-  className: ["班级", "行政班", "班级名称"],
-  majorCategory: ["专业大类", "学科门类"],
-  major: ["专业", "专业名称"],
-  level: ["层次", "学历层次"],
-  schoolSystem: ["学制"],
-  enrollmentDate: ["入学日期", "入学报名日期"],
-  isRuralStudent: ["是否农村学生", "农村学生"],
-  studentSource: ["生源地区", "生源地"],
-  phone: ["联系电话", "手机号码", "电话"],
+  grade: ["年级", "入学年级", "届别", "级"],
+  className: ["班级", "行政班", "班级名称", "班"],
+  majorCategory: ["专业大类", "学科门类", "学科大类"],
+  major: ["专业", "专业名称", "专业方向"],
+  level: ["层次", "学历层次", "学历", "教育层次"],
+  schoolSystem: ["学制", "修业年限"],
+  enrollmentDate: ["入学日期", "入学报名日期", "入校日期", "入学时间"],
+  isRuralStudent: ["是否农村学生", "农村学生", "农村"],
+  studentSource: ["生源地区", "生源地", "来源地区"],
+  phone: ["联系电话", "手机号码", "电话", "手机", "联系方式"],
 };
 
 function normalizeHeader(value: string) {
@@ -67,6 +67,20 @@ function getCurrentAcademicYear(): string {
   return month >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
 }
 
+function convertExcelDate(dateValue: string): string {
+  const num = parseFloat(dateValue);
+  if (isNaN(num)) return dateValue;
+  
+  const excelEpoch = new Date(1899, 11, 30);
+  const date = new Date(excelEpoch.getTime() + num * 24 * 60 * 60 * 1000);
+  
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  
+  return `${year}${month}${day}`;
+}
+
 function parseEnrolledStudentsFromRows(
   rows: Record<string, unknown>[],
   sourceFile: string,
@@ -83,7 +97,7 @@ function parseEnrolledStudentsFromRows(
 
       const idCardNum = idCard.replace(/\s+/g, "");
       let gender = pickCell(row, columnAliases.gender);
-      let birthDate = pickCell(row, columnAliases.birthDate);
+      let birthDate = convertExcelDate(pickCell(row, columnAliases.birthDate));
 
       if (idCardNum.length === 18) {
         if (!gender) {
@@ -116,7 +130,7 @@ function parseEnrolledStudentsFromRows(
         major: pickCell(row, columnAliases.major),
         level: pickCell(row, columnAliases.level),
         schoolSystem: pickCell(row, columnAliases.schoolSystem),
-        enrollmentDate: pickCell(row, columnAliases.enrollmentDate),
+        enrollmentDate: convertExcelDate(pickCell(row, columnAliases.enrollmentDate)),
         isRuralStudent: pickCell(row, columnAliases.isRuralStudent),
         studentSource: pickCell(row, columnAliases.studentSource),
         phone: pickCell(row, columnAliases.phone),
@@ -639,9 +653,10 @@ const styles: Record<string, CSSProperties> = {
     whiteSpace: "nowrap",
     position: "sticky",
     top: 0,
-    zIndex: 2,
+    zIndex: 10,
     fontWeight: 600,
     color: "#303133",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
   },
   td: {
     border: "1px solid #cbd5e1",
