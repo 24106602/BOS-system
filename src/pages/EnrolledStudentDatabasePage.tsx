@@ -205,7 +205,12 @@ export default function EnrolledStudentDatabasePage() {
       alert(`导入成功！新增 ${parsed.length} 条在校生数据`);
     } catch (err) {
       console.error(err);
-      alert("导入失败：" + (err as Error).message);
+      const errorMessage = err instanceof Error ? err.message : "未知错误";
+      if (errorMessage.includes("exceeded the quota") || errorMessage.includes("数据量过大")) {
+        alert(`导入失败：数据量过大，超出本地存储限制。\n\n建议：请配置 Supabase 云端数据库以支持大规模数据存储。\n当前错误：${errorMessage}`);
+      } else {
+        alert("导入失败：" + errorMessage);
+      }
       setImportStatus("");
     } finally {
       if (fileRef.current) fileRef.current.value = "";

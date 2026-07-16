@@ -26,7 +26,16 @@ const getLocalStudents = (): EnrolledStudentRecord[] => {
 };
 
 const setLocalStudents = (students: EnrolledStudentRecord[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(students));
+  try {
+    const data = JSON.stringify(students);
+    if (data.length > 4 * 1024 * 1024) {
+      throw new Error("数据量过大，超出本地存储限制（建议配置 Supabase）");
+    }
+    localStorage.setItem(STORAGE_KEY, data);
+  } catch (e) {
+    console.error("本地存储在校生数据失败", e);
+    throw e;
+  }
 };
 
 // ---- 对外接口（与原 localEnrolledStudentDb 兼容）----
