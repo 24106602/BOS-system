@@ -1,6 +1,6 @@
 /**
  * 在校生数据库 - Supabase 优先 + 本地降级
- * 当 Supabase 已配置时，数据存储到云端；否则降级到 localStorage
+ * 当 Supabase 已配置时，数据存储到云端；否则降级到 IndexedDB
  */
 import { isSupabaseConfigured } from "../lib/supabaseClient";
 import type { EnrolledStudentRecord } from "../types/enrolledStudent";
@@ -12,31 +12,111 @@ import {
   verifyEnrolledStudentFromCloud,
 } from "../services/supabaseDataService";
 
-const STORAGE_KEY = "bos_enrolled_students";
+const DB_NAME = "bos_enrolled_student_db";
+const STORE_NAME = "enrolled_students";
+const LOCAL_KEY = "bos_enrolled_students";
 
-// ---- 本地存储降级 ----
+// ---- IndexedDB 本地存储 ----
 
-const getLocalStudents = (): EnrolledStudentRecord[] => {
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME, { keyPath: "_localId", autoIncrement: true });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function getFromLocalStorage(): Promise<EnrolledStudentRecord[]> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    return JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]");
   } catch {
     return [];
   }
-};
+}
 
-const setLocalStudents = (students: EnrolledStudentRecord[]) => {
+async function saveToLocalStorage(records: EnrolledStudentRecord[]) {
   try {
-    const data = JSON.stringify(students);
-    if (data.length > 4 * 1024 * 1024) {
-      throw new Error("数据量过大，超出本地存储限制（建议配置 Supabase）");
-    }
-    localStorage.setItem(STORAGE_KEY, data);
-  } catch (e) {
-    console.error("本地存储在校生数据失败", e);
-    throw e;
+    localStorage.setItem(LOCAL_KEY, JSON.stringify(records));
+  } catch {
+    // 如果 localStorage 也失败，静默降级
   }
-};
+}
+
+async function getAllLocal(): Promise<EnrolledStudentRecord[]> {
+  try {
+    const db = await openDb();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readonly");
+      const request = tx.objectStore(STORE_NAME).getAll();
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+    });
+  } catch {
+    return getFromLocalStorage();
+  }
+}
+
+async function saveAllLocal(records: EnrolledStudentRecord[]) {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      store.clear();
+      records.forEach((r) => store.put(r));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    await saveToLocalStorage(records);
+  }
+}
+
+async function addLocal(newRecords: EnrolledStudentRecord[]) {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      newRecords.forEach((r) => store.put(r));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    const existing = await getFromLocalStorage();
+    const existingKeys = new Set(existing.map((s) => s.idCard || s.studentId || s.name));
+    const merged = [...existing];
+    for (const student of newRecords) {
+      const key = student.idCard || student.studentId || student.name;
+      if (!existingKeys.has(key)) {
+        merged.push(student);
+        existingKeys.add(key);
+      }
+    }
+    await saveToLocalStorage(merged);
+  }
+}
+
+async function clearLocal() {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      tx.objectStore(STORE_NAME).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    // ignore
+  }
+  localStorage.removeItem(LOCAL_KEY);
+}
 
 // ---- 对外接口（与原 localEnrolledStudentDb 兼容）----
 
@@ -48,7 +128,7 @@ export const getAllEnrolledStudents = async (): Promise<EnrolledStudentRecord[]>
       console.warn("Supabase 读取在校生失败，降级到本地存储", e);
     }
   }
-  return getLocalStudents();
+  return getAllLocal();
 };
 
 export const getEnrolledStudentCount = async (): Promise<number> => {
@@ -65,7 +145,7 @@ export const saveEnrolledStudents = async (students: EnrolledStudentRecord[]): P
       console.warn("Supabase 保存在校生失败，降级到本地存储", e);
     }
   }
-  setLocalStudents(students);
+  await saveAllLocal(students);
 };
 
 export const clearEnrolledStudents = async (): Promise<void> => {
@@ -76,7 +156,7 @@ export const clearEnrolledStudents = async (): Promise<void> => {
       console.warn("Supabase 清空在校生失败", e);
     }
   }
-  localStorage.removeItem(STORAGE_KEY);
+  await clearLocal();
 };
 
 export const findEnrolledStudent = async (query: {
@@ -115,8 +195,7 @@ export const verifyEnrolledStudent = async (
     }
   }
 
-  // 本地降级校验
-  const all = getLocalStudents();
+  const all = await getAllLocal();
   if (all.length === 0) {
     return { verified: true, reason: "在校生数据库未配置，已跳过校验" };
   }
@@ -146,19 +225,7 @@ export const addEnrolledStudents = async (newStudents: EnrolledStudentRecord[]):
     }
   }
 
-  // 本地降级
-  const existing = getLocalStudents();
-  const existingKeys = new Set(
-    existing.map((s) => s.idCard || s.studentId || s.name)
-  );
-  const merged = [...existing];
-  for (const student of newStudents) {
-    const key = student.idCard || student.studentId || student.name;
-    if (!existingKeys.has(key)) {
-      merged.push(student);
-      existingKeys.add(key);
-    }
-  }
-  setLocalStudents(merged);
-  return merged.length;
+  await addLocal(newStudents);
+  const all = await getAllLocal();
+  return all.length;
 };
