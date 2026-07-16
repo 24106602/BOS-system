@@ -41,21 +41,45 @@ const columnAliases = {
 function normalizeHeader(value: string) {
   return String(value ?? "")
     .trim()
-    .replace(/\s+/g, "")
+    .replace(/[\s\u3000]+/g, "")
     .replace(/\*/g, "")
     .replace(/（.*?）/g, "")
     .replace(/\(.*?\)/g, "")
+    .replace(/[:：]/g, "")
+    .replace(/[.,;，；]/g, "")
     .toLowerCase();
+}
+
+function normalizeHeaderForMatch(value: string) {
+  return normalizeHeader(value)
+    .replace(/^(.*?)$/g, "$1")
+    .replace(/学生/g, "")
+    .replace(/名称/g, "")
+    .replace(/类型/g, "")
+    .replace(/日期/g, "");
 }
 
 function pickCell(row: Record<string, unknown>, aliases: string[]) {
   const entries = Object.entries(row);
   const normalizedAliases = aliases.map(normalizeHeader);
+
+  // 精确匹配
   const exact = entries.find(([key]) => normalizedAliases.includes(normalizeHeader(key)));
   if (exact) return String(exact[1] ?? "").trim();
+
+  // 简化后的精确匹配（去除"学生"、"名称"等通用后缀）
+  const simpleAliases = aliases.map(normalizeHeaderForMatch);
+  const simpleExact = entries.find(([key]) =>
+    simpleAliases.includes(normalizeHeaderForMatch(key))
+  );
+  if (simpleExact) return String(simpleExact[1] ?? "").trim();
+
+  // 模糊匹配
   const fuzzy = entries.find(([key]) => {
     const header = normalizeHeader(key);
-    return normalizedAliases.some((alias) => header.includes(alias) || alias.includes(header));
+    const simpleHeader = normalizeHeaderForMatch(key);
+    return normalizedAliases.some((alias) => header.includes(alias) || alias.includes(header)) ||
+      simpleAliases.some((alias) => simpleHeader.includes(alias) || alias.includes(simpleHeader));
   });
   return String(fuzzy?.[1] ?? "").trim();
 }
@@ -382,25 +406,36 @@ export default function EnrolledStudentDatabasePage() {
               <thead>
                 <tr>
                   <th style={styles.th}>学年</th>
+                  <th style={styles.th}>学期</th>
+                  <th style={styles.th}>考生号</th>
                   <th style={styles.th}>学号</th>
                   <th style={styles.th}>学生姓名</th>
+                  <th style={styles.th}>身份证件类型</th>
                   <th style={styles.th}>身份证件号</th>
                   <th style={styles.th}>性别</th>
                   <th style={styles.th}>出生日期</th>
+                  <th style={styles.th}>政治面貌</th>
+                  <th style={styles.th}>民族</th>
+                  <th style={styles.th}>学生类型</th>
+                  <th style={styles.th}>学习形式</th>
                   <th style={styles.th}>院系名称</th>
+                  <th style={styles.th}>辅导员姓名</th>
                   <th style={styles.th}>年级</th>
                   <th style={styles.th}>班级</th>
+                  <th style={styles.th}>专业大类</th>
                   <th style={styles.th}>专业</th>
                   <th style={styles.th}>层次</th>
                   <th style={styles.th}>学制</th>
                   <th style={styles.th}>入学日期</th>
+                  <th style={styles.th}>是否农村学生</th>
+                  <th style={styles.th}>生源地区</th>
                   <th style={styles.th}>联系电话</th>
                 </tr>
               </thead>
               <tbody>
                 {pageData.length === 0 ? (
                   <tr>
-                    <td colSpan={14} style={styles.empty}>
+                    <td colSpan={25} style={styles.empty}>
                       {students.length === 0
                         ? "暂无在校生数据，请点击上方按钮导入"
                         : "没有匹配的结果"}
@@ -409,19 +444,30 @@ export default function EnrolledStudentDatabasePage() {
                 ) : (
                   pageData.map((student, index) => (
                     <tr key={(currentPage - 1) * PAGE_SIZE + index}>
-                      <td style={styles.td}>{student.academicYear}</td>
-                      <td style={styles.td}>{student.studentId}</td>
-                      <td style={styles.td}>{student.name}</td>
-                      <td style={styles.td}>{student.idCard}</td>
+                      <td style={styles.td}>{student.academicYear || "-"}</td>
+                      <td style={styles.td}>{student.semester || "-"}</td>
+                      <td style={styles.td}>{student.examineeId || "-"}</td>
+                      <td style={styles.td}>{student.studentId || "-"}</td>
+                      <td style={styles.td}>{student.name || "-"}</td>
+                      <td style={styles.td}>{student.idCardType || "-"}</td>
+                      <td style={styles.td}>{student.idCard || "-"}</td>
                       <td style={styles.td}>{student.gender || "-"}</td>
                       <td style={styles.td}>{student.birthDate || "-"}</td>
+                      <td style={styles.td}>{student.politicalStatus || "-"}</td>
+                      <td style={styles.td}>{student.nationality || "-"}</td>
+                      <td style={styles.td}>{student.studentType || "-"}</td>
+                      <td style={styles.td}>{student.studyForm || "-"}</td>
                       <td style={styles.td}>{student.department || "-"}</td>
+                      <td style={styles.td}>{student.counselorName || "-"}</td>
                       <td style={styles.td}>{student.grade || "-"}</td>
                       <td style={styles.td}>{student.className || "-"}</td>
+                      <td style={styles.td}>{student.majorCategory || "-"}</td>
                       <td style={styles.td}>{student.major || "-"}</td>
                       <td style={styles.td}>{student.level || "-"}</td>
                       <td style={styles.td}>{student.schoolSystem || "-"}</td>
                       <td style={styles.td}>{student.enrollmentDate || "-"}</td>
+                      <td style={styles.td}>{student.isRuralStudent || "-"}</td>
+                      <td style={styles.td}>{student.studentSource || "-"}</td>
                       <td style={styles.td}>{student.phone || "-"}</td>
                     </tr>
                   ))
