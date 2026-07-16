@@ -8,20 +8,6 @@ type CollegeUploadPageProps = {
 export default function CollegeUploadPage({ panel, onNavigate }: CollegeUploadPageProps) {
   return (
     <div className="difficulty-upload-shell">
-      <div className="difficulty-panel-tabs" aria-label="困难生数据类型切换">
-        <button
-          className={panel === "student" ? "is-active" : ""}
-          onClick={() => onNavigate?.("/college/difficulty/student")}
-        >
-          本专科信息
-        </button>
-        <button
-          className={panel === "family" ? "is-active" : ""}
-          onClick={() => onNavigate?.("/college/difficulty/family")}
-        >
-          家庭成员信息
-        </button>
-      </div>
       <ProcessingWorkbench
         collegeMode
         fixedProcessingPanel={panel}
