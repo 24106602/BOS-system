@@ -301,9 +301,6 @@ export default function EnrolledStudentDatabasePage() {
             <button style={styles.primaryButton} onClick={() => fileRef.current?.click()}>
               导入在校生数据
             </button>
-            <button style={styles.button} onClick={handleExport} disabled={filtered.length === 0}>
-              导出当前结果
-            </button>
             <button style={styles.button} onClick={handleVerify}>
               校验规则说明
             </button>
@@ -437,6 +434,13 @@ export default function EnrolledStudentDatabasePage() {
             </div>
             <div style={styles.paginationControls}>
               <button
+                style={styles.downloadButton}
+                onClick={handleExport}
+                disabled={filtered.length === 0}
+              >
+                下载
+              </button>
+              <button
                 style={styles.pageButton}
                 onClick={() => setPage(1)}
                 disabled={currentPage <= 1}
@@ -481,7 +485,7 @@ const styles: Record<string, CSSProperties> = {
     flex: 1,
     minHeight: 0,
     padding: 16,
-    overflow: "auto",
+    overflow: "hidden",
     background: "#f5f7fa",
   },
   header: {
@@ -574,6 +578,16 @@ const styles: Record<string, CSSProperties> = {
     color: "#f56c6c",
     fontSize: 12,
     cursor: "pointer",
+  },
+  downloadButton: {
+    padding: "6px 16px",
+    border: "1px solid #dcdfe6",
+    borderRadius: 4,
+    background: "#fff",
+    color: "#606266",
+    fontSize: 12,
+    cursor: "pointer",
+    marginRight: 8,
   },
   statusBar: {
     padding: "8px 16px",
