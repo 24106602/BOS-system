@@ -344,7 +344,7 @@ const parseHistoricalRows = (rows: unknown[][], academicYear: string) => {
     }, {});
     const item: HistoricalImportRow = {
       academic_year: academicYear,
-      college_name: getRowValueByHeader(row, headers, ["college_name", "学部（院）", "学部院", "学院", "学院名称", "院系", "学部", "院系名称"]) || "未填学院",
+      college_name: getRowValueByHeader(row, headers, ["college_name", "学院", "学院名称", "院系", "学部", "院系名称"]) || "未填学院",
       student_id: getRowValueByHeader(row, headers, ["student_id", "学号", "学生学号", "学生编号"]),
       name: getRowValueByHeader(row, headers, ["name", "姓名", "学生姓名"]),
       id_card: normalizeIdCard(getRowValueByHeader(row, headers, ["id_card", "身份证", "身份证号", "身份证件号", "证件号", "学生身份证号"])),
@@ -820,7 +820,7 @@ export default function AdminStudentsPage() {
           <div style={styles.sectionHead}>
             <div>
               <h2 style={styles.subTitle}>上传往年数据</h2>
-              <p style={styles.description}>用于导入已有历史名单，例如 2024-2025 学年困难生名单。数据会按所选 academic_year 写入 students 表，不走学部（院）端上载流程。</p>
+              <p style={styles.description}>用于导入已有历史名单，例如 2024-2025 学年困难生名单。数据会按所选 academic_year 写入 students 表，不走学院端上载流程。</p>
             </div>
             <span style={styles.badge}>学校管理员归档</span>
           </div>

@@ -21,7 +21,7 @@ const STORAGE_KEY = "bos_announcements";
 const defaultAnnouncements: Announcement[] = [
   {
     id: "welcome",
-    title: "欢迎使用学部（院）业务工作台",
+    title: "欢迎使用业务工作台",
     content:
       "请各学院经办人及时完成本专科信息和家庭成员信息的上传与治理工作，确保数据准确无误后上载至学校端。",
     priority: "important",

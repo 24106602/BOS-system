@@ -193,14 +193,14 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
         <div className="bos-sidebar-brand">
           <span className="bos-sidebar-logo">BOS</span>
           <span>
-            <strong>学部（院）业务工作台</strong>
+            <strong>业务工作台</strong>
           </span>
         </div>
 
         <div className="bos-sidebar-role">
           <span className="bos-role-dot" />
           <span>
-            <strong>学部（院）端</strong>
+            <strong>学院端</strong>
           </span>
         </div>
 
@@ -241,7 +241,7 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
           <div className="bos-topbar-account">
             <span className="bos-account-avatar">院</span>
             <span className="bos-account-copy">
-              <strong>{profile.display_name || "学部（院）经办人"}</strong>
+              <strong>{profile.display_name || "经办人"}</strong>
             </span>
             <button onClick={onLogout}>退出登录</button>
           </div>

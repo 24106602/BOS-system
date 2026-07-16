@@ -69,7 +69,7 @@ export default function CollegeRecordsPage() {
       <header className="bos-page-title-row">
         <div>
           <div className="bos-breadcrumb">困难生业务 / 提交记录</div>
-          <h1>学部（院）提交记录</h1>
+          <h1>学院提交记录</h1>
           <p>提交记录按学年归档展示，当前数据来源为学院端上载到学校端的通过批次。</p>
         </div>
         <label className="bos-current-year">

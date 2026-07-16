@@ -18,7 +18,7 @@ export default function CollegeDifficultyPage({ profile, onNavigate }: CollegeDi
     getMergeBatches().then(setBatches);
   }, []);
 
-  const unitName = profile.college_name || profile.display_name || "当前学部（院）";
+  const unitName = profile.college_name || profile.display_name || "当前学院";
   const myBatches = useMemo(
     () =>
       batches.filter(
@@ -40,7 +40,7 @@ export default function CollegeDifficultyPage({ profile, onNavigate }: CollegeDi
       <header className="bos-page-title-row">
         <div>
           <h1>困难生业务首页</h1>
-          <p>请按以下步骤完成本学部（院）困难生数据治理与提交。</p>
+          <p>请按以下步骤完成本学院困难生数据治理与提交。</p>
         </div>
         <label className="bos-current-year">
           当前学年
@@ -108,7 +108,7 @@ export default function CollegeDifficultyPage({ profile, onNavigate }: CollegeDi
             )}
           </div>
           <p style={styles.stepDesc}>
-            上传本学部（院）困难生的本专科学生信息，系统将自动校验数据并完成治理。
+            上传本学院困难生的本专科学生信息，系统将自动校验数据并完成治理。
           </p>
           <div style={styles.stepMeta}>
             <span>已提交 {studentCount} 条</span>
@@ -132,7 +132,7 @@ export default function CollegeDifficultyPage({ profile, onNavigate }: CollegeDi
             )}
           </div>
           <p style={styles.stepDesc}>
-            上传本学部（院）困难生的家庭成员信息，系统将自动校验数据并完成治理。
+            上传本学院困难生的家庭成员信息，系统将自动校验数据并完成治理。
           </p>
           <div style={styles.stepMeta}>
             <span>已提交 {familyCount} 条</span>

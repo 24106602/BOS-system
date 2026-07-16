@@ -48,7 +48,7 @@ export default function CollegeHomePage({ onNavigate }: CollegeHomePageProps) {
     <section>
       <div style={styles.hero}>
         <div>
-          <h1 style={styles.title}>学部（院）业务工作台</h1>
+          <h1 style={styles.title}>业务工作台</h1>
           <p style={styles.text}>请选择需要办理的业务模块，进入对应工作区进行数据处理。</p>
         </div>
       </div>

@@ -346,12 +346,12 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
 
     if (
       possibleDuplicate &&
-      !confirm("检测到该学部（院）本专科信息可能已上载，是否仍然继续上载？")
+      !confirm("检测到该学院本专科信息可能已上载，是否仍然继续上载？")
     ) {
       return;
     }
 
-    pushLog("info", `本次数据归属学年：${academicYear}；防重范围为当前学部（院）+ 当前学年。`);
+    pushLog("info", `本次数据归属学年：${academicYear}；防重范围为当前学院 + 当前学年。`);
     await saveMergeBatch({
       id: `student_${academicYear}_${encodeURIComponent(collegeName)}`,
       academic_year: academicYear,
@@ -405,12 +405,12 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
 
     if (
       possibleDuplicate &&
-      !confirm("检测到该学部（院）家庭成员信息可能已上载，是否仍然继续上载？")
+      !confirm("检测到该学院家庭成员信息可能已上载，是否仍然继续上载？")
     ) {
       return;
     }
 
-    pushFamilyLog("info", `本次数据归属学年：${academicYear}；防重范围为当前学部（院）+ 当前学年。`);
+    pushFamilyLog("info", `本次数据归属学年：${academicYear}；防重范围为当前学院 + 当前学年。`);
     await saveMergeBatch({
       id: `family_${academicYear}_${encodeURIComponent(collegeName)}`,
       academic_year: academicYear,
@@ -620,7 +620,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     setStudentCollegeName(collegeDetection.collegeName);
     setStudentCollegeValidationError("");
     if (collegeDetection.error) pushLog("error", `学院识别失败，但继续按行校验：${collegeDetection.error} 学院不匹配的数据将在治理结果中进入不通过名单。`);
-    else pushLog("success", `所属学部（院）已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
+    else pushLog("success", `所属学院已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
 
     const { sheetName, rowCount, rows } = getWorkbookReadSummary(workbookData, dataCheck.sheetName);
     if (rowCount === 0) throw new Error("没有读取到数据行");
@@ -1190,7 +1190,7 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
     setFamilyCollegeName(collegeDetection.collegeName);
     setFamilyCollegeValidationError("");
     if (collegeDetection.error) pushFamilyLog("error", `学院识别失败，但继续按行校验：${collegeDetection.error} 后续按当前账号范围提交。`);
-    else pushFamilyLog("success", `所属学部（院）已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
+    else pushFamilyLog("success", `所属学院已识别：${collegeDetection.collegeName}（来源：${collegeDetection.source === "account" ? "当前账号" : "文件名"}）`);
 
     const { sheetName, rowCount, rows } = getWorkbookReadSummary(workbookData, parsed.outputSheet);
     if (rowCount === 0) throw new Error("没有读取到数据行");
