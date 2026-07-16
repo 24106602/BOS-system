@@ -11,16 +11,31 @@ import {
 import DataFilterPanel from "../components/ui/DataFilterPanel";
 
 const columnAliases = {
+  academicYear: ["学年", "学年度", "academic_year", "学年学期"],
+  semester: ["学期", "semester"],
+  examineeId: ["考生号", "考试号", "考号"],
   studentId: ["学号", "学生学号", "学籍号", "学生编号"],
   name: ["姓名", "学生姓名"],
+  idCardType: ["身份证件类型", "证件类型", "身份证类型"],
   idCard: ["身份证号", "身份证号码", "身份证件号", "证件号", "学生身份证号"],
-  college: ["学院", "院系", "二级学院", "学院名称", "学校名称"],
-  department: ["院系", "系部", "学部", "院系名称"],
-  major: ["专业", "专业名称"],
-  className: ["班级", "行政班", "班级名称"],
   gender: ["性别", "学生性别"],
+  birthDate: ["出生日期", "生日"],
+  politicalStatus: ["政治面貌", "政治"],
+  nationality: ["民族"],
+  studentType: ["学生类型", "类型"],
+  studyForm: ["学习形式", "学习方式"],
+  department: ["院系名称", "院系", "系部", "学部", "学院", "二级学院", "学院名称"],
+  counselorName: ["辅导员姓名", "辅导员"],
   grade: ["年级", "入学年级", "届别"],
-  academicYear: ["学年", "学年度", "academic_year", "学年学期"],
+  className: ["班级", "行政班", "班级名称"],
+  majorCategory: ["专业大类", "学科门类"],
+  major: ["专业", "专业名称"],
+  level: ["层次", "学历层次"],
+  schoolSystem: ["学制"],
+  enrollmentDate: ["入学日期", "入学报名日期"],
+  isRuralStudent: ["是否农村学生", "农村学生"],
+  studentSource: ["生源地区", "生源地"],
+  phone: ["联系电话", "手机号码", "电话"],
 };
 
 function normalizeHeader(value: string) {
@@ -61,22 +76,53 @@ function parseEnrolledStudentsFromRows(
   const currentYear = defaultAcademicYear || getCurrentAcademicYear();
   return rows
     .map((row) => {
-      const base = {
-        studentId: pickCell(row, columnAliases.studentId),
-        name: pickCell(row, columnAliases.name),
-        idCard: pickCell(row, columnAliases.idCard),
-        college: pickCell(row, columnAliases.college),
-        department: pickCell(row, columnAliases.department),
-        major: pickCell(row, columnAliases.major),
-        className: pickCell(row, columnAliases.className),
-        gender: pickCell(row, columnAliases.gender),
-        grade: pickCell(row, columnAliases.grade),
+      const studentId = pickCell(row, columnAliases.studentId);
+      const name = pickCell(row, columnAliases.name);
+      const idCard = pickCell(row, columnAliases.idCard);
+      if (!name && !idCard && !studentId) return null;
+
+      const idCardNum = idCard.replace(/\s+/g, "");
+      let gender = pickCell(row, columnAliases.gender);
+      let birthDate = pickCell(row, columnAliases.birthDate);
+
+      if (idCardNum.length === 18) {
+        if (!gender) {
+          gender = parseInt(idCardNum.charAt(16)) % 2 === 1 ? "男" : "女";
+        }
+        if (!birthDate) {
+          birthDate = idCardNum.substring(6, 14);
+        }
+      }
+
+      return {
         academicYear: pickCell(row, columnAliases.academicYear) || currentYear,
+        semester: pickCell(row, columnAliases.semester),
+        examineeId: pickCell(row, columnAliases.examineeId),
+        studentId,
+        name,
+        idCardType: pickCell(row, columnAliases.idCardType),
+        idCard: idCardNum,
+        gender,
+        birthDate,
+        politicalStatus: pickCell(row, columnAliases.politicalStatus),
+        nationality: pickCell(row, columnAliases.nationality),
+        studentType: pickCell(row, columnAliases.studentType),
+        studyForm: pickCell(row, columnAliases.studyForm),
+        department: pickCell(row, columnAliases.department),
+        counselorName: pickCell(row, columnAliases.counselorName),
+        grade: pickCell(row, columnAliases.grade),
+        className: pickCell(row, columnAliases.className),
+        majorCategory: pickCell(row, columnAliases.majorCategory),
+        major: pickCell(row, columnAliases.major),
+        level: pickCell(row, columnAliases.level),
+        schoolSystem: pickCell(row, columnAliases.schoolSystem),
+        enrollmentDate: pickCell(row, columnAliases.enrollmentDate),
+        isRuralStudent: pickCell(row, columnAliases.isRuralStudent),
+        studentSource: pickCell(row, columnAliases.studentSource),
+        phone: pickCell(row, columnAliases.phone),
         sourceFile,
         importedAt,
       };
-      if (!base.name && !base.idCard && !base.studentId) return null;
-      return base;
     })
     .filter(Boolean) as EnrolledStudentRecord[];
 }
@@ -93,7 +139,7 @@ export default function EnrolledStudentDatabasePage() {
     name: "",
     studentId: "",
     idCard: "",
-    college: "",
+    department: "",
     major: "",
   });
   const [importStatus, setImportStatus] = useState("");
@@ -104,7 +150,7 @@ export default function EnrolledStudentDatabasePage() {
 
   useEffect(() => {
     setPage(1);
-  }, [academicYear, filters.name, filters.studentId, filters.idCard, filters.college, filters.major]);
+  }, [academicYear, filters.name, filters.studentId, filters.idCard, filters.department, filters.major]);
 
   const yearOptions = useMemo(() => {
     const years = new Set(students.map((s) => s.academicYear).filter(Boolean));
@@ -119,7 +165,7 @@ export default function EnrolledStudentDatabasePage() {
       if (filters.name && !s.name.includes(filters.name)) return false;
       if (filters.studentId && !s.studentId.includes(filters.studentId)) return false;
       if (filters.idCard && !s.idCard.includes(filters.idCard)) return false;
-      if (filters.college && !s.college.includes(filters.college)) return false;
+      if (filters.department && !s.department.includes(filters.department)) return false;
       if (filters.major && !s.major.includes(filters.major)) return false;
       return true;
     });
@@ -179,16 +225,31 @@ export default function EnrolledStudentDatabasePage() {
       return;
     }
     const exportData = filtered.map((s) => ({
-      学号: s.studentId,
-      姓名: s.name,
-      身份证号: s.idCard,
-      性别: s.gender,
-      学院: s.college,
-      院系: s.department,
-      专业: s.major,
-      班级: s.className,
-      年级: s.grade,
       学年: s.academicYear,
+      学期: s.semester || "-",
+      考生号: s.examineeId || "-",
+      学号: s.studentId,
+      学生姓名: s.name,
+      身份证件类型: s.idCardType || "-",
+      身份证件号: s.idCard,
+      性别: s.gender || "-",
+      出生日期: s.birthDate || "-",
+      政治面貌: s.politicalStatus || "-",
+      民族: s.nationality || "-",
+      学生类型: s.studentType || "-",
+      学习形式: s.studyForm || "-",
+      院系名称: s.department || "-",
+      辅导员姓名: s.counselorName || "-",
+      年级: s.grade || "-",
+      班级: s.className || "-",
+      专业大类: s.majorCategory || "-",
+      专业: s.major || "-",
+      层次: s.level || "-",
+      学制: s.schoolSystem || "-",
+      入学日期: s.enrollmentDate || "-",
+      是否农村学生: s.isRuralStudent || "-",
+      生源地区: s.studentSource || "-",
+      联系电话: s.phone || "-",
     }));
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
@@ -264,7 +325,7 @@ export default function EnrolledStudentDatabasePage() {
             name: filters.name,
             studentId: filters.studentId,
             idCard: filters.idCard,
-            college: filters.college,
+            department: filters.department,
             major: filters.major,
           }}
           onChange={(key, value) => {
@@ -276,7 +337,7 @@ export default function EnrolledStudentDatabasePage() {
           }}
           onReset={() => {
             setAcademicYear(getCurrentAcademicYear());
-            setFilters({ name: "", studentId: "", idCard: "", college: "", major: "" });
+            setFilters({ name: "", studentId: "", idCard: "", department: "", major: "" });
           }}
           showAcademicYear={true}
           showCollege={false}
@@ -285,7 +346,7 @@ export default function EnrolledStudentDatabasePage() {
             { key: "name", label: "姓名", type: "text", placeholder: "请输入姓名", width: 120 },
             { key: "studentId", label: "学号", type: "text", placeholder: "请输入学号", width: 120 },
             { key: "idCard", label: "身份证号", type: "text", placeholder: "请输入身份证号", width: 160 },
-            { key: "college", label: "学院", type: "text", placeholder: "请输入学院", width: 140 },
+            { key: "department", label: "院系", type: "text", placeholder: "请输入院系", width: 140 },
             { key: "major", label: "专业", type: "text", placeholder: "请输入专业", width: 140 },
           ]}
         />
@@ -299,22 +360,37 @@ export default function EnrolledStudentDatabasePage() {
             <table style={styles.table}>
               <thead>
                 <tr>
-                  <th style={styles.th}>学号</th>
-                  <th style={styles.th}>姓名</th>
-                  <th style={styles.th}>身份证号</th>
-                  <th style={styles.th}>性别</th>
-                  <th style={styles.th}>学院</th>
-                  <th style={styles.th}>院系</th>
-                  <th style={styles.th}>专业</th>
-                  <th style={styles.th}>班级</th>
-                  <th style={styles.th}>年级</th>
                   <th style={styles.th}>学年</th>
+                  <th style={styles.th}>学期</th>
+                  <th style={styles.th}>考生号</th>
+                  <th style={styles.th}>学号</th>
+                  <th style={styles.th}>学生姓名</th>
+                  <th style={styles.th}>身份证件类型</th>
+                  <th style={styles.th}>身份证件号</th>
+                  <th style={styles.th}>性别</th>
+                  <th style={styles.th}>出生日期</th>
+                  <th style={styles.th}>政治面貌</th>
+                  <th style={styles.th}>民族</th>
+                  <th style={styles.th}>学生类型</th>
+                  <th style={styles.th}>学习形式</th>
+                  <th style={styles.th}>院系名称</th>
+                  <th style={styles.th}>辅导员姓名</th>
+                  <th style={styles.th}>年级</th>
+                  <th style={styles.th}>班级</th>
+                  <th style={styles.th}>专业大类</th>
+                  <th style={styles.th}>专业</th>
+                  <th style={styles.th}>层次</th>
+                  <th style={styles.th}>学制</th>
+                  <th style={styles.th}>入学日期</th>
+                  <th style={styles.th}>是否农村学生</th>
+                  <th style={styles.th}>生源地区</th>
+                  <th style={styles.th}>联系电话</th>
                 </tr>
               </thead>
               <tbody>
                 {pageData.length === 0 ? (
                   <tr>
-                    <td colSpan={10} style={styles.empty}>
+                    <td colSpan={25} style={styles.empty}>
                       {students.length === 0
                         ? "暂无在校生数据，请点击上方按钮导入"
                         : "没有匹配的结果"}
@@ -323,16 +399,31 @@ export default function EnrolledStudentDatabasePage() {
                 ) : (
                   pageData.map((student, index) => (
                     <tr key={(currentPage - 1) * PAGE_SIZE + index}>
+                      <td style={styles.td}>{student.academicYear}</td>
+                      <td style={styles.td}>{student.semester || "-"}</td>
+                      <td style={styles.td}>{student.examineeId || "-"}</td>
                       <td style={styles.td}>{student.studentId}</td>
                       <td style={styles.td}>{student.name}</td>
+                      <td style={styles.td}>{student.idCardType || "-"}</td>
                       <td style={styles.td}>{student.idCard}</td>
-                      <td style={styles.td}>{student.gender}</td>
-                      <td style={styles.td}>{student.college}</td>
-                      <td style={styles.td}>{student.department}</td>
-                      <td style={styles.td}>{student.major}</td>
-                      <td style={styles.td}>{student.className}</td>
-                      <td style={styles.td}>{student.grade}</td>
-                      <td style={styles.td}>{student.academicYear}</td>
+                      <td style={styles.td}>{student.gender || "-"}</td>
+                      <td style={styles.td}>{student.birthDate || "-"}</td>
+                      <td style={styles.td}>{student.politicalStatus || "-"}</td>
+                      <td style={styles.td}>{student.nationality || "-"}</td>
+                      <td style={styles.td}>{student.studentType || "-"}</td>
+                      <td style={styles.td}>{student.studyForm || "-"}</td>
+                      <td style={styles.td}>{student.department || "-"}</td>
+                      <td style={styles.td}>{student.counselorName || "-"}</td>
+                      <td style={styles.td}>{student.grade || "-"}</td>
+                      <td style={styles.td}>{student.className || "-"}</td>
+                      <td style={styles.td}>{student.majorCategory || "-"}</td>
+                      <td style={styles.td}>{student.major || "-"}</td>
+                      <td style={styles.td}>{student.level || "-"}</td>
+                      <td style={styles.td}>{student.schoolSystem || "-"}</td>
+                      <td style={styles.td}>{student.enrollmentDate || "-"}</td>
+                      <td style={styles.td}>{student.isRuralStudent || "-"}</td>
+                      <td style={styles.td}>{student.studentSource || "-"}</td>
+                      <td style={styles.td}>{student.phone || "-"}</td>
                     </tr>
                   ))
                 )}
@@ -514,32 +605,39 @@ const styles: Record<string, CSSProperties> = {
     flex: 1,
     minHeight: 0,
     overflow: "hidden",
+    position: "relative",
   },
   tableWrap: {
     flex: 1,
     overflow: "auto",
     minHeight: 0,
+    scrollbarWidth: "thin",
+    scrollbarColor: "#cbd5e1 transparent",
   },
   table: {
     width: "100%",
+    minWidth: "1800px",
     borderCollapse: "collapse",
-    fontSize: 13,
+    fontSize: 12,
   },
   th: {
     border: "1px solid #cbd5e1",
-    padding: "8px 10px",
+    padding: "6px 8px",
     background: "#edf4fa",
     textAlign: "center",
     whiteSpace: "nowrap",
     position: "sticky",
     top: 0,
     zIndex: 2,
+    fontWeight: 600,
+    color: "#303133",
   },
   td: {
     border: "1px solid #cbd5e1",
-    padding: "8px 10px",
+    padding: "6px 8px",
     textAlign: "center",
     whiteSpace: "nowrap",
+    color: "#606266",
   },
   empty: {
     padding: 40,
