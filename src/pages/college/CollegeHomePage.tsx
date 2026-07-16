@@ -1,12 +1,75 @@
-import type { CSSProperties } from "react";
+import { useState, useEffect, type CSSProperties } from "react";
+import {
+  getAnnouncements,
+  formatAnnouncementTime,
+  type Announcement,
+  type AnnouncementPriority,
+} from "../../services/announcementService";
 
 type CollegeHomePageProps = {
   onNavigate?: (to: string) => void;
 };
 
 export default function CollegeHomePage({ onNavigate }: CollegeHomePageProps) {
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    setAnnouncements(getAnnouncements());
+  }, []);
+
+  const priorityLabel: Record<AnnouncementPriority, string> = {
+    normal: "通知",
+    important: "重要",
+    urgent: "紧急",
+  };
+
+  const hasAnnouncements = announcements.length > 0;
+  const current = hasAnnouncements ? announcements[Math.min(activeIndex, announcements.length - 1)] : null;
+
   return (
     <section>
+      {hasAnnouncements && current && !collapsed && (
+        <div className="bos-announcement-bar" data-priority={current.priority}>
+          <div className="bos-announcement-tag">{priorityLabel[current.priority]}</div>
+          <div className="bos-announcement-body">
+            <div className="bos-announcement-title">{current.title}</div>
+            <div className="bos-announcement-content">{current.content}</div>
+            <div className="bos-announcement-meta">
+              <span>{current.publisher}</span>
+              <span>{formatAnnouncementTime(current.publishedAt)}</span>
+            </div>
+          </div>
+          <div className="bos-announcement-actions">
+            {announcements.length > 1 && (
+              <>
+                <button
+                  className="bos-announcement-nav"
+                  disabled={activeIndex === 0}
+                  onClick={() => setActiveIndex(activeIndex - 1)}
+                >
+                  ‹
+                </button>
+                <span className="bos-announcement-pager">
+                  {activeIndex + 1} / {announcements.length}
+                </span>
+                <button
+                  className="bos-announcement-nav"
+                  disabled={activeIndex >= announcements.length - 1}
+                  onClick={() => setActiveIndex(activeIndex + 1)}
+                >
+                  ›
+                </button>
+              </>
+            )}
+            <button className="bos-announcement-close" onClick={() => setCollapsed(true)}>
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       <div style={styles.hero}>
         <div>
           <h1 style={styles.title}>学部（院）业务工作台</h1>
