@@ -3,6 +3,7 @@ import * as XLSX from "xlsx-js-style";
 import type { UserProfile } from "../../types/auth";
 import { ACADEMIC_YEAR_OPTIONS, getCurrentAcademicYear } from "../../utils/academicYear";
 import { normalizeIdCard, fetchCollegeDifficultyStudents, resubmitStudentRecords, type DifficultyStudentRow } from "../../services/difficultyStudentService";
+import { getDifficultyStudentStatusLabel } from "../../constants/statusTransitions";
 import { normalizeSubmissionCollegeName } from "../../utils/collegeDetector";
 import {
   DIFFICULTY_STUDENT_TEMPLATE_FIELDS,
@@ -15,15 +16,7 @@ type CollegeDifficultyStudentsPageProps = {
   profile: UserProfile;
 };
 
-const statusText: Record<string, string> = {
-  college_submitted: "学院已提交",
-  pending_review: "待学校确认",
-  rejected: "已退回",
-  archived: "管理员归档",
-  local_uploaded: "本地已上载",
-};
-
-const displayStatus = (status: string) => statusText[status] || status || "已上载学校端";
+const displayStatus = (status: string) => getDifficultyStudentStatusLabel(status);
 
 const normalizeRawKey = (value: string) =>
   value.replace(/\s|\*|（.*?）|\(.*?\)/g, "").toLowerCase();

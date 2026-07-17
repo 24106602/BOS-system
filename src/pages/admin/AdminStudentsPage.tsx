@@ -21,6 +21,12 @@ import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
 import Toolbar from "../../components/ui/Toolbar";
 import { rejectStudentRecords } from "../../services/difficultyStudentService";
+import { importHistoricalDifficultyStudent } from "../../services/difficultyStudentApi";
+import {
+  getDifficultyStudentStatusLabel,
+  normalizeDifficultyStudentStatus,
+  type DifficultyStudentStatus,
+} from "../../constants/statusTransitions";
 
 type MergedDifficultyRow = {
   academicYear: string;
@@ -72,7 +78,7 @@ type HistoricalImportRow = {
   grade: string;
   gender: string;
   difficulty_level: string;
-  status: string;
+  status: DifficultyStudentStatus;
   raw_data: Record<string, unknown>;
 };
 
@@ -106,15 +112,7 @@ const getText = (row: Record<string, unknown>, aliases: string[]) => {
 
 const normalizeIdCard = (value: string) => value.replace(/\s|-/g, "").toUpperCase();
 
-const statusText: Record<string, string> = {
-  college_submitted: "学院已提交",
-  pending_review: "待学校确认",
-  rejected: "已退回",
-  archived: "管理员归档",
-  local_uploaded: "本地已上载",
-};
-
-const displayStatus = (status: string) => statusText[status] || status || "已上载学校端";
+const displayStatus = (status: string) => getDifficultyStudentStatusLabel(status);
 
 const makeStudentKey = (row: Pick<HistoricalImportRow, "id_card" | "student_id">) =>
   normalizeIdCard(row.id_card) || row.student_id.trim();
@@ -150,29 +148,6 @@ const formatSupabaseError = (error: unknown) => {
     detail?.code ? `code: ${detail.code}` : "",
   ].filter(Boolean).join("；") || "未知 Supabase 错误";
 };
-
-const makeFullStudentPayload = (row: HistoricalImportRow) => ({
-  academic_year: row.academic_year,
-  college_name: row.college_name,
-  student_id: row.student_id,
-  name: row.name,
-  id_card: row.id_card,
-  grade: row.grade,
-  gender: row.gender,
-  difficulty_level: row.difficulty_level,
-  status: row.status,
-  raw_data: row.raw_data,
-});
-
-const makeCompatibleStudentPayload = (row: HistoricalImportRow) => ({
-  academic_year: row.academic_year,
-  college_name: row.college_name,
-  student_id: row.student_id,
-  name: row.name,
-  id_card: row.id_card,
-  difficulty_level: row.difficulty_level,
-  status: row.status,
-});
 
 const makeMergedRows = (batches: CollegeProcessedBatch[]): MergedDifficultyRow[] => {
   const studentRows = batches.filter((item) => item.dataType === "student");
@@ -360,7 +335,10 @@ const parseHistoricalRows = (rows: unknown[][], academicYear: string) => {
       grade: getRowValueByHeader(row, headers, ["grade", "年级", "所在年级"]),
       gender: getRowValueByHeader(row, headers, ["gender", "性别"]),
       difficulty_level: getRowValueByHeader(row, headers, ["difficulty_level", "推荐档次", "院系推荐档次", "学校推荐档次", "困难等级", "困难档次", "困难认定等级", "认定等级", "特殊困难类型"]),
-      status: getRowValueByHeader(row, headers, ["status", "状态", "审核状态"]) || "archived",
+      status: normalizeDifficultyStudentStatus(
+        getRowValueByHeader(row, headers, ["status", "状态", "审核状态"]) || "reported",
+        "reported"
+      ),
       raw_data: rawData,
     };
 
@@ -584,27 +562,13 @@ export default function AdminStudentsPage() {
   };
 
   const writeHistoricalStudent = async (row: HistoricalImportRow, existing?: CloudStudentRow) => {
-    const fullPayload = makeFullStudentPayload(row);
-    const compatiblePayload = makeCompatibleStudentPayload(row);
-    const action = existing?.id !== undefined
-      ? supabase.from("students").update(fullPayload).eq("id", existing.id)
-      : supabase.from("students").insert(fullPayload);
-    const { error } = await action;
-
-    if (!error) return { ok: true, fallback: false };
-
-    logSupabaseError(existing?.id !== undefined ? "Historical student update failed" : "Historical student insert failed", error);
-    pushImportLog(`${existing?.id !== undefined ? "更新" : "新增"}兼容重试：${row.name || row.student_id || row.id_card}，${formatSupabaseError(error)}`);
-
-    const fallbackAction = existing?.id !== undefined
-      ? supabase.from("students").update(compatiblePayload).eq("id", existing.id)
-      : supabase.from("students").insert(compatiblePayload);
-    const { error: fallbackError } = await fallbackAction;
-
-    if (!fallbackError) return { ok: true, fallback: true };
-
-    logSupabaseError(existing?.id !== undefined ? "Historical student fallback update failed" : "Historical student fallback insert failed", fallbackError);
-    return { ok: false, fallback: false, error: fallbackError };
+    try {
+      await importHistoricalDifficultyStudent(row);
+      return { ok: true, fallback: false };
+    } catch (error) {
+      logSupabaseError(existing?.id !== undefined ? "Historical student update failed" : "Historical student insert failed", error);
+      return { ok: false, fallback: false, error };
+    }
   };
 
   const importHistoricalData = async () => {

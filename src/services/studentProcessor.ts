@@ -24,7 +24,6 @@ import {
   parseRuleOptions,
 } from "./templateParser";
 import { applyHighlightStyle, cloneWorksheet } from "./excelExport";
-import { supabase } from '../utils/supabaseClient';
 import {
   cleanFieldName,
   compressText,
@@ -67,15 +66,6 @@ export type StudentProcessorResult = {
   stats: ProcessingStats;
   removedHeaders: { header: string; index: number }[];
   errorReports: ErrorReportItem[];
-};
-
-type StudentCloudRow = {
-  college_name: string;
-  student_id: string;
-  name: string;
-  id_card: string;
-  difficulty_level: string;
-  status: string;
 };
 
 const makeStudentKey = (collegeName: string, studentId: string, idCard: string) => {
@@ -1958,96 +1948,6 @@ ${removedHeaders.map((item) => item.header).join("、")}`,
       type: "error",
       message: "上传失败，当前数据仍存在不通过项，请查看“不通过预览”",
     });
-  } else {
-    try {
-      const cloudRows: StudentCloudRow[] = result.map((row) => ({
-        college_name: resolvedCollegeName || String(row[templateFields[1]] ?? "").trim() || "未填学院",
-        student_id: studentIdField ? String(row[studentIdField] ?? "").trim() : "",
-        name: String(row[templateFields[0]] ?? "").trim(),
-        id_card: String(row[templateFields[2]] ?? "").trim(),
-        difficulty_level: String(row[templateFields[11]] ?? "").trim(),
-        status: "pending_review",
-      }));
-
-      const collegeName = cloudRows[0]?.college_name || "未填学院";
-      const { data: existingRows, error: fetchError } = await supabase
-        .from("students")
-        .select("id,college_name,student_id,id_card")
-        .eq("college_name", collegeName);
-      if (fetchError) throw fetchError;
-
-      const existingByStudentId = new Map<string, number>();
-      const existingByIdCard = new Map<string, number>();
-      (existingRows || []).forEach((item: { id: number; student_id: string | null; id_card: string | null }) => {
-        const sid = String(item.student_id ?? "").trim();
-        const cid = String(item.id_card ?? "").trim();
-        if (sid) existingByStudentId.set(sid, item.id);
-        if (cid) existingByIdCard.set(cid, item.id);
-      });
-
-      let inserted = 0;
-      let updated = 0;
-      let skipped = 0;
-      let failed = 0;
-
-      for (const row of cloudRows) {
-        const sid = row.student_id.trim();
-        const cid = row.id_card.trim();
-        if (!sid && !cid) {
-          skipped += 1;
-          continue;
-        }
-
-        const existingId = sid ? existingByStudentId.get(sid) : existingByIdCard.get(cid);
-        if (existingId) {
-          const { error: updateError } = await supabase
-            .from("students")
-            .update({
-              college_name: row.college_name,
-              student_id: row.student_id,
-              name: row.name,
-              id_card: row.id_card,
-              difficulty_level: row.difficulty_level,
-              status: row.status,
-            })
-            .eq("id", existingId);
-          if (updateError) {
-            failed += 1;
-          } else {
-            updated += 1;
-          }
-          continue;
-        }
-
-        const { error: insertError } = await supabase.from("students").insert(row);
-        if (insertError) {
-          failed += 1;
-        } else {
-          inserted += 1;
-        }
-      }
-
-      onLog?.({
-        type: "success",
-        message: `云端同步完成：新增 ${inserted} 条，更新 ${updated} 条，跳过 ${skipped} 条，失败 ${failed} 条`,
-      });
-    } catch (error) {
-      const e = error as {
-        message?: string;
-        details?: string;
-        hint?: string;
-        code?: string;
-      };
-      console.error("Supabase cloud sync failed:", e);
-      console.error("Supabase error message:", e?.message);
-      console.error("Supabase error details:", e?.details);
-      console.error("Supabase error hint:", e?.hint);
-      console.error("Supabase error code:", e?.code);
-      onLog?.({
-        type: "error",
-        message: `云端同步失败：${e?.message || JSON.stringify(e)}；details=${e?.details || ""}；hint=${e?.hint || ""}；code=${e?.code || ""}`,
-      });
-    }
   }
 
   return {

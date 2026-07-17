@@ -210,7 +210,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   const [fieldDictMap, setFieldDictMap] = useState<Record<string, string>>({});
   const [sourceRows, setSourceRows] = useState<unknown[][]>([]);
   const [studentCollegeName, setStudentCollegeName] = useState("未知学院");
-  const [studentCollegeValidationError, setStudentCollegeValidationError] = useState("");
+  const [, setStudentCollegeValidationError] = useState("");
   const [processedData, setProcessedData] = useState<Record<string, unknown>[]>([]);
   const [studentErrorReports, setStudentErrorReports] = useState<ErrorReportItem[]>([]);
   const [highlightCellMap, setHighlightCellMap] = useState<Record<string, HighlightInfo>>({});
@@ -234,7 +234,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   const [familyFieldDictMap, setFamilyFieldDictMap] = useState<Record<string, string>>({});
   const [familySourceRows, setFamilySourceRows] = useState<unknown[][]>([]);
   const [familyCollegeName, setFamilyCollegeName] = useState("未知学院");
-  const [familyCollegeValidationError, setFamilyCollegeValidationError] = useState("");
+  const [, setFamilyCollegeValidationError] = useState("");
   const [familyProcessedData, setFamilyProcessedData] = useState<Record<string, unknown>[]>([]);
   const [familyHighlightCellMap, setFamilyHighlightCellMap] = useState<Record<string, HighlightInfo>>({});
   const [familyReviewRows, setFamilyReviewRows] = useState<FamilyReviewRow[]>([]);
@@ -426,6 +426,22 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     setFamilyStatus("已上载学校端");
     alert("家庭成员信息已上载到学校端");
   };
+
+  const schoolSyncActionsRef = useRef({
+    hasBlockingStudentUpload,
+    hasBlockingFamilyUpload,
+    addStudentResultToMergePool,
+    addFamilyResultToMergePool,
+  });
+
+  useEffect(() => {
+    schoolSyncActionsRef.current = {
+      hasBlockingStudentUpload,
+      hasBlockingFamilyUpload,
+      addStudentResultToMergePool,
+      addFamilyResultToMergePool,
+    };
+  });
 
   const confirmStudentCollegeReview = () => {
     if (processedData.length === 0) {
@@ -686,7 +702,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
 const askDeepSeek = async (prompt: string) => {
   try {
     const DEEPSEEK_API_URL =
-      import.meta.env.VITE_DEEPSEEK_API_URL || "http://localhost:3001/api/deepseek";
+      import.meta.env.VITE_DEEPSEEK_API_URL || "/api/deepseek";
 
     const res = await fetch(DEEPSEEK_API_URL, {
       method: "POST",
@@ -1055,11 +1071,15 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
       __bosSyncToSchool?: () => Promise<void>;
     };
 
-    win.__bosHasBlockingErrors =
-      activeProcessingPanel === "student" ? hasBlockingStudentUpload : hasBlockingFamilyUpload;
+    win.__bosHasBlockingErrors = () =>
+      activeProcessingPanel === "student"
+        ? schoolSyncActionsRef.current.hasBlockingStudentUpload()
+        : schoolSyncActionsRef.current.hasBlockingFamilyUpload();
     win.__bosSyncToSchool = async () => {
       const hasBlockingErrors =
-        activeProcessingPanel === "student" ? hasBlockingStudentUpload() : hasBlockingFamilyUpload();
+        activeProcessingPanel === "student"
+          ? schoolSyncActionsRef.current.hasBlockingStudentUpload()
+          : schoolSyncActionsRef.current.hasBlockingFamilyUpload();
       if (hasBlockingErrors) {
         const message = "上载失败，当前数据仍存在不通过项，请查看“不通过预览”";
         if (activeProcessingPanel === "student") {
@@ -1071,30 +1091,15 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
         }
         throw new Error(message);
       }
-      if (activeProcessingPanel === "student") await addStudentResultToMergePool();
-      else await addFamilyResultToMergePool();
+      if (activeProcessingPanel === "student") await schoolSyncActionsRef.current.addStudentResultToMergePool();
+      else await schoolSyncActionsRef.current.addFamilyResultToMergePool();
     };
 
     return () => {
       delete win.__bosHasBlockingErrors;
       delete win.__bosSyncToSchool;
     };
-  }, [
-    activeProcessingPanel,
-    stats.errors,
-    disqualifiedRows,
-    studentErrorReports,
-    processedData,
-    studentCollegeName,
-    studentCollegeValidationError,
-    familyStats.errors,
-    familyReviewRows,
-    familyProcessedData,
-    familyCollegeName,
-    familyCollegeValidationError,
-    studentReviewConfirmed,
-    familyReviewConfirmed,
-  ]);
+  }, [activeProcessingPanel]);
 
   const exportStudentList = (exportMode: "passed" | "failed") => {
     if (processedData.length === 0) {
@@ -1417,13 +1422,19 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
     }
   };
 
+  const processFamilyDataRef = useRef(processFamilyData);
+
+  useEffect(() => {
+    processFamilyDataRef.current = processFamilyData;
+  });
+
   useEffect(() => {
     if (!familyAutoProcessRequested) return;
     if (isFamilyProcessing || familyTemplateFields.length === 0 || familySourceRows.length === 0) return;
 
     const timer = window.setTimeout(() => {
       setFamilyAutoProcessRequested(false);
-      void processFamilyData();
+      void processFamilyDataRef.current();
     }, 0);
 
     return () => window.clearTimeout(timer);
