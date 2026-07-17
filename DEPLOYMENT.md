@@ -34,17 +34,19 @@ Functions 运行时变量/Secret（只在服务端可见）：
 
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`（必须使用 Secret，禁止添加 `VITE_` 前缀）
+- `SUPABASE_SECRET_KEY`（推荐使用 `sb_secret_...`，必须配置为 Secret，禁止添加 `VITE_` 前缀）
+- `SUPABASE_SERVICE_ROLE_KEY`（仅用于兼容旧项目；与上一项二选一）
 - `DEEPSEEK_API_KEY`（使用 Secret）
 - `DEEPSEEK_MODEL=deepseek-chat`（可选）
 - `ALLOWED_ORIGINS`（可选；同源访问无需填写）
 
 ## Supabase 数据库准备
 
-在 Supabase SQL Editor 中按顺序执行：
+当前生产项目已于 2026-07-17 应用以下迁移；新建环境按时间戳顺序执行：
 
-1. `supabase/extend_difficulty_student_status.sql`
-2. 在线 API 和登录联调通过后，再执行 `supabase/lock_difficulty_student_writes_to_api.sql`
+1. `supabase/migrations/20260717140734_connect_bos_cloud_tables.sql`
+2. `supabase/migrations/20260717141025_extend_difficulty_student_status.sql`
+3. 在线 API 和登录联调通过后，再执行 `supabase/lock_difficulty_student_writes_to_api.sql`
 
 第二个脚本会锁定浏览器对 `students` 的直接写权限，因此不得在 Pages Functions 的运行时 Secret 配置完成前执行。
 

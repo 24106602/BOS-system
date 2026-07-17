@@ -228,7 +228,7 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
       <div className="bos-action-toolbar">
         <button className="is-primary" onClick={() => void loadRows()} disabled={isLoading}>{isLoading ? "刷新中..." : "刷新数据"}</button>
         <button className="is-purple" onClick={exportCurrentRows}>导出当前名单</button>
-        <button className="is-success" disabled={selectedKeys.size === 0 || !filteredRows.some(r => selectedKeys.has(getRowKey(r)) && r.status === "rejected")} onClick={handleResubmit}>
+        <button className="is-success" disabled={selectedKeys.size === 0 || !filteredRows.some(r => selectedKeys.has(getRowKey(r)) && r.status === "rejected_by_school")} onClick={handleResubmit}>
           重新提交选中（{selectedKeys.size}）
         </button>
         <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedRows}>

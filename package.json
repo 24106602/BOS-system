@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "server": "node server.js",
-    "build": "npm install --legacy-peer-deps && vite build",
+    "build": "vite build",
+    "build:functions": "wrangler pages functions build functions",
+    "check": "npm run lint && npm run build",
     "lint": "eslint .",
     "preview": "vite preview"
   },

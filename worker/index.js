@@ -114,7 +114,7 @@ const getSupabaseClients = async (request, env) => {
 
   const url = env.SUPABASE_URL || env.VITE_SUPABASE_URL;
   const publishableKey = env.SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY;
-  const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceRoleKey = env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !publishableKey || !serviceRoleKey) {
     throw apiError("困难生 API 的 Supabase 服务端环境变量未完整配置", 503, "BACKEND_NOT_CONFIGURED");
   }
