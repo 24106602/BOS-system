@@ -6,11 +6,43 @@ import {
   clearEnrolledStudents,
   getAllEnrolledStudents,
   getEnrolledStudentCount,
-  verifyEnrolledStudent,
 } from "../db/localEnrolledStudentDb";
 import DataFilterPanel from "../components/ui/DataFilterPanel";
 
-const columnAliases = {
+type EnrolledStudentField = keyof Pick<
+  EnrolledStudentRecord,
+  | "academicYear"
+  | "semester"
+  | "examineeId"
+  | "studentId"
+  | "name"
+  | "idCardType"
+  | "idCard"
+  | "gender"
+  | "birthDate"
+  | "politicalStatus"
+  | "nationality"
+  | "studentType"
+  | "studyForm"
+  | "department"
+  | "counselorName"
+  | "grade"
+  | "className"
+  | "majorCategory"
+  | "major"
+  | "level"
+  | "schoolSystem"
+  | "enrollmentDate"
+  | "isRuralStudent"
+  | "studentSource"
+  | "phone"
+>;
+
+type SheetCell = string | number | boolean | Date | null | undefined;
+type SheetRow = SheetCell[];
+type ColumnMap = Record<EnrolledStudentField, number[]>;
+
+const columnAliases: Record<EnrolledStudentField, string[]> = {
   academicYear: ["学年", "学年度", "academic_year", "学年学期"],
   semester: ["学期", "semester"],
   examineeId: ["考生号", "考试号", "考号", "考生编号"],
@@ -43,45 +75,112 @@ function normalizeHeader(value: string) {
     .trim()
     .replace(/[\s\u3000]+/g, "")
     .replace(/\*/g, "")
-    .replace(/（.*?）/g, "")
-    .replace(/\(.*?\)/g, "")
+    .replace(/[（(][^）)]*[）)]/g, "")
+    .replace(/^\d+[.、)]/, "")
     .replace(/[:：]/g, "")
-    .replace(/[.,;，；]/g, "")
+    .replace(/[._\-—/\\,;，；]/g, "")
     .toLowerCase();
 }
 
 function normalizeHeaderForMatch(value: string) {
   return normalizeHeader(value)
-    .replace(/^(.*?)$/g, "$1")
     .replace(/学生/g, "")
     .replace(/名称/g, "")
     .replace(/类型/g, "")
-    .replace(/日期/g, "");
+    .replace(/日期/g, "")
+    .replace(/信息/g, "");
 }
 
-function pickCell(row: Record<string, unknown>, aliases: string[]) {
-  const entries = Object.entries(row);
-  const normalizedAliases = aliases.map(normalizeHeader);
+function scoreHeader(headerValue: SheetCell, aliases: string[]): number {
+  const header = normalizeHeader(String(headerValue ?? ""));
+  if (!header) return 0;
 
-  // 精确匹配
-  const exact = entries.find(([key]) => normalizedAliases.includes(normalizeHeader(key)));
-  if (exact) return String(exact[1] ?? "").trim();
+  const normalizedAliases = aliases.map(normalizeHeader).filter(Boolean);
+  if (normalizedAliases.includes(header)) return 300 + header.length;
 
-  // 简化后的精确匹配（去除"学生"、"名称"等通用后缀）
-  const simpleAliases = aliases.map(normalizeHeaderForMatch);
-  const simpleExact = entries.find(([key]) =>
-    simpleAliases.includes(normalizeHeaderForMatch(key))
-  );
-  if (simpleExact) return String(simpleExact[1] ?? "").trim();
+  const simpleHeader = normalizeHeaderForMatch(header);
+  const simpleAliases = aliases.map(normalizeHeaderForMatch).filter((alias) => alias.length >= 2);
+  if (simpleHeader.length >= 2 && simpleAliases.includes(simpleHeader)) {
+    return 200 + simpleHeader.length;
+  }
 
-  // 模糊匹配
-  const fuzzy = entries.find(([key]) => {
-    const header = normalizeHeader(key);
-    const simpleHeader = normalizeHeaderForMatch(key);
-    return normalizedAliases.some((alias) => header.includes(alias) || alias.includes(header)) ||
-      simpleAliases.some((alias) => simpleHeader.includes(alias) || alias.includes(simpleHeader));
+  const fuzzyScores = [...normalizedAliases, ...simpleAliases]
+    .filter((alias) => alias.length >= 2)
+    .map((alias) => {
+      const candidate = normalizedAliases.includes(alias) ? header : simpleHeader;
+      if (candidate.length < 2 || (!candidate.includes(alias) && !alias.includes(candidate))) return 0;
+      const shorter = Math.min(candidate.length, alias.length);
+      const longer = Math.max(candidate.length, alias.length);
+      return shorter / longer >= 0.6 ? 100 + shorter : 0;
+    });
+  return Math.max(0, ...fuzzyScores);
+}
+
+function buildColumnMap(headers: SheetRow): ColumnMap {
+  return Object.fromEntries(
+    (Object.keys(columnAliases) as EnrolledStudentField[]).map((field) => {
+      const candidates = headers
+        .map((header, index) => ({ index, score: scoreHeader(header, columnAliases[field]) }))
+        .filter(({ score }) => score > 0)
+        .sort((a, b) => b.score - a.score || a.index - b.index);
+      const bestScore = candidates[0]?.score ?? 0;
+      return [field, candidates.filter(({ score }) => score === bestScore).map(({ index }) => index)];
+    })
+  ) as ColumnMap;
+}
+
+function countMappedFields(headers: SheetRow): number {
+  const map = buildColumnMap(headers);
+  return (Object.keys(map) as EnrolledStudentField[]).filter((field) => map[field].length > 0).length;
+}
+
+function fillMergedHeaderCells(sheet: XLSX.WorkSheet, rows: SheetRow[]): SheetRow[] {
+  const result = rows.map((row) => [...row]);
+  const merges = (sheet["!merges"] ?? []) as XLSX.Range[];
+  merges.forEach((merge) => {
+    if (merge.s.r >= 30) return;
+    const value = result[merge.s.r]?.[merge.s.c];
+    if (value === undefined || value === null || value === "") return;
+    for (let rowIndex = merge.s.r; rowIndex <= merge.e.r; rowIndex += 1) {
+      result[rowIndex] ??= [];
+      for (let columnIndex = merge.s.c; columnIndex <= merge.e.c; columnIndex += 1) {
+        if (result[rowIndex][columnIndex] === undefined || result[rowIndex][columnIndex] === "") {
+          result[rowIndex][columnIndex] = value;
+        }
+      }
+    }
   });
-  return String(fuzzy?.[1] ?? "").trim();
+  return result;
+}
+
+function locateHeaderRow(rows: SheetRow[]): { headerIndex: number; columnMap: ColumnMap } {
+  const candidates = rows.slice(0, 30).map((row, index) => ({
+    index,
+    mappedFields: countMappedFields(row),
+    nonEmptyCells: row.filter((cell) => String(cell ?? "").trim()).length,
+  }));
+  candidates.sort((a, b) =>
+    b.mappedFields - a.mappedFields || b.nonEmptyCells - a.nonEmptyCells || a.index - b.index
+  );
+  const best = candidates[0];
+  if (!best || best.mappedFields < 3) {
+    throw new Error("未识别到有效表头，请确认文件包含学号、姓名、身份证件号等在校生字段");
+  }
+  return { headerIndex: best.index, columnMap: buildColumnMap(rows[best.index]) };
+}
+
+function cellToText(value: SheetCell): string {
+  if (value === null || value === undefined) return "";
+  if (value instanceof Date) return formatDateParts(value.getFullYear(), value.getMonth() + 1, value.getDate());
+  return String(value).trim();
+}
+
+function pickMappedCell(row: SheetRow, indexes: number[]): string {
+  for (const index of indexes) {
+    const value = cellToText(row[index]);
+    if (value) return value;
+  }
+  return "";
 }
 
 function getCurrentAcademicYear(): string {
@@ -91,22 +190,37 @@ function getCurrentAcademicYear(): string {
   return month >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
 }
 
-function convertExcelDate(dateValue: string): string {
-  const num = parseFloat(dateValue);
-  if (isNaN(num)) return dateValue;
-  
-  const excelEpoch = new Date(1899, 11, 30);
-  const date = new Date(excelEpoch.getTime() + num * 24 * 60 * 60 * 1000);
-  
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  
-  return `${year}${month}${day}`;
+function formatDateParts(year: number, month: number, day: number): string {
+  return `${String(year).padStart(4, "0")}${String(month).padStart(2, "0")}${String(day).padStart(2, "0")}`;
+}
+
+function convertExcelDate(dateValue: SheetCell): string {
+  if (dateValue === null || dateValue === undefined || dateValue === "") return "";
+  if (dateValue instanceof Date) {
+    return formatDateParts(dateValue.getFullYear(), dateValue.getMonth() + 1, dateValue.getDate());
+  }
+
+  const text = String(dateValue).trim();
+  if (/^\d{8}$/.test(text)) return text;
+
+  const normalizedDate = text.match(/^(\d{4})[年\-/.](\d{1,2})[月\-/.](\d{1,2})日?$/);
+  if (normalizedDate) {
+    return formatDateParts(Number(normalizedDate[1]), Number(normalizedDate[2]), Number(normalizedDate[3]));
+  }
+
+  if (/^\d+(\.\d+)?$/.test(text)) {
+    const serial = Number(text);
+    if (serial >= 1 && serial <= 2958465) {
+      const parsed = XLSX.SSF.parse_date_code(serial);
+      if (parsed) return formatDateParts(parsed.y, parsed.m, parsed.d);
+    }
+  }
+  return text;
 }
 
 function parseEnrolledStudentsFromRows(
-  rows: Record<string, unknown>[],
+  rows: SheetRow[],
+  columnMap: ColumnMap,
   sourceFile: string,
   defaultAcademicYear?: string
 ): EnrolledStudentRecord[] {
@@ -114,14 +228,15 @@ function parseEnrolledStudentsFromRows(
   const currentYear = defaultAcademicYear || getCurrentAcademicYear();
   return rows
     .map((row) => {
-      const studentId = pickCell(row, columnAliases.studentId);
-      const name = pickCell(row, columnAliases.name);
-      const idCard = pickCell(row, columnAliases.idCard);
+      const getCell = (field: EnrolledStudentField) => pickMappedCell(row, columnMap[field]);
+      const studentId = getCell("studentId");
+      const name = getCell("name");
+      const idCard = getCell("idCard");
       if (!name && !idCard && !studentId) return null;
 
       const idCardNum = idCard.replace(/\s+/g, "");
-      let gender = pickCell(row, columnAliases.gender);
-      let birthDate = convertExcelDate(pickCell(row, columnAliases.birthDate));
+      let gender = getCell("gender");
+      let birthDate = convertExcelDate(getCell("birthDate"));
 
       if (idCardNum.length === 18) {
         if (!gender) {
@@ -133,31 +248,31 @@ function parseEnrolledStudentsFromRows(
       }
 
       return {
-        academicYear: pickCell(row, columnAliases.academicYear) || currentYear,
-        semester: pickCell(row, columnAliases.semester),
-        examineeId: pickCell(row, columnAliases.examineeId),
+        academicYear: getCell("academicYear") || currentYear,
+        semester: getCell("semester"),
+        examineeId: getCell("examineeId"),
         studentId,
         name,
-        idCardType: pickCell(row, columnAliases.idCardType),
+        idCardType: getCell("idCardType"),
         idCard: idCardNum,
         gender,
         birthDate,
-        politicalStatus: pickCell(row, columnAliases.politicalStatus),
-        nationality: pickCell(row, columnAliases.nationality),
-        studentType: pickCell(row, columnAliases.studentType),
-        studyForm: pickCell(row, columnAliases.studyForm),
-        department: pickCell(row, columnAliases.department),
-        counselorName: pickCell(row, columnAliases.counselorName),
-        grade: pickCell(row, columnAliases.grade),
-        className: pickCell(row, columnAliases.className),
-        majorCategory: pickCell(row, columnAliases.majorCategory),
-        major: pickCell(row, columnAliases.major),
-        level: pickCell(row, columnAliases.level),
-        schoolSystem: pickCell(row, columnAliases.schoolSystem),
-        enrollmentDate: convertExcelDate(pickCell(row, columnAliases.enrollmentDate)),
-        isRuralStudent: pickCell(row, columnAliases.isRuralStudent),
-        studentSource: pickCell(row, columnAliases.studentSource),
-        phone: pickCell(row, columnAliases.phone),
+        politicalStatus: getCell("politicalStatus"),
+        nationality: getCell("nationality"),
+        studentType: getCell("studentType"),
+        studyForm: getCell("studyForm"),
+        department: getCell("department"),
+        counselorName: getCell("counselorName"),
+        grade: getCell("grade"),
+        className: getCell("className"),
+        majorCategory: getCell("majorCategory"),
+        major: getCell("major"),
+        level: getCell("level"),
+        schoolSystem: getCell("schoolSystem"),
+        enrollmentDate: convertExcelDate(getCell("enrollmentDate")),
+        isRuralStudent: getCell("isRuralStudent"),
+        studentSource: getCell("studentSource"),
+        phone: getCell("phone"),
         sourceFile,
         importedAt,
       };
@@ -186,17 +301,6 @@ export default function EnrolledStudentDatabasePage() {
     getAllEnrolledStudents().then(setStudents);
   }, []);
 
-  useEffect(() => {
-    setPage(1);
-  }, [academicYear, filters.name, filters.studentId, filters.idCard, filters.department, filters.major]);
-
-  const yearOptions = useMemo(() => {
-    const years = new Set(students.map((s) => s.academicYear).filter(Boolean));
-    const current = getCurrentAcademicYear();
-    if (!years.has(current)) years.add(current);
-    return Array.from(years).sort().reverse();
-  }, [students]);
-
   const filtered = useMemo(() => {
     return students.filter((s) => {
       if (academicYear && s.academicYear !== academicYear) return false;
@@ -222,16 +326,28 @@ export default function EnrolledStudentDatabasePage() {
     try {
       setImportStatus("正在读取...");
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
+      const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" }) as Record<string, unknown>[];
+      const rawRows = XLSX.utils.sheet_to_json<SheetRow>(sheet, {
+        header: 1,
+        defval: "",
+        raw: true,
+        blankrows: false,
+      });
+      const rows = fillMergedHeaderCells(sheet, rawRows);
       if (rows.length === 0) {
         alert("文件中没有读取到数据");
         setImportStatus("");
         return;
       }
-      const parsed = parseEnrolledStudentsFromRows(rows, file.name, academicYear);
+      const { headerIndex, columnMap } = locateHeaderRow(rows);
+      const parsed = parseEnrolledStudentsFromRows(
+        rows.slice(headerIndex + 1),
+        columnMap,
+        file.name,
+        academicYear
+      );
       if (parsed.length === 0) {
         alert("未能识别到有效学生数据，请检查表头");
         setImportStatus("");
@@ -365,6 +481,13 @@ export default function EnrolledStudentDatabasePage() {
         )}
 
         <DataFilterPanel
+          style={{
+            flex: "0 0 auto",
+            marginBottom: 0,
+            borderRadius: 0,
+            boxShadow: "none",
+            borderBottom: "1px solid #e4e7ed",
+          }}
           filters={{
             academicYear,
             name: filters.name,
@@ -374,6 +497,7 @@ export default function EnrolledStudentDatabasePage() {
             major: filters.major,
           }}
           onChange={(key, value) => {
+            setPage(1);
             if (key === "academicYear") {
               setAcademicYear(value);
             } else {
@@ -381,6 +505,7 @@ export default function EnrolledStudentDatabasePage() {
             }
           }}
           onReset={() => {
+            setPage(1);
             setAcademicYear(getCurrentAcademicYear());
             setFilters({ name: "", studentId: "", idCard: "", department: "", major: "" });
           }}
@@ -523,13 +648,17 @@ export default function EnrolledStudentDatabasePage() {
 const styles: Record<string, CSSProperties> = {
   page: {
     width: "100%",
+    height: "100%",
+    maxHeight: "100%",
     flex: 1,
     minHeight: 0,
     padding: 16,
+    boxSizing: "border-box",
     background: "#f5f7fa",
     display: "flex",
     flexDirection: "column",
     gap: 14,
+    overflow: "hidden",
   },
   header: {
     display: "flex",
@@ -662,34 +791,23 @@ const styles: Record<string, CSSProperties> = {
     flex: 1,
     minHeight: 0,
     position: "relative",
+    overflow: "hidden",
   },
   tableWrap: {
-    flex: 1,
+    flex: "1 1 0",
+    width: "100%",
     overflowY: "auto",
     overflowX: "auto",
     minHeight: 0,
+    overscrollBehavior: "contain",
     scrollbarWidth: "thin",
     scrollbarColor: "#409eff #e4e7ed",
-    "&::-webkit-scrollbar": {
-      width: "8px",
-      height: "8px",
-    },
-    "&::-webkit-scrollbar-track": {
-      background: "#e4e7ed",
-      borderRadius: "4px",
-    },
-    "&::-webkit-scrollbar-thumb": {
-      background: "#409eff",
-      borderRadius: "4px",
-    },
-    "&::-webkit-scrollbar-thumb:hover": {
-      background: "#66b1ff",
-    },
   },
   table: {
     width: "100%",
     minWidth: "1800px",
-    borderCollapse: "collapse",
+    borderCollapse: "separate",
+    borderSpacing: 0,
     fontSize: 12,
   },
   th: {
