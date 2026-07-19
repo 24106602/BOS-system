@@ -7,11 +7,16 @@ import {
   normalizeDifficultyStudentStatus,
 } from "../src/constants/statusTransitions.ts";
 import { ForbiddenError, guardStatus } from "../src/utils/guardStatus.ts";
+import {
+  IncompleteDataError,
+  reportDifficultyStudentsAtomically,
+} from "../server/difficultyReportIntegrity.js";
 
 const DEFAULT_ALLOWED_HEADERS = "Content-Type, Authorization";
 const DEFAULT_ALLOWED_METHODS = "GET, POST, PATCH, DELETE, OPTIONS";
 const DEFAULT_MAX_PROMPT_LENGTH = 20000;
 const DIFFICULTY_API_PREFIX = "/api/difficulty-students";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SYSTEM_PROMPT =
   "你是高校困难生数据治理系统助手，负责分析 Excel 治理结果、生成问题总结和整改建议。";
 
@@ -24,6 +29,8 @@ const EDITABLE_FIELDS = [
   "grade",
   "gender",
   "difficulty_level",
+  "photo_uploaded",
+  "photo_url",
   "rejected_reason",
   "raw_data",
 ];
@@ -232,6 +239,48 @@ const handleHistoricalImport = async (request, context) => {
   return { body: { inserted: existing ? 0 : 1, updated: existing ? 1 : 0 }, status: 200 };
 };
 
+const handleBatchReport = async (request, context, env) => {
+  const { admin, profile } = context;
+  requireRole(profile, ["admin"]);
+  const body = await readJsonBody(request);
+  const requestedIds = Array.isArray(body?.ids)
+    ? [...new Set(body.ids.map(text).filter(Boolean))]
+    : [];
+  if (requestedIds.length === 0) {
+    throw apiError("上报记录不能为空", 400, "INVALID_REQUEST");
+  }
+
+  const validIds = requestedIds.filter((id) => UUID_PATTERN.test(id));
+  const invalidIdFailures = requestedIds
+    .filter((id) => !UUID_PATTERN.test(id))
+    .map((id) => ({ studentId: id, reasons: ["困难生记录不存在"] }));
+  const { data, error } = validIds.length > 0
+    ? await admin.from("students").select("*").in("id", validIds)
+    : { data: [], error: null };
+  if (error) throw error;
+
+  const studentsById = new Map((data || []).map((student) => [text(student.id), student]));
+  const missingFailures = validIds
+    .filter((id) => !studentsById.has(id))
+    .map((id) => ({ studentId: id, reasons: ["困难生记录不存在"] }));
+  const students = validIds.map((id) => studentsById.get(id)).filter(Boolean);
+  const updated = await reportDifficultyStudentsAtomically(admin, students, {
+    configuredChecks: env.DIFFICULTY_REPORT_REQUIRED_CHECKS,
+    additionalFailures: [...invalidIdFailures, ...missingFailures],
+  });
+  return { body: { data: updated, processed: updated.length }, status: 200 };
+};
+
+const handleReport = async (_request, context, env, id) => {
+  const { admin, profile } = context;
+  requireRole(profile, ["admin"]);
+  const student = await findStudent(admin, id);
+  const updated = await reportDifficultyStudentsAtomically(admin, [student], {
+    configuredChecks: env.DIFFICULTY_REPORT_REQUIRED_CHECKS,
+  });
+  return { body: { data: updated[0] || null }, status: 200 };
+};
+
 const handleEdit = async (request, context, id) => {
   const { admin, profile } = context;
   requireRole(profile, ["college", "admin"]);
@@ -312,6 +361,9 @@ const handleDifficultyApi = async (request, env) => {
   if (request.method === "POST" && relativePath === "/historical-import") {
     return handleHistoricalImport(request, context);
   }
+  if (request.method === "POST" && relativePath === "/batch-report") {
+    return handleBatchReport(request, context, env);
+  }
 
   const recordMatch = relativePath.match(/^\/([^/]+)$/);
   if (recordMatch && request.method === "PATCH") {
@@ -323,6 +375,14 @@ const handleDifficultyApi = async (request, env) => {
 
   const transitionMatch = relativePath.match(/^\/([^/]+)\/(submit|approve|reject|report|return-by-center)$/);
   if (transitionMatch && request.method === "POST") {
+    if (transitionMatch[2] === "report") {
+      return handleReport(
+        request,
+        context,
+        env,
+        decodeURIComponent(transitionMatch[1])
+      );
+    }
     return handleTransition(
       request,
       context,
@@ -372,6 +432,16 @@ const handleDeepSeek = async (request, env) => {
 };
 
 const formatError = (error) => {
+  if (error instanceof IncompleteDataError) {
+    return {
+      status: 400,
+      body: {
+        code: error.code,
+        message: error.message,
+        failures: error.failures,
+      },
+    };
+  }
   const isForbidden = error instanceof ForbiddenError;
   const status = isForbidden ? 403 : Number(error?.statusCode) || 500;
   return {

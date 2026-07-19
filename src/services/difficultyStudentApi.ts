@@ -7,14 +7,26 @@ const DIFFICULTY_API_URL = (
 export class DifficultyStudentApiError extends Error {
   readonly status: number;
   readonly code: string;
+  readonly failures: DifficultyReportFailure[];
 
-  constructor(message: string, status: number, code = "DIFFICULTY_API_ERROR") {
+  constructor(
+    message: string,
+    status: number,
+    code = "DIFFICULTY_API_ERROR",
+    failures: DifficultyReportFailure[] = []
+  ) {
     super(message);
     this.name = "DifficultyStudentApiError";
     this.status = status;
     this.code = code;
+    this.failures = failures;
   }
 }
+
+export type DifficultyReportFailure = {
+  studentId: string;
+  reasons: string[];
+};
 
 const requestDifficultyApi = async <T>(
   path: string,
@@ -39,12 +51,14 @@ const requestDifficultyApi = async <T>(
     message?: string;
     error?: string;
     code?: string;
+    failures?: DifficultyReportFailure[];
   };
   if (!response.ok) {
     throw new DifficultyStudentApiError(
       payload.message || payload.error || `困难生 API 请求失败（HTTP ${response.status}）`,
       response.status,
-      payload.code || "DIFFICULTY_API_ERROR"
+      payload.code || "DIFFICULTY_API_ERROR",
+      Array.isArray(payload.failures) ? payload.failures : []
     );
   }
   return payload as T;
@@ -74,3 +88,10 @@ export const transitionDifficultyStudent = (
   action: "submit" | "approve" | "reject" | "report" | "return-by-center",
   body?: Record<string, unknown>
 ) => requestDifficultyApi<{ data: Record<string, unknown> }>(`/${id}/${action}`, "POST", body);
+
+export const reportDifficultyStudentBatch = (ids: (string | number)[]) =>
+  requestDifficultyApi<{ data: Record<string, unknown>[]; processed: number }>(
+    "/batch-report",
+    "POST",
+    { ids }
+  );

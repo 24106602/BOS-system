@@ -24,6 +24,8 @@ BOS 是面向高校学生资助业务的数据治理平台，采用 Vite、React
 - 学院端按学院隔离查看困难生明细。
 - 管理员端按学年导入、查询和汇总困难生数据。
 - 困难生申请档案表格按标准模板 40 列展示。
+- 学校上报前校验学籍、家庭成员、学生照片、学校认定办法及流程状态。
+- 单条与批量学校上报均由后端 API 执行；批量状态写入使用数据库事务，禁止部分成功。
 
 ### 三大奖业务
 
@@ -61,6 +63,7 @@ BOS 是面向高校学生资助业务的数据治理平台，采用 Vite、React
 ## 数据保存说明
 
 - 困难生学校端数据按项目现有逻辑写入和读取 Supabase。
+- 学校困难生认定办法元数据保存在 `difficulty_policy_documents`，文件本体应保存在 Supabase Storage。
 - 三大奖数据当前通过 `localStorage` 暂存，并由管理员端汇总页面读取。
 - 页面中的“删除”仅影响当前页面展示，不删除 Supabase 或 `localStorage` 中的数据。
 - 项目不会写入尚未创建的 Supabase 三奖表。
@@ -122,10 +125,19 @@ http://localhost:5173/
 ```bash
 npm run lint
 npm run build
+npm run build:functions
+npm run test:report-integrity
 git diff --check
 ```
 
 `npm run build` 生成的生产文件位于 `dist`。
+
+## 困难生学校上报 API
+
+- 单条上报：`POST /api/difficulty-students/:id/report`
+- 批量上报：`POST /api/difficulty-students/batch-report`，请求体为 `{ "ids": ["uuid"] }`
+- 数据不完整时返回 HTTP 400、错误码 `INCOMPLETE_DATA` 和逐学生缺失原因。
+- `DIFFICULTY_REPORT_REQUIRED_CHECKS` 可按需选择校验项；未配置时默认启用全部校验。
 
 ## 维护边界
 

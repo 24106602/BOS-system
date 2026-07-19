@@ -8,6 +8,10 @@ import {
   normalizeDifficultyStudentStatus,
 } from "../src/constants/statusTransitions.ts";
 import { ForbiddenError, guardStatus } from "../src/utils/guardStatus.ts";
+import {
+  IncompleteDataError,
+  reportDifficultyStudentsAtomically,
+} from "./difficultyReportIntegrity.js";
 
 const EDITABLE_FIELDS = [
   "academic_year",
@@ -18,12 +22,15 @@ const EDITABLE_FIELDS = [
   "grade",
   "gender",
   "difficulty_level",
+  "photo_uploaded",
+  "photo_url",
   "rejected_reason",
   "raw_data",
 ];
 
 const text = (value) => String(value ?? "").trim();
 const normalizeIdCard = (value) => text(value).replace(/\s|-/g, "").toUpperCase();
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const pickEditableFields = (input) => Object.fromEntries(
   EDITABLE_FIELDS
@@ -33,6 +40,13 @@ const pickEditableFields = (input) => Object.fromEntries(
 
 const forbidden = (message, currentStatus = "draft", action = "edit") =>
   new ForbiddenError(message, normalizeDifficultyStudentStatus(currentStatus), action, []);
+
+const invalidRequest = (message) => {
+  const error = new Error(message);
+  error.statusCode = 400;
+  error.code = "INVALID_REQUEST";
+  return error;
+};
 
 const requireRole = (profile, roles) => {
   if (!roles.includes(profile.role)) {
@@ -133,6 +147,14 @@ const authenticate = async (req, _res, next) => {
 };
 
 export const difficultyStudentErrorHandler = (error, _req, res, _next) => {
+  if (error instanceof IncompleteDataError) {
+    res.status(400).json({
+      code: error.code,
+      message: error.message,
+      failures: error.failures,
+    });
+    return;
+  }
   const statusCode = error instanceof ForbiddenError
     ? 403
     : Number(error?.statusCode) || 500;
@@ -149,6 +171,12 @@ export const difficultyStudentErrorHandler = (error, _req, res, _next) => {
 export const createDifficultyStudentRouter = () => {
   const router = Router();
   router.use(authenticate);
+
+  const reportStudents = async (admin, students, additionalFailures = []) =>
+    reportDifficultyStudentsAtomically(admin, students, {
+      configuredChecks: process.env.DIFFICULTY_REPORT_REQUIRED_CHECKS,
+      additionalFailures,
+    });
 
   router.post("/batch-submit", async (req, res, next) => {
     try {
@@ -208,6 +236,40 @@ export const createDifficultyStudentRouter = () => {
         : await admin.from("students").insert({ ...row, status: nextStatus });
       if (result.error) throw result.error;
       res.json({ inserted: existing ? 0 : 1, updated: existing ? 1 : 0 });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/batch-report", async (req, res, next) => {
+    try {
+      const { admin, profile } = req.difficultyContext;
+      requireRole(profile, ["admin"]);
+      const requestedIds = Array.isArray(req.body?.ids)
+        ? [...new Set(req.body.ids.map(text).filter(Boolean))]
+        : [];
+      if (requestedIds.length === 0) throw invalidRequest("上报记录不能为空");
+
+      const validIds = requestedIds.filter((id) => UUID_PATTERN.test(id));
+      const invalidIdFailures = requestedIds
+        .filter((id) => !UUID_PATTERN.test(id))
+        .map((id) => ({ studentId: id, reasons: ["困难生记录不存在"] }));
+      const { data, error } = validIds.length > 0
+        ? await admin.from("students").select("*").in("id", validIds)
+        : { data: [], error: null };
+      if (error) throw error;
+
+      const studentsById = new Map((data || []).map((student) => [text(student.id), student]));
+      const missingFailures = validIds
+        .filter((id) => !studentsById.has(id))
+        .map((id) => ({ studentId: id, reasons: ["困难生记录不存在"] }));
+      const students = validIds.map((id) => studentsById.get(id)).filter(Boolean);
+      const updated = await reportStudents(
+        admin,
+        students,
+        [...invalidIdFailures, ...missingFailures]
+      );
+      res.json({ data: updated, processed: updated.length });
     } catch (error) {
       next(error);
     }
@@ -282,7 +344,17 @@ export const createDifficultyStudentRouter = () => {
   router.post("/:id/submit", transitionHandler("submit", ["college", "admin"]));
   router.post("/:id/approve", transitionHandler("approve", ["admin"]));
   router.post("/:id/reject", transitionHandler("reject", ["admin"]));
-  router.post("/:id/report", transitionHandler("report", ["admin"]));
+  router.post("/:id/report", async (req, res, next) => {
+    try {
+      const { admin, profile } = req.difficultyContext;
+      requireRole(profile, ["admin"]);
+      const student = await findStudent(admin, req.params.id);
+      const updated = await reportStudents(admin, [student]);
+      res.json({ data: updated[0] || null });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.post("/:id/return-by-center", transitionHandler("reject", ["center"], true));
 
   return router;
