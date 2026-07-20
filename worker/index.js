@@ -17,6 +17,10 @@ import {
   translateDifficultyStudentUniqueError,
 } from "../server/difficultyImportValidation.js";
 import {
+  confirmDifficultyStudentImport,
+  validateDifficultyStudentImport,
+} from "../server/validators/difficultyStudentImport.js";
+import {
   applyLoggedDifficultyTransition,
   deleteDifficultyStudentWithLog,
   getDifficultyStudentOperationHistory,
@@ -219,7 +223,7 @@ const handleBatchSubmit = async (request, context) => {
     preparedRows.push(row);
   }
 
-  await assertDifficultyImportConstraints(admin, preparedRows);
+  await assertDifficultyImportConstraints(admin, preparedRows, { allowExisting: true });
 
   for (const row of preparedRows) {
     const existing = await findStudentByIdentity(admin, row);
@@ -444,6 +448,33 @@ const handleDifficultyApi = async (request, env) => {
   const url = new URL(request.url);
   const relativePath = url.pathname.slice(DIFFICULTY_API_PREFIX.length) || "/";
 
+  if (request.method === "POST" && relativePath === "/import/validate") {
+    const body = await readJsonBody(request);
+    return {
+      body: await validateDifficultyStudentImport({
+        context,
+        body,
+        secret: env.DIFFICULTY_IMPORT_TOKEN_SECRET
+          || env.SUPABASE_SECRET_KEY
+          || env.SUPABASE_SERVICE_ROLE_KEY,
+      }),
+      status: 200,
+    };
+  }
+  if (request.method === "POST" && relativePath === "/import/confirm") {
+    const body = await readJsonBody(request);
+    return {
+      body: await confirmDifficultyStudentImport({
+        context,
+        body,
+        secret: env.DIFFICULTY_IMPORT_TOKEN_SECRET
+          || env.SUPABASE_SECRET_KEY
+          || env.SUPABASE_SERVICE_ROLE_KEY,
+      }),
+      status: 200,
+    };
+  }
+
   if (request.method === "POST" && relativePath === "/batch-submit") {
     return handleBatchSubmit(request, context);
   }
@@ -568,6 +599,7 @@ const formatError = (error) => {
       currentStatus: error?.currentStatus,
       action: error?.action,
       allowedPrerequisiteStatuses: error?.allowedPrerequisiteStatuses,
+      failures: Array.isArray(error?.failures) ? error.failures : undefined,
     },
   };
 };

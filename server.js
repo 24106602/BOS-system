@@ -37,7 +37,7 @@ app.use(
   })
 );
 app.use(express.json({
-  limit: process.env.API_MAX_BODY_SIZE || process.env.DEEPSEEK_MAX_BODY_SIZE || "10mb",
+  limit: process.env.API_MAX_BODY_SIZE || process.env.DEEPSEEK_MAX_BODY_SIZE || "12mb",
 }));
 
 registerDifficultyStudentRoutes(app);

@@ -461,6 +461,16 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     pushLog("success", "学院确认审核完成");
   };
 
+  const handleStudentFormalImportConfirmed = (result: { inserted: number }) => {
+    setStudentReviewConfirmed(false);
+    setStudentUploadedToSchool(false);
+    setStatus("正式导入完成，待学院确认审核");
+    pushLog(
+      "success",
+      `困难生数据正式导入完成：新增 ${result.inserted} 条，当前为草稿态，请继续完成学院确认审核。`
+    );
+  };
+
   const confirmFamilyCollegeReview = () => {
     if (familyProcessedData.length === 0) {
       alert("请先完成家庭成员信息处理");
@@ -667,20 +677,6 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     );
 
     await processData();
-  };
-
-  const uploadData = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    if (!file) {
-      pushLog("error", "文件未选择");
-      input.value = "";
-      return;
-    }
-
-    await uploadStudentDataFile(file);
-    input.value = "";
-    if (dataRef.current) dataRef.current.value = "";
   };
 
   const uploadStudentDataFile = async (file: File) => {
@@ -1632,15 +1628,14 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
           {activeProcessingPanel === "student" ? (
             <StudentProcessPage
               dataRef={dataRef}
-              uploadData={uploadData}
               uploadDataFile={uploadStudentDataFile}
-              startProcessing={processData}
               templateInfo={studentTemplateInfo}
               dataTemplateCheck={studentDataTemplateCheck}
               isProcessing={isProcessing}
               exportExcel={exportExcel}
               exportStudentErrorReport={exportStudentErrorReport}
               addStudentResultToMergePool={addStudentResultToMergePool}
+              onFormalImportConfirmed={handleStudentFormalImportConfirmed}
               confirmCollegeReview={confirmStudentCollegeReview}
               reviewConfirmed={studentReviewConfirmed}
               uploadedToSchool={studentUploadedToSchool}

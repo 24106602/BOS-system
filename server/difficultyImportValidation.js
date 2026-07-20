@@ -54,7 +54,11 @@ export class DifficultyImportValidationError extends Error {
  * 当前 BOS 项目是单校单库，记录存在于 enrolled_students 即表示属于当前学校。
  * 这里同时预检请求内重复和 students 中的既有认定，避免进入写入阶段后才暴露数据库原始错误。
  */
-export const collectDifficultyImportFailures = async (admin, rows) => {
+export const collectDifficultyImportFailures = async (
+  admin,
+  rows,
+  { allowExisting = false } = {}
+) => {
   if (!Array.isArray(rows) || rows.length === 0) return [];
 
   const [enrollmentRows, existingRows] = await Promise.all([
@@ -87,7 +91,7 @@ export const collectDifficultyImportFailures = async (admin, rows) => {
     }
 
     const existing = existingByKey.get(key);
-    if (existing) {
+    if (existing && !allowExisting) {
       reasons.push(
         `学号 ${studentId} 在 ${academicYear} 学年已存在困难生认定记录（姓名：${text(existing.name) || "未填写姓名"}）`
       );
@@ -99,8 +103,8 @@ export const collectDifficultyImportFailures = async (admin, rows) => {
   });
 };
 
-export const assertDifficultyImportConstraints = async (admin, rows) => {
-  const failures = await collectDifficultyImportFailures(admin, rows);
+export const assertDifficultyImportConstraints = async (admin, rows, options) => {
+  const failures = await collectDifficultyImportFailures(admin, rows, options);
   if (failures.length === 0) return;
   const hasDuplicate = failures.some((failure) =>
     failure.reasons.some((reason) => reason.includes("重复") || reason.includes("已存在困难生认定记录"))

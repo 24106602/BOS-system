@@ -1,4 +1,5 @@
-import { useMemo, useState, type CSSProperties, type ChangeEventHandler, type DragEvent, type ReactNode, type RefObject } from "react";
+import * as XLSX from "xlsx-js-style";
+import { useMemo, useRef, useState, type CSSProperties, type ChangeEventHandler, type DragEvent, type ReactNode, type RefObject } from "react";
 import type {
   DataTemplateValidationResult,
   DisqualifiedRow,
@@ -11,18 +12,24 @@ import {
   DIFFICULTY_STUDENT_TEMPLATE_FIELDS,
   getDifficultyTemplateValue,
 } from "../constants/difficultyStudentTemplate";
+import {
+  DifficultyStudentApiError,
+  confirmDifficultyStudentImport,
+  validateDifficultyStudentImport,
+  type DifficultyImportConfirmResult,
+  type DifficultyImportValidationResult,
+} from "../services/difficultyStudentApi";
 
 type StudentProcessPageProps = {
   dataRef: RefObject<HTMLInputElement | null>;
-  uploadData: ChangeEventHandler<HTMLInputElement>;
   uploadDataFile: (file: File) => Promise<void>;
-  startProcessing: () => Promise<void>;
   templateInfo: TemplateValidationResult | null;
   dataTemplateCheck: DataTemplateValidationResult | null;
   isProcessing: boolean;
   exportExcel: () => void;
   exportStudentErrorReport: () => void;
   addStudentResultToMergePool: () => void;
+  onFormalImportConfirmed?: (result: DifficultyImportConfirmResult) => void | Promise<void>;
   confirmCollegeReview: () => void;
   reviewConfirmed: boolean;
   uploadedToSchool: boolean;
@@ -43,18 +50,18 @@ type StudentProcessPageProps = {
 
 type ModalType = "import" | null;
 type ImportTab = "success" | "failed";
+type ImportStep = 1 | 2 | 3;
 
 export default function StudentProcessPage({
   dataRef,
-  uploadData,
   uploadDataFile,
-  startProcessing,
   templateInfo,
   dataTemplateCheck,
   isProcessing,
   exportExcel,
   exportStudentErrorReport,
   addStudentResultToMergePool,
+  onFormalImportConfirmed,
   confirmCollegeReview,
   reviewConfirmed,
   uploadedToSchool,
@@ -71,7 +78,13 @@ export default function StudentProcessPage({
 }: StudentProcessPageProps) {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [importTab, setImportTab] = useState<ImportTab>("success");
+  const [importStep, setImportStep] = useState<ImportStep>(1);
   const [importFileName, setImportFileName] = useState("");
+  const [importValidation, setImportValidation] = useState<DifficultyImportValidationResult | null>(null);
+  const [isImportValidating, setIsImportValidating] = useState(false);
+  const [isImportConfirming, setIsImportConfirming] = useState(false);
+  const [importConfirmResult, setImportConfirmResult] = useState<DifficultyImportConfirmResult | null>(null);
+  const retryFileRef = useRef<HTMLInputElement | null>(null);
   const [filters, setFilters] = useState({
     academicYear: academicYear,
     semester: "",
@@ -149,20 +162,75 @@ export default function StudentProcessPage({
     dataRef.current.click();
   };
 
-  const handleFileChange: ChangeEventHandler<HTMLInputElement> = async (event) => {
-    const file = event.currentTarget.files?.[0];
-    if (file) setImportFileName(file.name);
-    await uploadData(event);
+  const openImportModal = () => {
+    setActiveModal("import");
+    setImportStep(1);
     setImportTab("success");
+    setImportFileName("");
+    setImportValidation(null);
+    setImportConfirmResult(null);
+  };
+
+  const validateImportFile = async (file: File, retryFailedOnly = false) => {
+    if (!/\.(xlsx|xls)$/i.test(file.name)) {
+      alert("仅支持 .xls 或 .xlsx 格式的 Excel 文件");
+      return;
+    }
+    if (file.size > 6 * 1024 * 1024) {
+      alert("单个 Excel 文件不能超过 6MB");
+      return;
+    }
+    if (retryFailedOnly && !importValidation) {
+      alert("没有可重新校验的失败数据");
+      return;
+    }
+
+    setImportFileName(file.name);
+    setIsImportValidating(true);
+    try {
+      if (!retryFailedOnly) {
+        await uploadDataFile(file);
+      }
+      const result = await validateDifficultyStudentImport(file, {
+        academicYear,
+        collegeName: studentCollegeName,
+        retryToken: retryFailedOnly ? importValidation?.validationToken : undefined,
+        acceptedRows: retryFailedOnly ? importValidation?.passedRows : undefined,
+      });
+      setImportValidation(result);
+      setImportStep(2);
+      setImportTab(result.failed > 0 ? "failed" : "success");
+    } catch (error) {
+      const message = error instanceof DifficultyStudentApiError
+        ? error.message
+        : error instanceof Error
+        ? error.message
+        : "困难生导入校验失败";
+      alert(message);
+    } finally {
+      setIsImportValidating(false);
+    }
+  };
+
+  const handleFileChange: ChangeEventHandler<HTMLInputElement> = async (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (file) await validateImportFile(file);
+    input.value = "";
   };
 
   const handleDrop = async (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     const file = event.dataTransfer.files?.[0];
     if (!file) return;
-    setImportFileName(file.name);
-    await uploadDataFile(file);
-    setImportTab("success");
+    await validateImportFile(file);
+  };
+
+  const handleRetryFileChange: ChangeEventHandler<HTMLInputElement> = async (event) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (file) await validateImportFile(file, true);
+    input.value = "";
   };
 
   const resetFilters = () => {
@@ -180,37 +248,82 @@ export default function StudentProcessPage({
     setCurrentPage(1);
   };
 
-  const handleConfirmImportSuccess = () => {
-    if (passedRows.length === 0) {
-      alert("没有可导入的成功数据");
+  const handleConfirmImport = async () => {
+    if (!importValidation || importValidation.passed === 0) {
+      alert("没有可正式导入的通过数据");
       return;
     }
-    addStudentResultToMergePool();
-    setActiveModal(null);
+    if (importValidation.failed > 0) {
+      alert("仍有校验失败数据，请修正后重新校验");
+      return;
+    }
+    if (hasBlockingRows) {
+      alert("原有数据治理仍存在不通过数据，请修正并重新上传后再正式导入");
+      return;
+    }
+    if (!confirm(`确认正式导入 ${importValidation.passed} 条困难生数据？`)) return;
+
+    setIsImportConfirming(true);
+    try {
+      const result = await confirmDifficultyStudentImport(
+        importValidation.validationToken,
+        importValidation.passedRows
+      );
+      setImportConfirmResult(result);
+      setImportStep(3);
+      await onFormalImportConfirmed?.(result);
+    } catch (error) {
+      const message = error instanceof DifficultyStudentApiError
+        ? error.message
+        : error instanceof Error
+        ? error.message
+        : "困难生正式导入失败";
+      alert(message);
+    } finally {
+      setIsImportConfirming(false);
+    }
   };
 
-  const handleRevalidateFailed = async () => {
-    if (disqualifiedRows.length === 0) {
-      alert("没有需要重新校验的失败数据");
+  const downloadFailedImportRows = () => {
+    if (!importValidation?.failedRows.length) {
+      alert("没有可下载的失败数据");
       return;
     }
-    await startProcessing();
+    const rows = importValidation.failedRows.map((row) => ({
+      "原始行号": row.row,
+      "错误字段": row.errors.map((item) => item.field).join("；"),
+      "错误原因": row.errors.map((item) => item.reason).join("；"),
+      ...row.data,
+    }));
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet["!cols"] = Object.keys(rows[0]).map((key) => ({
+      wch: Math.min(Math.max(key.length + 4, 14), key.includes("原因") ? 48 : 28),
+    }));
+    XLSX.utils.book_append_sheet(workbook, worksheet, "失败数据");
+    XLSX.writeFile(workbook, `困难生导入失败数据_${Date.now()}.xlsx`);
   };
 
   const importSuccessCount = passedRows.length;
   const importFailedCount = disqualifiedRows.length;
   const importTotalCount = processedData.length;
 
-  const failedRowsWithReason = useMemo(() => {
-    return disqualifiedRows.map((row) => {
-      const originalRow = processedData[row.rowNumber - 1] || {};
-      return {
-        "导入状态": "导入失败",
-        "错误信息": row.reason,
-        ...originalRow,
-      };
-    });
-  }, [disqualifiedRows, processedData]);
+  const importPassedPreviewRows = useMemo(() => (
+    (importValidation?.passedRows || []).map((row) => ({
+      "学年": row.academic_year,
+      "学院": row.college_name,
+      ...(row.raw_data && typeof row.raw_data === "object" ? row.raw_data : {}),
+    }))
+  ), [importValidation]);
+
+  const importFailedPreviewRows = useMemo(() => (
+    (importValidation?.failedRows || []).map((row) => ({
+      "原始行号": row.row,
+      "错误字段": row.errors.map((item) => item.field).join("；"),
+      "错误原因": row.errors.map((item) => item.reason).join("；"),
+      ...row.data,
+    }))
+  ), [importValidation]);
 
   return (
     <div style={pageStyles.workspace}>
@@ -291,7 +404,7 @@ export default function StudentProcessPage({
       </div>
 
       <div style={pageStyles.toolbarSection}>
-        <button style={pageStyles.toolbarButton} onClick={() => setActiveModal("import")}>数据导入</button>
+        <button style={pageStyles.toolbarButton} onClick={openImportModal}>数据导入</button>
         <button style={pageStyles.toolbarButton} disabled={!hasProcessedRows} onClick={exportExcel}>导出通过名单</button>
         <button style={pageStyles.toolbarButton} disabled={!hasProcessedRows} onClick={exportStudentErrorReport}>导出不通过名单</button>
         {!hideSubmitAction && (
@@ -366,67 +479,107 @@ export default function StudentProcessPage({
 
       {activeModal === "import" && (
         <Modal title="数据导入" onClose={() => setActiveModal(null)}>
-          <div
-            style={pageStyles.importDrop}
-            onClick={selectFile}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={handleDrop}
-          >
-            <input ref={dataRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileChange} />
-            <strong>点击上传 EXCEL 文件</strong>
-            <span>或将文件拖拽到此处</span>
+          <div style={pageStyles.importSteps}>
+            {[
+              [1, "选择文件"],
+              [2, "校验结果"],
+              [3, "正式导入"],
+            ].map(([step, label]) => (
+              <div
+                key={step}
+                style={Number(step) <= importStep ? pageStyles.importStepActive : pageStyles.importStep}
+              >
+                <span>{step}</span>
+                <strong>{label}</strong>
+              </div>
+            ))}
           </div>
 
-          {processedData.length > 0 && (
+          {importStep === 1 && (
+            <div
+              style={pageStyles.importDrop}
+              onClick={isImportValidating ? undefined : selectFile}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={isImportValidating ? undefined : handleDrop}
+            >
+              <input ref={dataRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }} onChange={handleFileChange} />
+              <strong>{isImportValidating ? "正在解析并校验，请稍候…" : "点击上传 EXCEL 文件"}</strong>
+              <span>{importFileName || "或将文件拖拽到此处（最大 6MB）"}</span>
+              <small>上传后仅执行解析与校验，不会写入困难生数据库。</small>
+            </div>
+          )}
+
+          {importStep === 2 && importValidation && (
             <>
+              <div style={pageStyles.importSummary}>
+                <div><span>总数据</span><strong>{importValidation.total}</strong></div>
+                <div style={pageStyles.importSummarySuccess}><span>通过</span><strong>{importValidation.passed}</strong></div>
+                <div style={pageStyles.importSummaryDanger}><span>失败</span><strong>{importValidation.failed}</strong></div>
+                <p>
+                  {importValidation.failed > 0
+                    ? "失败数据不会入库。请下载失败数据，修改后仅上传该失败文件重新校验。"
+                    : hasBlockingRows
+                    ? "后端导入校验已通过，但原有数据治理仍有不通过数据，暂不能正式导入。"
+                    : "全部校验通过。点击“正式导入”后才会写入数据库并进入草稿态。"}
+                </p>
+              </div>
               <div style={pageStyles.importTabs}>
                 <button
                   style={importTab === "success" ? pageStyles.importTabActive : pageStyles.importTab}
                   onClick={() => setImportTab("success")}
                 >
-                  成功数据（{importSuccessCount}）
+                  通过 {importValidation.passed} 条
                 </button>
                 <button
                   style={importTab === "failed" ? pageStyles.importTabActive : pageStyles.importTab}
                   onClick={() => setImportTab("failed")}
                 >
-                  失败数据（{importFailedCount}）
+                  失败 {importValidation.failed} 条
                 </button>
               </div>
 
               <div style={pageStyles.importPreview}>
                 <div style={pageStyles.importPreviewHeader}>
                   <span>导入预览</span>
-                  <span>显示 {importTab === "success" ? importSuccessCount : importFailedCount} 条</span>
+                  <span>显示 {importTab === "success" ? importValidation.passed : importValidation.failed} 条</span>
                 </div>
                 <div style={pageStyles.importPreviewBody}>
                   {importTab === "success" ? (
-                    passedRows.length === 0 ? (
+                    importPassedPreviewRows.length === 0 ? (
                       <div style={pageStyles.empty}>暂无成功数据</div>
                     ) : (
                       <div style={pageStyles.tableScrollWrapper}>
-                        {renderSuccessTable(passedRows, academicYear, studentCollegeName)}
+                        {renderSuccessTable(importPassedPreviewRows, academicYear, studentCollegeName)}
                       </div>
                     )
                   ) : (
-                    failedRowsWithReason.length === 0 ? (
+                    importFailedPreviewRows.length === 0 ? (
                       <div style={pageStyles.empty}>暂无失败数据</div>
                     ) : (
                       <div style={pageStyles.tableScrollWrapper}>
-                        {renderFailedTable(failedRowsWithReason)}
+                        {renderFailedTable(importFailedPreviewRows)}
                       </div>
                     )
                   )}
                 </div>
                 <div style={pageStyles.importPreviewFooter}>
-                  <span>显示 1 到 {importTab === "success" ? importSuccessCount : importFailedCount} 条，共 {importTab === "success" ? importSuccessCount : importFailedCount} 条</span>
+                  <span>共 {importTab === "success" ? importValidation.passed : importValidation.failed} 条</span>
                 </div>
               </div>
             </>
           )}
 
+          {importStep === 3 && importConfirmResult && (
+            <div style={pageStyles.importComplete}>
+              <span>✓</span>
+              <h3>正式导入完成</h3>
+              <strong>已写入 {importConfirmResult.inserted} 条困难生数据</strong>
+              <p>新导入记录当前为草稿态，请继续完成学院确认审核后再上载学校端。</p>
+            </div>
+          )}
+
           <div style={pageStyles.modalFooter}>
-            <button style={pageStyles.modalButton} onClick={() => {
+            {importStep === 1 && <button style={pageStyles.modalButton} onClick={() => {
               const template = [DIFFICULTY_STUDENT_TEMPLATE_FIELDS, DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map(() => "")];
               const csv = template.map((row) => row.join(",")).join("\n");
               const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
@@ -436,33 +589,54 @@ export default function StudentProcessPage({
               link.download = "困难生本专科信息模板.csv";
               link.click();
               URL.revokeObjectURL(url);
-            }}>下载模板</button>
+            }}>下载模板</button>}
 
-            {processedData.length > 0 && importTab === "success" && (
+            {importStep === 1 && (
               <button
-                style={importSuccessCount > 0 ? pageStyles.modalGreenButton : pageStyles.modalDisabledButton}
-                disabled={importSuccessCount === 0}
-                onClick={handleConfirmImportSuccess}
+                style={isImportValidating ? pageStyles.modalDisabledButton : pageStyles.modalGreenButton}
+                disabled={isImportValidating}
+                onClick={selectFile}
               >
-                成功数据正式导入
+                {isImportValidating ? "正在校验" : "选择文件并校验"}
               </button>
             )}
 
-            {processedData.length > 0 && importTab === "failed" && (
-              <button
-                style={importFailedCount > 0 ? pageStyles.modalOrangeButton : pageStyles.modalDisabledButton}
-                disabled={importFailedCount === 0 || isProcessing}
-                onClick={handleRevalidateFailed}
-              >
-                失败数据重新校验
-              </button>
+            {importStep === 2 && importValidation && (
+              <>
+                <button style={pageStyles.modalButton} onClick={() => setImportStep(1)}>重新选择完整文件</button>
+                {importValidation.failed > 0 ? (
+                  <>
+                    <button style={pageStyles.modalOrangeButton} onClick={downloadFailedImportRows}>下载失败数据</button>
+                    <input
+                      ref={retryFileRef}
+                      type="file"
+                      accept=".xlsx,.xls"
+                      style={{ display: "none" }}
+                      onChange={handleRetryFileChange}
+                    />
+                    <button
+                      style={isImportValidating ? pageStyles.modalDisabledButton : pageStyles.modalGreenButton}
+                      disabled={isImportValidating}
+                      onClick={() => retryFileRef.current?.click()}
+                    >
+                      {isImportValidating ? "正在重新校验" : "只重新校验失败数据"}
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    style={isImportConfirming || hasBlockingRows ? pageStyles.modalDisabledButton : pageStyles.modalGreenButton}
+                    disabled={isImportConfirming || hasBlockingRows}
+                    onClick={handleConfirmImport}
+                  >
+                    {isImportConfirming ? "正在正式导入" : hasBlockingRows ? "原有治理未通过" : "正式导入"}
+                  </button>
+                )}
+              </>
             )}
 
-            {!processedData.length && (
-              <button style={pageStyles.modalGreenButton} onClick={selectFile}>上传文件</button>
-            )}
-
-            <button style={pageStyles.modalButton} onClick={() => setActiveModal(null)}>关闭</button>
+            <button style={pageStyles.modalButton} onClick={() => setActiveModal(null)}>
+              {importStep === 3 ? "完成" : "关闭"}
+            </button>
           </div>
         </Modal>
       )}
@@ -500,7 +674,7 @@ function renderSuccessTable(rows: Record<string, unknown>[], academicYear?: stri
 }
 
 function renderFailedTable(rows: Record<string, unknown>[]) {
-  const columns = ["导入状态", "错误信息", "姓名(*)", "身份证号(*)", "院系(*)", "学校名称(*)"];
+  const columns = ["原始行号", "错误字段", "错误原因", "姓名(*)", "学号", "身份证号(*)", "学院", "院系(*)"];
   const availableColumns = columns.filter((col) => rows[0] && col in rows[0]);
   if (availableColumns.length === 0) return null;
   return (
@@ -516,7 +690,7 @@ function renderFailedTable(rows: Record<string, unknown>[]) {
         {rows.map((row, index) => (
           <tr key={index}>
             {availableColumns.map((col) => (
-              <td key={col} style={col === "错误信息" ? styles.failedErrorTd : styles.failedTd}>
+              <td key={col} style={col === "错误原因" ? styles.failedErrorTd : styles.failedTd}>
                 {String(row[col] ?? "")}
               </td>
             ))}
@@ -820,8 +994,8 @@ const pageStyles: Record<string, CSSProperties> = {
     zIndex: 1000,
   },
   modal: {
-    width: "720px",
-    maxWidth: "92vw",
+    width: "1000px",
+    maxWidth: "94vw",
     maxHeight: "88vh",
     background: "#fff",
     borderRadius: 6,
@@ -871,6 +1045,7 @@ const pageStyles: Record<string, CSSProperties> = {
     display: "flex",
     justifyContent: "flex-end",
     gap: 10,
+    flexWrap: "wrap",
     padding: "12px 16px",
     borderTop: "1px solid #e4e7ed",
     background: "#fff",
@@ -925,6 +1100,64 @@ const pageStyles: Record<string, CSSProperties> = {
     background: "#f0f9eb",
     color: "#67c23a",
     cursor: "pointer",
+  },
+  importSteps: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+    gap: 10,
+  },
+  importStep: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: "10px 12px",
+    borderRadius: 6,
+    background: "#f5f7fa",
+    border: "1px solid #e4e7ed",
+    color: "#909399",
+    fontSize: 12,
+  },
+  importStepActive: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    padding: "10px 12px",
+    borderRadius: 6,
+    background: "#f0f9eb",
+    border: "1px solid #b3e19d",
+    color: "#529b2e",
+    fontSize: 12,
+  },
+  importSummary: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(110px, 1fr))",
+    gap: 10,
+    padding: 12,
+    border: "1px solid #e4e7ed",
+    borderRadius: 6,
+    background: "#f8fafc",
+  },
+  importSummarySuccess: {
+    color: "#529b2e",
+  },
+  importSummaryDanger: {
+    color: "#f56c6c",
+  },
+  importComplete: {
+    minHeight: 280,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    padding: 24,
+    border: "1px solid #b3e19d",
+    borderRadius: 8,
+    background: "#f0f9eb",
+    color: "#529b2e",
+    textAlign: "center",
   },
   importTabs: {
     display: "flex",

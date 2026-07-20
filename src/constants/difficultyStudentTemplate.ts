@@ -221,4 +221,4 @@ export const makeDifficultyRowKey = (
 export {
   DIFFICULTY_FAMILY_TEMPLATE_FIELDS,
   getFamilyTemplateValue,
-} from "./difficultyFamilyTemplate";
+} from "./difficultyFamilyTemplate.ts";

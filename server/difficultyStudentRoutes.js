@@ -18,6 +18,10 @@ import {
   translateDifficultyStudentUniqueError,
 } from "./difficultyImportValidation.js";
 import {
+  confirmDifficultyStudentImport,
+  validateDifficultyStudentImport,
+} from "./validators/difficultyStudentImport.js";
+import {
   applyLoggedDifficultyTransition,
   deleteDifficultyStudentWithLog,
   getDifficultyStudentOperationHistory,
@@ -187,6 +191,7 @@ export const difficultyStudentErrorHandler = (error, _req, res, _next) => {
     currentStatus: error?.currentStatus,
     action: error?.action,
     allowedPrerequisiteStatuses: error?.allowedPrerequisiteStatuses,
+    failures: Array.isArray(error?.failures) ? error.failures : undefined,
   });
 };
 
@@ -200,6 +205,37 @@ export const createDifficultyStudentRouter = () => {
       additionalFailures,
       context,
     });
+
+  const getImportTokenSecret = () =>
+    process.env.DIFFICULTY_IMPORT_TOKEN_SECRET
+    || process.env.SUPABASE_SECRET_KEY
+    || process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  router.post("/import/validate", async (req, res, next) => {
+    try {
+      const result = await validateDifficultyStudentImport({
+        context: req.difficultyContext,
+        body: req.body || {},
+        secret: getImportTokenSecret(),
+      });
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/import/confirm", async (req, res, next) => {
+    try {
+      const result = await confirmDifficultyStudentImport({
+        context: req.difficultyContext,
+        body: req.body || {},
+        secret: getImportTokenSecret(),
+      });
+      res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
 
   router.post("/batch-submit", async (req, res, next) => {
     try {
@@ -225,7 +261,7 @@ export const createDifficultyStudentRouter = () => {
         preparedRows.push(row);
       }
 
-      await assertDifficultyImportConstraints(admin, preparedRows);
+      await assertDifficultyImportConstraints(admin, preparedRows, { allowExisting: true });
 
       for (const row of preparedRows) {
         const existing = await findStudentByIdentity(admin, row);

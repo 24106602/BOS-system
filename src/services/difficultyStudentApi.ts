@@ -28,6 +28,34 @@ export type DifficultyReportFailure = {
   reasons: string[];
 };
 
+export type DifficultyImportFailure = {
+  row: number;
+  field: string;
+  reason: string;
+};
+
+export type DifficultyImportFailedRow = {
+  row: number;
+  data: Record<string, unknown>;
+  errors: Array<Pick<DifficultyImportFailure, "field" | "reason">>;
+};
+
+export type DifficultyImportValidationResult = {
+  validationToken: string;
+  total: number;
+  passed: number;
+  failed: number;
+  failures: DifficultyImportFailure[];
+  passedRows: Record<string, unknown>[];
+  failedRows: DifficultyImportFailedRow[];
+};
+
+export type DifficultyImportConfirmResult = {
+  inserted: number;
+  failed: number;
+  status: "draft";
+};
+
 export type DifficultyOperationAction =
   | "confirm"
   | "approve"
@@ -98,6 +126,43 @@ export type DifficultyBatchSubmitResult = {
 
 export const submitDifficultyStudentBatch = (rows: Record<string, unknown>[]) =>
   requestDifficultyApi<DifficultyBatchSubmitResult>("/batch-submit", "POST", { rows });
+
+const fileToBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve(String(reader.result || ""));
+  reader.onerror = () => reject(new Error("读取 Excel 文件失败，请重新选择文件"));
+  reader.readAsDataURL(file);
+});
+
+export const validateDifficultyStudentImport = async (
+  file: File,
+  options: {
+    academicYear: string;
+    collegeName: string;
+    retryToken?: string;
+    acceptedRows?: Record<string, unknown>[];
+  }
+) => requestDifficultyApi<DifficultyImportValidationResult>(
+  "/import/validate",
+  "POST",
+  {
+    fileName: file.name,
+    fileBase64: await fileToBase64(file),
+    academicYear: options.academicYear,
+    collegeName: options.collegeName,
+    retryToken: options.retryToken,
+    acceptedRows: options.acceptedRows,
+  }
+);
+
+export const confirmDifficultyStudentImport = (
+  validationToken: string,
+  passedRows: Record<string, unknown>[]
+) => requestDifficultyApi<DifficultyImportConfirmResult>(
+  "/import/confirm",
+  "POST",
+  { validationToken, passedRows }
+);
 
 export const importHistoricalDifficultyStudent = (row: Record<string, unknown>) =>
   requestDifficultyApi<{ inserted: number; updated: number }>("/historical-import", "POST", { row });
