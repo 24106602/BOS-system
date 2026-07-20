@@ -11,6 +11,11 @@ import {
   IncompleteDataError,
   reportDifficultyStudentsAtomically,
 } from "../server/difficultyReportIntegrity.js";
+import {
+  DifficultyImportValidationError,
+  assertDifficultyImportConstraints,
+  translateDifficultyStudentUniqueError,
+} from "../server/difficultyImportValidation.js";
 
 const DEFAULT_ALLOWED_HEADERS = "Content-Type, Authorization";
 const DEFAULT_ALLOWED_METHODS = "GET, POST, PATCH, DELETE, OPTIONS";
@@ -189,6 +194,7 @@ const handleBatchSubmit = async (request, context) => {
   let inserted = 0;
   let updated = 0;
   let skipped = 0;
+  const preparedRows = [];
 
   for (const input of rows) {
     const row = pickEditableFields(input);
@@ -201,7 +207,12 @@ const handleBatchSubmit = async (request, context) => {
       skipped += 1;
       continue;
     }
+    preparedRows.push(row);
+  }
 
+  await assertDifficultyImportConstraints(admin, preparedRows);
+
+  for (const row of preparedRows) {
     const existing = await findStudentByIdentity(admin, row);
     const currentStatus = normalizeDifficultyStudentStatus(existing?.status, "draft");
     const nextStatus = getTransitionTarget(currentStatus, "submit");
@@ -209,7 +220,7 @@ const handleBatchSubmit = async (request, context) => {
     const result = existing
       ? await admin.from("students").update(payload).eq("id", existing.id)
       : await admin.from("students").insert(payload);
-    if (result.error) throw result.error;
+    if (result.error) throw translateDifficultyStudentUniqueError(result.error, row);
     if (existing) updated += 1;
     else inserted += 1;
   }
@@ -226,6 +237,7 @@ const handleHistoricalImport = async (request, context) => {
   row.college_name = text(row.college_name);
   row.student_id = text(row.student_id);
   row.id_card = normalizeIdCard(row.id_card);
+  await assertDifficultyImportConstraints(admin, [row]);
   const existing = await findStudentByIdentity(admin, row);
   const currentStatus = existing
     ? normalizeDifficultyStudentStatus(existing.status)
@@ -235,7 +247,7 @@ const handleHistoricalImport = async (request, context) => {
   const result = existing
     ? await admin.from("students").update({ ...row, status: nextStatus }).eq("id", existing.id)
     : await admin.from("students").insert({ ...row, status: nextStatus });
-  if (result.error) throw result.error;
+  if (result.error) throw translateDifficultyStudentUniqueError(result.error, row);
   return { body: { inserted: existing ? 0 : 1, updated: existing ? 1 : 0 }, status: 200 };
 };
 
@@ -432,6 +444,16 @@ const handleDeepSeek = async (request, env) => {
 };
 
 const formatError = (error) => {
+  if (error instanceof DifficultyImportValidationError) {
+    return {
+      status: error.statusCode,
+      body: {
+        code: error.code,
+        message: error.message,
+        failures: error.failures,
+      },
+    };
+  }
   if (error instanceof IncompleteDataError) {
     return {
       status: 400,

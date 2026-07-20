@@ -12,6 +12,11 @@ import {
   IncompleteDataError,
   reportDifficultyStudentsAtomically,
 } from "./difficultyReportIntegrity.js";
+import {
+  DifficultyImportValidationError,
+  assertDifficultyImportConstraints,
+  translateDifficultyStudentUniqueError,
+} from "./difficultyImportValidation.js";
 
 const EDITABLE_FIELDS = [
   "academic_year",
@@ -147,6 +152,14 @@ const authenticate = async (req, _res, next) => {
 };
 
 export const difficultyStudentErrorHandler = (error, _req, res, _next) => {
+  if (error instanceof DifficultyImportValidationError) {
+    res.status(error.statusCode).json({
+      code: error.code,
+      message: error.message,
+      failures: error.failures,
+    });
+    return;
+  }
   if (error instanceof IncompleteDataError) {
     res.status(400).json({
       code: error.code,
@@ -186,6 +199,7 @@ export const createDifficultyStudentRouter = () => {
       let inserted = 0;
       let updated = 0;
       let skipped = 0;
+      const preparedRows = [];
 
       for (const input of rows) {
         const row = pickEditableFields(input);
@@ -198,7 +212,12 @@ export const createDifficultyStudentRouter = () => {
           skipped += 1;
           continue;
         }
+        preparedRows.push(row);
+      }
 
+      await assertDifficultyImportConstraints(admin, preparedRows);
+
+      for (const row of preparedRows) {
         const existing = await findStudentByIdentity(admin, row);
         const currentStatus = normalizeDifficultyStudentStatus(existing?.status, "draft");
         const nextStatus = getTransitionTarget(currentStatus, "submit");
@@ -206,7 +225,7 @@ export const createDifficultyStudentRouter = () => {
         const result = existing
           ? await admin.from("students").update(payload).eq("id", existing.id)
           : await admin.from("students").insert(payload);
-        if (result.error) throw result.error;
+        if (result.error) throw translateDifficultyStudentUniqueError(result.error, row);
         if (existing) updated += 1;
         else inserted += 1;
       }
@@ -225,6 +244,7 @@ export const createDifficultyStudentRouter = () => {
       row.college_name = text(row.college_name);
       row.student_id = text(row.student_id);
       row.id_card = normalizeIdCard(row.id_card);
+      await assertDifficultyImportConstraints(admin, [row]);
       const existing = await findStudentByIdentity(admin, row);
       const currentStatus = existing
         ? normalizeDifficultyStudentStatus(existing.status)
@@ -234,7 +254,7 @@ export const createDifficultyStudentRouter = () => {
       const result = existing
         ? await admin.from("students").update({ ...row, status: nextStatus }).eq("id", existing.id)
         : await admin.from("students").insert({ ...row, status: nextStatus });
-      if (result.error) throw result.error;
+      if (result.error) throw translateDifficultyStudentUniqueError(result.error, row);
       res.json({ inserted: existing ? 0 : 1, updated: existing ? 1 : 0 });
     } catch (error) {
       next(error);
