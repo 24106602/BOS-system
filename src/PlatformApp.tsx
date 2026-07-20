@@ -322,7 +322,7 @@ function AppContent() {
       ) : pagePath === "/college/difficulty/family" ? (
         <CollegeUploadPage panel="family" onNavigate={navigate} />
       ) : pagePath === "/college/difficulty/students" ? (
-        <CollegeDifficultyStudentsPage profile={authState.profile!} />
+        <CollegeDifficultyStudentsPage profile={authState.profile!} onNavigate={navigate} />
       ) : pagePath === "/college/difficulty" ? (
         <CollegeDifficultyPage profile={authState.profile!} onNavigate={navigate} />
       ) : pagePath === "/college/records" ? (

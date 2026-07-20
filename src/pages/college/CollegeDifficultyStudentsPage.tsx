@@ -2,9 +2,16 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 import * as XLSX from "xlsx-js-style";
 import type { UserProfile } from "../../types/auth";
 import { ACADEMIC_YEAR_OPTIONS, getCurrentAcademicYear } from "../../utils/academicYear";
-import { normalizeIdCard, fetchCollegeDifficultyStudents, resubmitStudentRecords, type DifficultyStudentRow } from "../../services/difficultyStudentService";
+import { normalizeIdCard, fetchCollegeDifficultyStudents, type DifficultyStudentRow } from "../../services/difficultyStudentService";
+import { transitionDifficultyStudent } from "../../services/difficultyStudentApi";
 import { getDifficultyStudentStatusLabel } from "../../constants/statusTransitions";
 import { normalizeSubmissionCollegeName } from "../../utils/collegeDetector";
+import {
+  DIFFICULTY_STUDENT_ACTION_LABELS,
+  getAvailableActions,
+  getDifficultyStudentActionHint,
+  type DifficultyStudentUiAction,
+} from "../../utils/difficultyStudentActions";
 import {
   DIFFICULTY_STUDENT_TEMPLATE_FIELDS,
   getDifficultyTemplateValue,
@@ -14,6 +21,7 @@ import {
 
 type CollegeDifficultyStudentsPageProps = {
   profile: UserProfile;
+  onNavigate?: (to: string) => void;
 };
 
 const displayStatus = (status: string) => getDifficultyStudentStatusLabel(status);
@@ -36,7 +44,7 @@ const getRawDetail = (row: DifficultyStudentRow, aliases: string[]) => {
   return matchedKey ? String(rawData[matchedKey] ?? "").trim() : "";
 };
 
-export default function CollegeDifficultyStudentsPage({ profile }: CollegeDifficultyStudentsPageProps) {
+export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: CollegeDifficultyStudentsPageProps) {
   const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear());
   const [nameKeyword, setNameKeyword] = useState("");
   const [studentIdKeyword, setStudentIdKeyword] = useState("");
@@ -48,6 +56,8 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [loadMessage, setLoadMessage] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [pendingRowKey, setPendingRowKey] = useState("");
   const [dataSource, setDataSource] = useState<"supabase" | "local">("supabase");
 
   const collegeName = normalizeSubmissionCollegeName(profile.college_name || profile.display_name || "");
@@ -143,19 +153,81 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
     setSelectedKeys(new Set());
   };
 
-  const handleResubmit = async () => {
-    if (selectedKeys.size === 0) return;
-    const rowsToResubmit = rows.filter((row) => selectedKeys.has(getRowKey(row)) && row.id);
-    const ids = rowsToResubmit.map((row) => row.id!);
+  const removeRowFromCurrentView = (row: DifficultyStudentRow) => {
+    const key = getRowKey(row);
+    if (!confirm(`确认从当前页面移除 ${row.name || "该学生"}？此操作不会删除 Supabase 数据。`)) return;
+    setRows((current) => current.filter((item) => getRowKey(item) !== key));
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+      next.delete(key);
+      return next;
+    });
+    setSelectedRow(null);
+    setActionMessage(`${row.name || "该学生"}已从当前页面移除，Supabase 数据未删除。`);
+  };
 
-    const result = await resubmitStudentRecords(ids);
-    if (result.success) {
-      alert(result.message);
-      setSelectedKeys(new Set());
-      void loadRows();
-    } else {
-      alert(result.message);
+  const handleRecordAction = async (
+    action: DifficultyStudentUiAction,
+    row: DifficultyStudentRow
+  ) => {
+    if (action === "edit") {
+      setSelectedRow(null);
+      setActionMessage(
+        row.status === "returned_by_center"
+          ? "中心已退回，请在本专科信息处理页修正资料后重新上载。"
+          : "请在本专科信息处理页修正资料并重新提交。"
+      );
+      onNavigate?.("/college/difficulty/student");
+      return;
     }
+    if (action === "delete") {
+      removeRowFromCurrentView(row);
+      return;
+    }
+    if (action !== "confirm_upload") return;
+    if (row.id === undefined) {
+      setActionMessage("该记录尚未写入云端，无法执行状态上载；请先在信息处理页完成数据上载。");
+      return;
+    }
+
+    const key = getRowKey(row);
+    setPendingRowKey(key);
+    setActionMessage("");
+    try {
+      await transitionDifficultyStudent(row.id, "submit");
+      setSelectedRow(null);
+      setActionMessage(`${row.name || "该学生"}已确认上载，等待学校接收审核。`);
+      await loadRows();
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "确认上载失败");
+    } finally {
+      setPendingRowKey("");
+    }
+  };
+
+  const renderRecordActions = (row: DifficultyStudentRow, location: "table" | "detail") => {
+    const actions = getAvailableActions(row.status, "college");
+    const hint = getDifficultyStudentActionHint(row.status, "college");
+    const isPending = pendingRowKey === getRowKey(row);
+    return (
+      <div className={`difficulty-record-actions is-${location}`}>
+        {actions.length > 0 && (
+          <div className="difficulty-record-action-buttons">
+            {actions.map((action) => (
+              <button
+                key={action}
+                className={`difficulty-record-action is-${action}`}
+                disabled={isPending}
+                onClick={() => void handleRecordAction(action, row)}
+              >
+                {isPending && action === "confirm_upload" ? "处理中..." : DIFFICULTY_STUDENT_ACTION_LABELS[action]}
+              </button>
+            ))}
+          </div>
+        )}
+        <span className="difficulty-status-notice" data-tone={hint.tone}>{hint.text}</span>
+      </div>
+    );
   };
 
   const exportCurrentRows = () => {
@@ -180,6 +252,11 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
     XLSX.utils.book_append_sheet(workbook, worksheet, "困难生明细");
     XLSX.writeFile(workbook, `${academicYear}_${collegeName || "学院"}_困难生明细.xlsx`);
   };
+
+  const selectedRows = rows.filter((row) => selectedKeys.has(getRowKey(row)));
+  const canDeleteSelected = selectedRows.length > 0 && selectedRows.every((row) =>
+    getAvailableActions(row.status, "college").includes("delete")
+  );
 
   return (
     <section className="bos-table-page difficulty-workspace">
@@ -228,13 +305,18 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
       <div className="bos-action-toolbar">
         <button className="is-primary" onClick={() => void loadRows()} disabled={isLoading}>{isLoading ? "刷新中..." : "刷新数据"}</button>
         <button className="is-purple" onClick={exportCurrentRows}>导出当前名单</button>
-        <button className="is-success" disabled={selectedKeys.size === 0 || !filteredRows.some(r => selectedKeys.has(getRowKey(r)) && r.status === "rejected_by_school")} onClick={handleResubmit}>
-          重新提交选中（{selectedKeys.size}）
-        </button>
-        <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedRows}>
-          删除选中（{selectedKeys.size}）
-        </button>
+        {canDeleteSelected ? (
+          <button className="is-danger" onClick={deleteSelectedRows}>
+            删除选中（{selectedKeys.size}）
+          </button>
+        ) : (
+          <span className="difficulty-toolbar-hint">
+            {selectedRows.length === 0 ? "选择草稿或退回记录后可批量移除" : "所选状态不可删除，请查看各行状态说明"}
+          </span>
+        )}
       </div>
+
+      {actionMessage && <div className="difficulty-page-action-message">{actionMessage}</div>}
 
       <div className="bos-status-row">
         <span className="bos-status-badge">学年 {academicYear}</span>
@@ -272,16 +354,17 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
                   ))}
                   <th style={styles.th}>状态</th>
                   <th style={styles.th}>退回原因</th>
+                  <th style={styles.actionColumn}>操作与状态说明</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td style={styles.empty} colSpan={43}>正在加载困难生明细...</td>
+                    <td style={styles.empty} colSpan={DIFFICULTY_STUDENT_TEMPLATE_FIELDS.length + 6}>正在加载困难生明细...</td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td style={styles.empty} colSpan={43}>暂无当前学年困难生明细</td>
+                    <td style={styles.empty} colSpan={DIFFICULTY_STUDENT_TEMPLATE_FIELDS.length + 6}>暂无当前学年困难生明细</td>
                   </tr>
                 ) : (
                   filteredRows.map((row, index) => (
@@ -312,6 +395,7 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
                       ))}
                       <td style={styles.td}>{displayStatus(row.status)}</td>
                       <td style={styles.td}>{row.rejected_reason || "-"}</td>
+                      <td style={styles.actionCell}>{renderRecordActions(row, "table")}</td>
                     </tr>
                   ))
                 )}
@@ -337,6 +421,9 @@ export default function CollegeDifficultyStudentsPage({ profile }: CollegeDiffic
                 {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
                   <Detail key={field} label={field} value={getTemplateCell(selectedRow, field)} />
                 ))}
+              </div>
+              <div className="difficulty-detail-actions">
+                {renderRecordActions(selectedRow, "detail")}
               </div>
             </div>
           </section>
@@ -404,6 +491,8 @@ const styles: Record<string, CSSProperties> = {
   th: { position: "sticky", top: 0, zIndex: 1, border: "1px solid #d7e1ed", background: "#edf4fa", padding: "9px 10px", whiteSpace: "nowrap", textAlign: "center" },
   td: { border: "1px solid #cbd5e1", padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap" },
   nameCell: { border: "1px solid #cbd5e1", padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap", fontWeight: 800 },
+  actionColumn: { position: "sticky", top: 0, zIndex: 1, minWidth: 300, border: "1px solid #d7e1ed", background: "#edf4fa", padding: "9px 10px", whiteSpace: "nowrap", textAlign: "center" },
+  actionCell: { minWidth: 300, maxWidth: 360, border: "1px solid #cbd5e1", padding: "8px 10px", textAlign: "left", whiteSpace: "normal" },
   empty: { padding: 18, color: "#8190a4", textAlign: "center" },
   linkButton: { border: "none", background: "transparent", color: "#1e5aa8", fontWeight: 800, cursor: "pointer" },
   smallButton: { border: "1px solid #bcd9f5", borderRadius: 6, padding: "6px 9px", background: "#f3f9ff", color: "#0879c5", fontWeight: 800, cursor: "pointer" },

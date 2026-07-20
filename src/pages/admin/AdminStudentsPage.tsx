@@ -21,12 +21,23 @@ import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
 import Toolbar from "../../components/ui/Toolbar";
 import { rejectStudentRecords } from "../../services/difficultyStudentService";
-import { importHistoricalDifficultyStudent } from "../../services/difficultyStudentApi";
+import {
+  DifficultyStudentApiError,
+  importHistoricalDifficultyStudent,
+  reportDifficultyStudentBatch,
+  transitionDifficultyStudent,
+} from "../../services/difficultyStudentApi";
 import {
   getDifficultyStudentStatusLabel,
   normalizeDifficultyStudentStatus,
   type DifficultyStudentStatus,
 } from "../../constants/statusTransitions";
+import {
+  DIFFICULTY_STUDENT_ACTION_LABELS,
+  getAvailableActions,
+  getDifficultyStudentActionHint,
+  type DifficultyStudentUiAction,
+} from "../../utils/difficultyStudentActions";
 
 type MergedDifficultyRow = {
   academicYear: string;
@@ -113,6 +124,21 @@ const getText = (row: Record<string, unknown>, aliases: string[]) => {
 const normalizeIdCard = (value: string) => value.replace(/\s|-/g, "").toUpperCase();
 
 const displayStatus = (status: string) => getDifficultyStudentStatusLabel(status);
+
+const getWorkflowStatus = (row: MergedDifficultyRow) => row.rawStatus || row.status;
+
+const hasCloudRecordId = (row: MergedDifficultyRow) =>
+  row.cloudId !== undefined && row.cloudId !== null && String(row.cloudId).trim() !== "";
+
+const formatWorkflowError = (error: unknown) => {
+  if (error instanceof DifficultyStudentApiError && error.failures.length > 0) {
+    const failures = error.failures
+      .map((item) => `${item.studentId}：${item.reasons.join("、")}`)
+      .join("；");
+    return `${error.message}（${failures}）`;
+  }
+  return error instanceof Error ? error.message : "状态操作失败";
+};
 
 const makeStudentKey = (row: Pick<HistoricalImportRow, "id_card" | "student_id">) =>
   normalizeIdCard(row.id_card) || row.student_id.trim();
@@ -214,17 +240,25 @@ const makeCloudMergedRows = (rows: CloudStudentRow[]): MergedDifficultyRow[] =>
   }));
 
 const mergeDatabaseRows = (localRows: MergedDifficultyRow[], cloudRows: MergedDifficultyRow[]) => {
-  const rows = [...localRows];
-  const existingKeys = new Set(
-    localRows.map((row) => normalizeIdCard(row.idCard) || row.studentId.trim()).filter(Boolean)
+  const cloudByKey = new Map(
+    cloudRows
+      .map((row) => [normalizeIdCard(row.idCard) || row.studentId.trim(), row] as const)
+      .filter(([key]) => Boolean(key))
   );
-  cloudRows.forEach((row) => {
-    const key = normalizeIdCard(row.idCard) || row.studentId.trim();
-    if (key && existingKeys.has(key)) return;
-    if (key) existingKeys.add(key);
-    rows.push(row);
+  const rows = localRows.map((localRow) => {
+    const key = normalizeIdCard(localRow.idCard) || localRow.studentId.trim();
+    const cloudRow = key ? cloudByKey.get(key) : undefined;
+    if (!cloudRow) return localRow;
+    cloudByKey.delete(key);
+    return {
+      ...localRow,
+      ...cloudRow,
+      rawData: { ...localRow.rawData, ...cloudRow.rawData },
+      familyMembers: localRow.familyMembers,
+      relationStatus: localRow.relationStatus,
+    };
   });
-  return rows;
+  return [...rows, ...cloudByKey.values()];
 };
 
 const normalizeHeader = (value: unknown) =>
@@ -377,9 +411,11 @@ export default function AdminStudentsPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [selectedRow, setSelectedRow] = useState<MergedDifficultyRow | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [pendingRowKey, setPendingRowKey] = useState("");
+  const [isBulkActionPending, setIsBulkActionPending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getTemplateCell = (row: MergedDifficultyRow, field: DifficultyStudentTemplateField) => {
@@ -397,7 +433,6 @@ export default function AdminStudentsPage() {
 
   const loadCloudStudents = useCallback(async () => {
     setSelectedKeys(new Set());
-    setHiddenKeys(new Set());
     if (!isSupabaseConfigured) {
       setCloudStudents([]);
       setLoadError("读取困难生数据库失败：请先配置 Supabase 环境变量。");
@@ -469,7 +504,6 @@ export default function AdminStudentsPage() {
     const status = searchFilters.status.trim();
 
     return mergedRows.filter((row) => {
-      if (hiddenKeys.has(getMergedRowKey(row))) return false;
       if (name && !row.name.includes(name)) return false;
       if (studentId && !row.studentId.includes(studentId)) return false;
       if (collegeName && row.collegeName !== collegeName && !row.collegeName.includes(collegeName)) return false;
@@ -480,7 +514,7 @@ export default function AdminStudentsPage() {
       if (status && !row.status.includes(status) && !row.relationStatus.includes(status)) return false;
       return true;
     });
-  }, [hiddenKeys, mergedRows, searchFilters]);
+  }, [mergedRows, searchFilters]);
   const studentCount = yearBatches.filter((item) => item.dataType === "student").reduce((sum, item) => sum + item.rowCount, 0);
   const familyCount = yearBatches.filter((item) => item.dataType === "family").reduce((sum, item) => sum + item.rowCount, 0);
   const linkedCount = mergedRows.filter((item) => item.relationStatus === "已关联").length;
@@ -507,33 +541,128 @@ export default function AdminStudentsPage() {
     });
   };
 
-  const deleteSelectedRows = () => {
-    if (selectedKeys.size === 0) return;
-    if (!confirm(`确认从当前页面移除已选中的 ${selectedKeys.size} 条记录？此操作不会删除 Supabase 数据。`)) return;
-    setHiddenKeys((current) => new Set([...current, ...selectedKeys]));
-    setSelectedKeys(new Set());
+  const selectedRows = mergedRows.filter((row) => selectedKeys.has(getMergedRowKey(row)));
+  const canPerformSelectedAction = (action: DifficultyStudentUiAction) =>
+    selectedRows.length > 0 && selectedRows.every((row) =>
+      hasCloudRecordId(row) && getAvailableActions(getWorkflowStatus(row), "school").includes(action)
+    );
+
+  const handleRecordAction = async (
+    action: DifficultyStudentUiAction,
+    row: MergedDifficultyRow
+  ) => {
+    if (action === "reject") {
+      setSelectedKeys(new Set([getMergedRowKey(row)]));
+      setSelectedRow(null);
+      setShowRejectModal(true);
+      return;
+    }
+    if (!hasCloudRecordId(row)) {
+      setActionMessage("该记录尚未同步到 Supabase，无法执行学校端状态操作。");
+      return;
+    }
+    if (action !== "start_review" && action !== "approve" && action !== "report") return;
+
+    const key = getMergedRowKey(row);
+    setPendingRowKey(key);
+    setActionMessage("");
+    try {
+      if (action === "report") {
+        await reportDifficultyStudentBatch([row.cloudId]);
+      } else {
+        await transitionDifficultyStudent(row.cloudId, action === "start_review" ? "submit" : "approve");
+      }
+      setSelectedRow(null);
+      setActionMessage(`${row.name || "该学生"}${DIFFICULTY_STUDENT_ACTION_LABELS[action]}成功。`);
+      await loadCloudStudents();
+    } catch (error) {
+      setActionMessage(formatWorkflowError(error));
+    } finally {
+      setPendingRowKey("");
+    }
+  };
+
+  const handleSelectedAction = async (action: "start_review" | "approve" | "report") => {
+    if (!canPerformSelectedAction(action)) return;
+    const rowsToProcess = selectedRows.filter(hasCloudRecordId);
+    setIsBulkActionPending(true);
+    setActionMessage("");
+    try {
+      if (action === "report") {
+        await reportDifficultyStudentBatch(rowsToProcess.map((row) => row.cloudId!));
+      } else {
+        for (const row of rowsToProcess) {
+          await transitionDifficultyStudent(row.cloudId!, action === "start_review" ? "submit" : "approve");
+        }
+      }
+      setActionMessage(`已完成 ${rowsToProcess.length} 条记录的“${DIFFICULTY_STUDENT_ACTION_LABELS[action]}”操作。`);
+      setSelectedKeys(new Set());
+      await loadCloudStudents();
+    } catch (error) {
+      setActionMessage(formatWorkflowError(error));
+    } finally {
+      setIsBulkActionPending(false);
+    }
+  };
+
+  const renderRecordActions = (row: MergedDifficultyRow, location: "table" | "detail") => {
+    const status = getWorkflowStatus(row);
+    const actions = getAvailableActions(status, "school");
+    const hint = getDifficultyStudentActionHint(status, "school");
+    const isPending = pendingRowKey === getMergedRowKey(row);
+    return (
+      <div className={`difficulty-record-actions is-${location}`}>
+        {actions.length > 0 && (
+          <div className="difficulty-record-action-buttons">
+            {actions.map((action) => (
+              <button
+                key={action}
+                className={`difficulty-record-action is-${action}`}
+                disabled={isPending || !hasCloudRecordId(row)}
+                title={!hasCloudRecordId(row) ? "该记录尚未同步到 Supabase" : undefined}
+                onClick={() => void handleRecordAction(action, row)}
+              >
+                {isPending ? "处理中..." : DIFFICULTY_STUDENT_ACTION_LABELS[action]}
+              </button>
+            ))}
+          </div>
+        )}
+        <span className="difficulty-status-notice" data-tone={hint.tone}>{hint.text}</span>
+        {!hasCloudRecordId(row) && actions.length > 0 && (
+          <span className="difficulty-status-notice" data-tone="danger">未同步云端，暂不能执行状态操作。</span>
+        )}
+      </div>
+    );
   };
 
   const handleReject = async () => {
     if (selectedKeys.size === 0) return;
+    if (!canPerformSelectedAction("reject")) {
+      setShowRejectModal(false);
+      setActionMessage("只有“学校审核中”的云端记录可以执行审核退回。");
+      return;
+    }
     if (!rejectReason.trim()) {
       alert("请填写退回原因");
       return;
     }
 
-    const rowsToReject = mergedRows.filter((row) => selectedKeys.has(getMergedRowKey(row)) && row.cloudId);
+    const rowsToReject = mergedRows.filter((row) => selectedKeys.has(getMergedRowKey(row)) && hasCloudRecordId(row));
     const ids = rowsToReject.map((row) => row.cloudId!);
 
+    setIsBulkActionPending(true);
     const result = await rejectStudentRecords(ids, rejectReason);
-    if (result.success) {
-      alert(result.message);
-      setShowRejectModal(false);
-      setRejectReason("");
-      setSelectedKeys(new Set());
-      void loadCloudStudents();
-    } else {
-      alert(result.message);
+    setIsBulkActionPending(false);
+    if (!result.success) {
+      setActionMessage(result.message);
+      return;
     }
+    setActionMessage(result.message);
+    setShowRejectModal(false);
+    setRejectReason("");
+    setSelectedKeys(new Set());
+    setSelectedRow(null);
+    void loadCloudStudents();
   };
 
   const exportCurrentYearDatabase = () => {
@@ -731,13 +860,36 @@ export default function AdminStudentsPage() {
         <button className="is-primary" onClick={() => setShowImportModal(true)}>数据导入</button>
         <button onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>{isLoadingDatabase ? "刷新中..." : "刷新"}</button>
         <button className="is-purple" onClick={exportCurrentYearDatabase}>导出当前名单</button>
-        <button className="is-warning" disabled={selectedKeys.size === 0} onClick={() => setShowRejectModal(true)}>
-          退回选中（{selectedKeys.size}）
-        </button>
-        <button className="is-danger" disabled={selectedKeys.size === 0} onClick={deleteSelectedRows}>
-          删除选中（{selectedKeys.size}）
-        </button>
+        {canPerformSelectedAction("start_review") && (
+          <button className="is-primary" disabled={isBulkActionPending} onClick={() => void handleSelectedAction("start_review")}>
+            开始审核（{selectedRows.length}）
+          </button>
+        )}
+        {canPerformSelectedAction("approve") && (
+          <button className="is-success" disabled={isBulkActionPending} onClick={() => void handleSelectedAction("approve")}>
+            审核通过（{selectedRows.length}）
+          </button>
+        )}
+        {canPerformSelectedAction("reject") && (
+          <button className="is-warning" disabled={isBulkActionPending} onClick={() => setShowRejectModal(true)}>
+            审核退回（{selectedRows.length}）
+          </button>
+        )}
+        {canPerformSelectedAction("report") && (
+          <button className="is-success" disabled={isBulkActionPending} onClick={() => void handleSelectedAction("report")}>
+            上报（{selectedRows.length}）
+          </button>
+        )}
+        {selectedRows.length === 0 && <span className="difficulty-toolbar-hint">选择记录后显示当前状态可执行的学校端操作</span>}
+        {selectedRows.length > 0
+          && !canPerformSelectedAction("start_review")
+          && !canPerformSelectedAction("approve")
+          && !canPerformSelectedAction("reject")
+          && !canPerformSelectedAction("report")
+          && <span className="difficulty-toolbar-hint">所选记录状态不一致或当前状态不允许学校端操作</span>}
       </Toolbar>
+
+      {actionMessage && <div className="difficulty-page-action-message">{actionMessage}</div>}
 
       <div className="bos-status-row">
         <span className="bos-status-badge">合并学生 {mergedRows.length}</span>
@@ -772,11 +924,14 @@ export default function AdminStudentsPage() {
                   {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
                     <th key={field} style={styles.th}>{field}</th>
                   ))}
+                  <th style={styles.th}>状态</th>
+                  <th style={styles.th}>退回原因</th>
+                  <th style={styles.actionColumn}>操作与状态说明</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.length === 0 ? (
-                  <tr><td style={styles.empty} colSpan={41}>{mergedRows.length === 0 ? "暂无当前学年已合并数据" : "没有符合筛选条件的数据"}</td></tr>
+                  <tr><td style={styles.empty} colSpan={DIFFICULTY_STUDENT_TEMPLATE_FIELDS.length + 4}>{mergedRows.length === 0 ? "暂无当前学年已合并数据" : "没有符合筛选条件的数据"}</td></tr>
                 ) : (
                   filteredRows.map((row) => (
                     <tr
@@ -802,6 +957,9 @@ export default function AdminStudentsPage() {
                           )}
                         </td>
                       ))}
+                      <td style={styles.td}>{displayStatus(getWorkflowStatus(row))}</td>
+                      <td style={styles.td}>{row.rejectedReason || "-"}</td>
+                      <td style={styles.actionCell}>{renderRecordActions(row, "table")}</td>
                     </tr>
                   ))
                 )}
@@ -893,7 +1051,9 @@ export default function AdminStudentsPage() {
           </div>
           <div style={styles.modalFooter}>
             <button style={styles.secondaryButton} onClick={() => setShowRejectModal(false)}>取消</button>
-            <button style={styles.importButton} onClick={handleReject}>确认退回</button>
+            <button style={isBulkActionPending ? styles.disabledButton : styles.importButton} disabled={isBulkActionPending} onClick={handleReject}>
+              {isBulkActionPending ? "处理中..." : "确认退回"}
+            </button>
           </div>
         </Modal>
       )}
@@ -901,9 +1061,14 @@ export default function AdminStudentsPage() {
       {selectedRow && (
         <Modal title={`${selectedRow.name || "困难生"}详情`} onClose={() => setSelectedRow(null)}>
           <div style={styles.detailGrid}>
+            <Detail label="当前状态" value={displayStatus(getWorkflowStatus(selectedRow))} />
+            <Detail label="退回原因" value={selectedRow.rejectedReason || ""} />
             {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
               <Detail key={field} label={field} value={getTemplateCell(selectedRow, field)} />
             ))}
+          </div>
+          <div className="difficulty-detail-actions">
+            {renderRecordActions(selectedRow, "detail")}
           </div>
         </Modal>
       )}
@@ -985,6 +1150,8 @@ const styles: Record<string, CSSProperties> = {
   th: { position: "sticky", top: 0, zIndex: 1, background: "#edf4fa", color: "#40526a", padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" },
   td: { borderTop: "1px solid #e3ebf3", padding: "7px 8px", color: "#52647b", textAlign: "center", whiteSpace: "nowrap" },
   nameCell: { borderTop: "1px solid #e3ebf3", padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" },
+  actionColumn: { position: "sticky", top: 0, zIndex: 1, minWidth: 300, background: "#edf4fa", color: "#40526a", padding: "7px 8px", textAlign: "center", whiteSpace: "nowrap" },
+  actionCell: { minWidth: 300, maxWidth: 360, borderTop: "1px solid #e3ebf3", padding: "7px 8px", color: "#52647b", textAlign: "left", whiteSpace: "normal" },
   linkButton: { border: "none", padding: 0, color: "#1e5aa8", background: "transparent", fontWeight: 800, textDecoration: "underline", cursor: "pointer" },
   checkboxColumn: { minWidth: 46, width: 46, position: "sticky", left: 0, zIndex: 4 },
   empty: { borderTop: "1px solid #e3ebf3", padding: 16, color: "#8190a4", textAlign: "center" },

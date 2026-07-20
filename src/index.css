@@ -2385,3 +2385,136 @@ button:not(:disabled):hover {
     transform: translateY(0);
   }
 }
+
+/* 困难生状态动作：列表与详情共用 */
+.difficulty-record-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+}
+
+.difficulty-record-actions.is-detail {
+  width: 100%;
+}
+
+.difficulty-record-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.difficulty-record-action {
+  min-height: 30px;
+  padding: 5px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #fff;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.difficulty-record-action:hover:not(:disabled) {
+  border-color: #409eff;
+  color: #1677c8;
+  background: #ecf5ff;
+}
+
+.difficulty-record-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.difficulty-record-action.is-delete,
+.difficulty-record-action.is-reject {
+  border-color: #f5bcbc;
+  color: #c2414d;
+  background: #fff5f5;
+}
+
+.difficulty-record-action.is-confirm_upload,
+.difficulty-record-action.is-start_review {
+  border-color: #9cc9f2;
+  color: #1769aa;
+  background: #f1f8ff;
+}
+
+.difficulty-record-action.is-approve,
+.difficulty-record-action.is-report {
+  border-color: #9ddcbf;
+  color: #087b5b;
+  background: #effaf5;
+}
+
+.difficulty-status-notice {
+  display: block;
+  max-width: 100%;
+  padding: 5px 7px;
+  border: 1px solid #d8e4ef;
+  border-radius: 5px;
+  background: #f5f9fd;
+  color: #52647b;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+.difficulty-status-notice[data-tone="success"] {
+  border-color: #bce8d2;
+  background: #f0faf5;
+  color: #087b5b;
+}
+
+.difficulty-status-notice[data-tone="warning"] {
+  border-color: #f2d49b;
+  background: #fff8e8;
+  color: #946200;
+}
+
+.difficulty-status-notice[data-tone="danger"] {
+  border-color: #f1bfc2;
+  background: #fff4f4;
+  color: #b4232d;
+}
+
+.difficulty-status-notice[data-tone="locked"] {
+  border-color: #cbd5e1;
+  background: #f1f5f9;
+  color: #334155;
+  font-weight: 700;
+}
+
+.difficulty-detail-actions {
+  position: sticky;
+  bottom: -18px;
+  z-index: 2;
+  margin: 16px -18px -18px;
+  padding: 12px 18px;
+  border-top: 1px solid #d7e1ed;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 -4px 12px rgba(15, 35, 64, 0.06);
+}
+
+.difficulty-toolbar-hint {
+  align-self: center;
+  padding: 7px 10px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 5px;
+  color: #64748b;
+  background: #f8fafc;
+  font-size: 12px;
+}
+
+.difficulty-page-action-message {
+  padding: 9px 12px;
+  border: 1px solid #c6e2ff;
+  border-radius: 6px;
+  background: #f1f8ff;
+  color: #075f9e;
+  font-size: 12px;
+  font-weight: 700;
+}
