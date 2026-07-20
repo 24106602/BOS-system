@@ -11,6 +11,7 @@
     "check": "npm run lint && npm run build",
     "lint": "eslint .",
     "test:import-constraints": "node --experimental-strip-types --test tests/difficultyImportValidation.test.mjs",
+    "test:operation-log": "node --experimental-strip-types --test tests/difficultyOperationLog.test.mjs",
     "test:review-workflow": "node --experimental-strip-types --test tests/difficultyReviewWorkflow.test.mjs",
     "test:report-integrity": "node --experimental-strip-types --test tests/difficultyReportIntegrity.test.mjs",
     "preview": "vite preview"

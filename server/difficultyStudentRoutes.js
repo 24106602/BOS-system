@@ -19,9 +19,12 @@ import {
 } from "./difficultyImportValidation.js";
 import {
   applyLoggedDifficultyTransition,
+  deleteDifficultyStudentWithLog,
+  getDifficultyStudentOperationHistory,
   getTransitionLogAction,
   readRequiredWorkflowRemark,
   resolveResubmitTransition,
+  saveDifficultyStudentWithLog,
 } from "./difficultyReviewWorkflow.js";
 
 const EDITABLE_FIELDS = [
@@ -191,10 +194,11 @@ export const createDifficultyStudentRouter = () => {
   const router = Router();
   router.use(authenticate);
 
-  const reportStudents = async (admin, students, additionalFailures = []) =>
+  const reportStudents = async (admin, students, context, additionalFailures = []) =>
     reportDifficultyStudentsAtomically(admin, students, {
       configuredChecks: process.env.DIFFICULTY_REPORT_REQUIRED_CHECKS,
       additionalFailures,
+      context,
     });
 
   router.post("/batch-submit", async (req, res, next) => {
@@ -227,11 +231,26 @@ export const createDifficultyStudentRouter = () => {
         const existing = await findStudentByIdentity(admin, row);
         const currentStatus = normalizeDifficultyStudentStatus(existing?.status, "draft");
         const nextStatus = getTransitionTarget(currentStatus, "submit");
-        const payload = { ...row, status: nextStatus };
-        const result = existing
-          ? await admin.from("students").update(payload).eq("id", existing.id)
-          : await admin.from("students").insert(payload);
-        if (result.error) throw translateDifficultyStudentUniqueError(result.error, row);
+        try {
+          if (existing) {
+            await applyLoggedDifficultyTransition(admin, existing, {
+              currentStatus,
+              nextStatus,
+              operationAction: getTransitionLogAction(currentStatus, nextStatus),
+              changes: row,
+              context: req.difficultyContext,
+            });
+          } else {
+            await saveDifficultyStudentWithLog(admin, {
+              payload: row,
+              nextStatus,
+              action: "confirm",
+              context: req.difficultyContext,
+            });
+          }
+        } catch (error) {
+          throw translateDifficultyStudentUniqueError(error, row);
+        }
         if (existing) updated += 1;
         else inserted += 1;
       }
@@ -257,10 +276,19 @@ export const createDifficultyStudentRouter = () => {
         : findReportSourceStatus();
       if (!currentStatus) throw new Error("未找到历史数据上报的前置状态定义");
       const nextStatus = getTransitionTarget(currentStatus, "report");
-      const result = existing
-        ? await admin.from("students").update({ ...row, status: nextStatus }).eq("id", existing.id)
-        : await admin.from("students").insert({ ...row, status: nextStatus });
-      if (result.error) throw translateDifficultyStudentUniqueError(result.error, row);
+      try {
+        await saveDifficultyStudentWithLog(admin, {
+          student: existing,
+          payload: row,
+          currentStatus,
+          nextStatus,
+          action: "report",
+          remark: "管理员导入往年困难生数据",
+          context: req.difficultyContext,
+        });
+      } catch (error) {
+        throw translateDifficultyStudentUniqueError(error, row);
+      }
       res.json({ inserted: existing ? 0 : 1, updated: existing ? 1 : 0 });
     } catch (error) {
       next(error);
@@ -293,6 +321,7 @@ export const createDifficultyStudentRouter = () => {
       const updated = await reportStudents(
         admin,
         students,
+        req.difficultyContext,
         [...invalidIdFailures, ...missingFailures]
       );
       res.json({ data: updated, processed: updated.length });
@@ -323,6 +352,19 @@ export const createDifficultyStudentRouter = () => {
     }
   });
 
+  router.get("/:id/logs", async (req, res, next) => {
+    try {
+      const { admin, profile } = req.difficultyContext;
+      requireRole(profile, ["college", "admin"]);
+      const student = await findStudent(admin, req.params.id);
+      assertCollegeScope(profile, student.college_name);
+      const data = await getDifficultyStudentOperationHistory(admin, student.id);
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.delete("/:id", async (req, res, next) => {
     try {
       const { admin, profile } = req.difficultyContext;
@@ -330,8 +372,12 @@ export const createDifficultyStudentRouter = () => {
       const student = await findStudent(admin, req.params.id);
       assertCollegeScope(profile, student.college_name);
       guardStatus(student.status, "delete", DIFFICULTY_STUDENT_STATUS_TRANSITIONS);
-      const { error } = await admin.from("students").delete().eq("id", student.id);
-      if (error) throw error;
+      await deleteDifficultyStudentWithLog(
+        admin,
+        student,
+        req.difficultyContext,
+        text(req.body?.remark)
+      );
       res.status(204).end();
     } catch (error) {
       next(error);
@@ -407,7 +453,7 @@ export const createDifficultyStudentRouter = () => {
       const { admin, profile } = req.difficultyContext;
       requireRole(profile, ["admin"]);
       const student = await findStudent(admin, req.params.id);
-      const updated = await reportStudents(admin, [student]);
+      const updated = await reportStudents(admin, [student], req.difficultyContext);
       res.json({ data: updated[0] || null });
     } catch (error) {
       next(error);

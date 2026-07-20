@@ -23,6 +23,7 @@ import {
   makeDifficultyRowKey,
   type DifficultyStudentTemplateField,
 } from "../../constants/difficultyStudentTemplate";
+import DifficultyOperationHistory from "../../components/DifficultyOperationHistory";
 
 type CollegeDifficultyStudentsPageProps = {
   profile: UserProfile;
@@ -58,6 +59,7 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
   const [statusKeyword, setStatusKeyword] = useState("");
   const [rows, setRows] = useState<DifficultyStudentRow[]>([]);
   const [selectedRow, setSelectedRow] = useState<DifficultyStudentRow | null>(null);
+  const [detailTab, setDetailTab] = useState<"detail" | "history">("detail");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [loadMessage, setLoadMessage] = useState("");
@@ -433,7 +435,10 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
                       {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
                         <td key={field} style={field === "姓名(*)" ? styles.nameCell : styles.td}>
                           {field === "姓名(*)" ? (
-                            <button style={styles.linkButton} onClick={() => setSelectedRow(row)}>
+                            <button style={styles.linkButton} onClick={() => {
+                              setSelectedRow(row);
+                              setDetailTab("detail");
+                            }}>
                               {getTemplateCell(row, field) || "未填写姓名"}
                             </button>
                           ) : (
@@ -466,17 +471,37 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
               <button onClick={() => setSelectedRow(null)}>关闭</button>
             </div>
             <div className="bos-modal-body">
-              <div style={styles.detailGrid}>
-                <Detail label="当前状态" value={displayStatus(selectedRow.status)} />
-                <Detail label="退回原因" value={selectedRow.rejected_reason || ""} />
-                <Detail label="最近修改说明" value={selectedRow.resubmission_remark || ""} />
-                {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
-                  <Detail key={field} label={field} value={getTemplateCell(selectedRow, field)} />
-                ))}
+              <div className="difficulty-detail-tabs" role="tablist" aria-label="困难生详情导航">
+                <button
+                  className={detailTab === "detail" ? "is-active" : ""}
+                  onClick={() => setDetailTab("detail")}
+                >
+                  学生详情
+                </button>
+                <button
+                  className={detailTab === "history" ? "is-active" : ""}
+                  onClick={() => setDetailTab("history")}
+                >
+                  操作历史
+                </button>
               </div>
-              <div className="difficulty-detail-actions">
-                {renderRecordActions(selectedRow, "detail")}
-              </div>
+              {detailTab === "detail" ? (
+                <>
+                  <div style={styles.detailGrid}>
+                    <Detail label="当前状态" value={displayStatus(selectedRow.status)} />
+                    <Detail label="退回原因" value={selectedRow.rejected_reason || ""} />
+                    <Detail label="最近修改说明" value={selectedRow.resubmission_remark || ""} />
+                    {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
+                      <Detail key={field} label={field} value={getTemplateCell(selectedRow, field)} />
+                    ))}
+                  </div>
+                  <div className="difficulty-detail-actions">
+                    {renderRecordActions(selectedRow, "detail")}
+                  </div>
+                </>
+              ) : (
+                <DifficultyOperationHistory key={String(selectedRow.id || "")} recordId={selectedRow.id} />
+              )}
             </div>
           </section>
         </div>

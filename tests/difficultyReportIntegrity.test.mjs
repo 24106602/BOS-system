@@ -142,7 +142,13 @@ test("全部通过时只调用一次 RPC 完成整批状态写入", async () => 
 
   assert.deepEqual(result, updated);
   assert.deepEqual(admin.rpcCalls, [{
-    name: "report_difficulty_students",
-    params: { p_ids: ["11111111-1111-4111-8111-111111111111"] },
+    name: "report_difficulty_students_with_log",
+    params: {
+      p_ids: ["11111111-1111-4111-8111-111111111111"],
+      p_remark: null,
+      p_operator_user_id: null,
+      p_operator_role: null,
+      p_operator_name: null,
+    },
   }]);
 });

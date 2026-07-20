@@ -28,9 +28,34 @@ export type DifficultyReportFailure = {
   reasons: string[];
 };
 
+export type DifficultyOperationAction =
+  | "confirm"
+  | "approve"
+  | "reject"
+  | "report"
+  | "return"
+  | "edit"
+  | "delete"
+  | "resubmit";
+
+export type DifficultyOperationLog = {
+  id: string;
+  table_name: "difficulty_student";
+  record_id: string;
+  action: DifficultyOperationAction;
+  operator_id?: string | null;
+  operator_role?: "college_admin" | "school_admin" | "center_admin" | null;
+  operator_name?: string | null;
+  from_status?: string | null;
+  to_status?: string | null;
+  remark?: string | null;
+  snapshot?: Record<string, unknown> | null;
+  created_at: string;
+};
+
 const requestDifficultyApi = async <T>(
   path: string,
-  method: "POST" | "PATCH" | "DELETE",
+  method: "GET" | "POST" | "PATCH" | "DELETE",
   body?: unknown
 ): Promise<T> => {
   const { data: sessionData } = await supabase.auth.getSession();
@@ -104,3 +129,6 @@ export const reportDifficultyStudentBatch = (ids: (string | number)[]) =>
     "POST",
     { ids }
   );
+
+export const getDifficultyStudentOperationLogs = (id: string | number) =>
+  requestDifficultyApi<{ data: DifficultyOperationLog[] }>(`/${id}/logs`, "GET");

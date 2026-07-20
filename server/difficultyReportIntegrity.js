@@ -7,6 +7,7 @@ import {
   normalizeDifficultyStudentStatus,
 } from "../src/constants/statusTransitions.ts";
 import { guardStatus } from "../src/utils/guardStatus.ts";
+import { reportDifficultyStudentRecordsWithLog } from "./difficultyReviewWorkflow.js";
 
 const text = (value) => String(value ?? "").trim();
 const normalizeIdCard = (value) => text(value).replace(/\s|-/g, "").toUpperCase();
@@ -206,7 +207,11 @@ export const reportDifficultyStudentsAtomically = async (admin, students, option
     guardStatus(student.status, "report", DIFFICULTY_STUDENT_STATUS_TRANSITIONS);
   });
   const ids = [...new Set(students.map((student) => text(student.id)).filter(Boolean))];
-  const { data, error } = await admin.rpc("report_difficulty_students", { p_ids: ids });
-  if (error) throw error;
+  const data = await reportDifficultyStudentRecordsWithLog(
+    admin,
+    ids,
+    options.context,
+    options.remark
+  );
   return data || [];
 };

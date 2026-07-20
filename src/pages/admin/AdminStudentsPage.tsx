@@ -20,6 +20,7 @@ import {
 import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
 import Toolbar from "../../components/ui/Toolbar";
+import DifficultyOperationHistory from "../../components/DifficultyOperationHistory";
 import { rejectStudentRecords } from "../../services/difficultyStudentService";
 import {
   DifficultyStudentApiError,
@@ -415,6 +416,7 @@ export default function AdminStudentsPage() {
   const [searchFilters, setSearchFilters] = useState<SearchFilters>(emptyFilters);
   const [showImportModal, setShowImportModal] = useState(false);
   const [selectedRow, setSelectedRow] = useState<MergedDifficultyRow | null>(null);
+  const [detailTab, setDetailTab] = useState<"detail" | "history">("detail");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -955,7 +957,10 @@ export default function AdminStudentsPage() {
                       {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
                         <td key={field} style={field === "姓名(*)" ? styles.nameCell : styles.td}>
                           {field === "姓名(*)" ? (
-                            <button style={styles.linkButton} onClick={() => setSelectedRow(row)}>
+                            <button style={styles.linkButton} onClick={() => {
+                              setSelectedRow(row);
+                              setDetailTab("detail");
+                            }}>
                               {getTemplateCell(row, field) || "查看详情"}
                             </button>
                           ) : (
@@ -1067,17 +1072,40 @@ export default function AdminStudentsPage() {
 
       {selectedRow && (
         <Modal title={`${selectedRow.name || "困难生"}详情`} onClose={() => setSelectedRow(null)}>
-          <div style={styles.detailGrid}>
-            <Detail label="当前状态" value={displayStatus(getWorkflowStatus(selectedRow))} />
-            <Detail label="退回原因" value={selectedRow.rejectedReason || ""} />
-            <Detail label="学院修改说明" value={selectedRow.resubmissionRemark || ""} />
-            {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
-              <Detail key={field} label={field} value={getTemplateCell(selectedRow, field)} />
-            ))}
+          <div className="difficulty-detail-tabs" role="tablist" aria-label="困难生详情导航">
+            <button
+              className={detailTab === "detail" ? "is-active" : ""}
+              onClick={() => setDetailTab("detail")}
+            >
+              学生详情
+            </button>
+            <button
+              className={detailTab === "history" ? "is-active" : ""}
+              onClick={() => setDetailTab("history")}
+            >
+              操作历史
+            </button>
           </div>
-          <div className="difficulty-detail-actions">
-            {renderRecordActions(selectedRow, "detail")}
-          </div>
+          {detailTab === "detail" ? (
+            <>
+              <div style={styles.detailGrid}>
+                <Detail label="当前状态" value={displayStatus(getWorkflowStatus(selectedRow))} />
+                <Detail label="退回原因" value={selectedRow.rejectedReason || ""} />
+                <Detail label="学院修改说明" value={selectedRow.resubmissionRemark || ""} />
+                {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
+                  <Detail key={field} label={field} value={getTemplateCell(selectedRow, field)} />
+                ))}
+              </div>
+              <div className="difficulty-detail-actions">
+                {renderRecordActions(selectedRow, "detail")}
+              </div>
+            </>
+          ) : (
+            <DifficultyOperationHistory
+              key={String(selectedRow.cloudId || "")}
+              recordId={selectedRow.cloudId}
+            />
+          )}
         </Modal>
       )}
     </section>

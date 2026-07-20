@@ -18,9 +18,12 @@ import {
 } from "../server/difficultyImportValidation.js";
 import {
   applyLoggedDifficultyTransition,
+  deleteDifficultyStudentWithLog,
+  getDifficultyStudentOperationHistory,
   getTransitionLogAction,
   readRequiredWorkflowRemark,
   resolveResubmitTransition,
+  saveDifficultyStudentWithLog,
 } from "../server/difficultyReviewWorkflow.js";
 
 const DEFAULT_ALLOWED_HEADERS = "Content-Type, Authorization";
@@ -222,11 +225,26 @@ const handleBatchSubmit = async (request, context) => {
     const existing = await findStudentByIdentity(admin, row);
     const currentStatus = normalizeDifficultyStudentStatus(existing?.status, "draft");
     const nextStatus = getTransitionTarget(currentStatus, "submit");
-    const payload = { ...row, status: nextStatus };
-    const result = existing
-      ? await admin.from("students").update(payload).eq("id", existing.id)
-      : await admin.from("students").insert(payload);
-    if (result.error) throw translateDifficultyStudentUniqueError(result.error, row);
+    try {
+      if (existing) {
+        await applyLoggedDifficultyTransition(admin, existing, {
+          currentStatus,
+          nextStatus,
+          operationAction: getTransitionLogAction(currentStatus, nextStatus),
+          changes: row,
+          context,
+        });
+      } else {
+        await saveDifficultyStudentWithLog(admin, {
+          payload: row,
+          nextStatus,
+          action: "confirm",
+          context,
+        });
+      }
+    } catch (error) {
+      throw translateDifficultyStudentUniqueError(error, row);
+    }
     if (existing) updated += 1;
     else inserted += 1;
   }
@@ -250,10 +268,19 @@ const handleHistoricalImport = async (request, context) => {
     : findReportSourceStatus();
   if (!currentStatus) throw apiError("未找到历史数据上报的前置状态定义");
   const nextStatus = getTransitionTarget(currentStatus, "report");
-  const result = existing
-    ? await admin.from("students").update({ ...row, status: nextStatus }).eq("id", existing.id)
-    : await admin.from("students").insert({ ...row, status: nextStatus });
-  if (result.error) throw translateDifficultyStudentUniqueError(result.error, row);
+  try {
+    await saveDifficultyStudentWithLog(admin, {
+      student: existing,
+      payload: row,
+      currentStatus,
+      nextStatus,
+      action: "report",
+      remark: "管理员导入往年困难生数据",
+      context,
+    });
+  } catch (error) {
+    throw translateDifficultyStudentUniqueError(error, row);
+  }
   return { body: { inserted: existing ? 0 : 1, updated: existing ? 1 : 0 }, status: 200 };
 };
 
@@ -285,6 +312,7 @@ const handleBatchReport = async (request, context, env) => {
   const updated = await reportDifficultyStudentsAtomically(admin, students, {
     configuredChecks: env.DIFFICULTY_REPORT_REQUIRED_CHECKS,
     additionalFailures: [...invalidIdFailures, ...missingFailures],
+    context,
   });
   return { body: { data: updated, processed: updated.length }, status: 200 };
 };
@@ -295,6 +323,7 @@ const handleReport = async (_request, context, env, id) => {
   const student = await findStudent(admin, id);
   const updated = await reportDifficultyStudentsAtomically(admin, [student], {
     configuredChecks: env.DIFFICULTY_REPORT_REQUIRED_CHECKS,
+    context,
   });
   return { body: { data: updated[0] || null }, status: 200 };
 };
@@ -324,9 +353,17 @@ const handleDelete = async (_request, context, id) => {
   const student = await findStudent(admin, id);
   assertCollegeScope(profile, student.college_name);
   guardStatus(student.status, "delete", DIFFICULTY_STUDENT_STATUS_TRANSITIONS);
-  const { error } = await admin.from("students").delete().eq("id", student.id);
-  if (error) throw error;
+  await deleteDifficultyStudentWithLog(admin, student, context);
   return { body: null, status: 204 };
+};
+
+const handleOperationHistory = async (_request, context, id) => {
+  const { admin, profile } = context;
+  requireRole(profile, ["college", "admin"]);
+  const student = await findStudent(admin, id);
+  assertCollegeScope(profile, student.college_name);
+  const data = await getDifficultyStudentOperationHistory(admin, student.id);
+  return { body: { data }, status: 200 };
 };
 
 const handleTransition = async (request, context, id, routeAction) => {
@@ -423,6 +460,15 @@ const handleDifficultyApi = async (request, env) => {
   }
   if (recordMatch && request.method === "DELETE") {
     return handleDelete(request, context, decodeURIComponent(recordMatch[1]));
+  }
+
+  const historyMatch = relativePath.match(/^\/([^/]+)\/logs$/);
+  if (historyMatch && request.method === "GET") {
+    return handleOperationHistory(
+      request,
+      context,
+      decodeURIComponent(historyMatch[1])
+    );
   }
 
   const transitionMatch = relativePath.match(/^\/([^/]+)\/(submit|approve|reject|resubmit|report|return-by-center)$/);

@@ -2519,3 +2519,155 @@ button:not(:disabled):hover {
   font-size: 12px;
   font-weight: 700;
 }
+
+.difficulty-detail-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #dbe4ef;
+}
+
+.difficulty-detail-tabs button {
+  min-height: 34px;
+  padding: 7px 15px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #607086;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.difficulty-detail-tabs button:hover {
+  background: #f2f7fc;
+  color: #1e5aa8;
+}
+
+.difficulty-detail-tabs button.is-active {
+  border-color: #bdd3ea;
+  background: #eaf3fc;
+  color: #174f91;
+}
+
+.difficulty-operation-timeline {
+  position: relative;
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 2px 0 4px 30px;
+  list-style: none;
+}
+
+.difficulty-operation-timeline::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 12px;
+  left: 10px;
+  width: 2px;
+  background: #d7e3ef;
+}
+
+.difficulty-operation-item {
+  position: relative;
+  padding: 0 0 14px;
+}
+
+.difficulty-operation-dot {
+  position: absolute;
+  top: 10px;
+  left: -26px;
+  z-index: 1;
+  width: 12px;
+  height: 12px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  background: #1e5aa8;
+  box-shadow: 0 0 0 2px #b9cee4;
+}
+
+.difficulty-operation-dot[data-action="reject"],
+.difficulty-operation-dot[data-action="return"] {
+  background: #d14b59;
+  box-shadow: 0 0 0 2px #f1b7bd;
+}
+
+.difficulty-operation-dot[data-action="approve"],
+.difficulty-operation-dot[data-action="report"] {
+  background: #15916b;
+  box-shadow: 0 0 0 2px #a8ddcc;
+}
+
+.difficulty-operation-card {
+  padding: 11px 13px;
+  border: 1px solid #d8e2ed;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.difficulty-operation-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  color: #17304f;
+}
+
+.difficulty-operation-heading time {
+  color: #7b899c;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.difficulty-operation-meta,
+.difficulty-operation-status {
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.difficulty-operation-status {
+  color: #315b88;
+  font-weight: 700;
+}
+
+.difficulty-operation-remark {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid #f0b548;
+  border-radius: 4px;
+  background: #fff8e8;
+  color: #805a0a;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.difficulty-history-empty {
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px;
+  border: 1px dashed #cbd8e6;
+  border-radius: 8px;
+  background: #f8fbfe;
+  color: #738197;
+  text-align: center;
+}
+
+.difficulty-history-empty.is-error {
+  color: #b43a47;
+}
+
+.difficulty-history-empty button {
+  padding: 6px 10px;
+  border: 1px solid #c6d6e8;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e5aa8;
+  font-weight: 800;
+  cursor: pointer;
+}
