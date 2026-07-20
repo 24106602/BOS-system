@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "r
 import * as XLSX from "xlsx-js-style";
 import type { UserProfile } from "../../types/auth";
 import { ACADEMIC_YEAR_OPTIONS, getCurrentAcademicYear } from "../../utils/academicYear";
-import { normalizeIdCard, fetchCollegeDifficultyStudents, type DifficultyStudentRow } from "../../services/difficultyStudentService";
+import {
+  fetchCollegeDifficultyStudents,
+  normalizeIdCard,
+  resubmitStudentRecords,
+  type DifficultyStudentRow,
+} from "../../services/difficultyStudentService";
 import { transitionDifficultyStudent } from "../../services/difficultyStudentApi";
 import { getDifficultyStudentStatusLabel } from "../../constants/statusTransitions";
 import { normalizeSubmissionCollegeName } from "../../utils/collegeDetector";
@@ -58,6 +63,9 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
   const [loadMessage, setLoadMessage] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [pendingRowKey, setPendingRowKey] = useState("");
+  const [resubmitRow, setResubmitRow] = useState<DifficultyStudentRow | null>(null);
+  const [resubmitRemark, setResubmitRemark] = useState("");
+  const [isResubmitting, setIsResubmitting] = useState(false);
   const [dataSource, setDataSource] = useState<"supabase" | "local">("supabase");
 
   const collegeName = normalizeSubmissionCollegeName(profile.college_name || profile.display_name || "");
@@ -184,6 +192,16 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
       removeRowFromCurrentView(row);
       return;
     }
+    if (action === "resubmit") {
+      if (row.id === undefined) {
+        setActionMessage("该记录尚未写入云端，无法重新提交。");
+        return;
+      }
+      setSelectedRow(null);
+      setResubmitRemark("");
+      setResubmitRow(row);
+      return;
+    }
     if (action !== "confirm_upload") return;
     if (row.id === undefined) {
       setActionMessage("该记录尚未写入云端，无法执行状态上载；请先在信息处理页完成数据上载。");
@@ -206,8 +224,13 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
   };
 
   const renderRecordActions = (row: DifficultyStudentRow, location: "table" | "detail") => {
-    const actions = getAvailableActions(row.status, "college");
-    const hint = getDifficultyStudentActionHint(row.status, "college");
+    const isEditedRejectedDraft = row.status === "draft" && Boolean(row.rejected_reason);
+    const actions = isEditedRejectedDraft
+      ? [...getAvailableActions(row.status, "college").filter((action) => action !== "confirm_upload"), "resubmit" as const]
+      : getAvailableActions(row.status, "college");
+    const hint = isEditedRejectedDraft
+      ? { text: "学校退回资料已修改，请填写修改说明后重新提交。", tone: "warning" as const }
+      : getDifficultyStudentActionHint(row.status, "college");
     const isPending = pendingRowKey === getRowKey(row);
     return (
       <div className={`difficulty-record-actions is-${location}`}>
@@ -226,8 +249,32 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
           </div>
         )}
         <span className="difficulty-status-notice" data-tone={hint.tone}>{hint.text}</span>
+        {(row.status === "rejected_by_school" || isEditedRejectedDraft) && row.rejected_reason && (
+          <span className="difficulty-status-notice" data-tone="danger">
+            退回原因：{row.rejected_reason}
+          </span>
+        )}
       </div>
     );
+  };
+
+  const handleResubmit = async () => {
+    if (!resubmitRow || resubmitRow.id === undefined) return;
+    const remark = resubmitRemark.trim();
+    if (!remark) {
+      setActionMessage("请填写修改说明后再重新提交。");
+      return;
+    }
+
+    setIsResubmitting(true);
+    setActionMessage("");
+    const result = await resubmitStudentRecords([resubmitRow.id], remark);
+    setIsResubmitting(false);
+    setActionMessage(result.message);
+    if (!result.success) return;
+    setResubmitRow(null);
+    setResubmitRemark("");
+    await loadRows();
   };
 
   const exportCurrentRows = () => {
@@ -354,17 +401,18 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
                   ))}
                   <th style={styles.th}>状态</th>
                   <th style={styles.th}>退回原因</th>
+                  <th style={styles.th}>学院修改说明</th>
                   <th style={styles.actionColumn}>操作与状态说明</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td style={styles.empty} colSpan={DIFFICULTY_STUDENT_TEMPLATE_FIELDS.length + 6}>正在加载困难生明细...</td>
+                    <td style={styles.empty} colSpan={DIFFICULTY_STUDENT_TEMPLATE_FIELDS.length + 7}>正在加载困难生明细...</td>
                   </tr>
                 ) : filteredRows.length === 0 ? (
                   <tr>
-                    <td style={styles.empty} colSpan={DIFFICULTY_STUDENT_TEMPLATE_FIELDS.length + 6}>暂无当前学年困难生明细</td>
+                    <td style={styles.empty} colSpan={DIFFICULTY_STUDENT_TEMPLATE_FIELDS.length + 7}>暂无当前学年困难生明细</td>
                   </tr>
                 ) : (
                   filteredRows.map((row, index) => (
@@ -395,6 +443,7 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
                       ))}
                       <td style={styles.td}>{displayStatus(row.status)}</td>
                       <td style={styles.td}>{row.rejected_reason || "-"}</td>
+                      <td style={styles.td}>{row.resubmission_remark || "-"}</td>
                       <td style={styles.actionCell}>{renderRecordActions(row, "table")}</td>
                     </tr>
                   ))
@@ -418,12 +467,51 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
             </div>
             <div className="bos-modal-body">
               <div style={styles.detailGrid}>
+                <Detail label="当前状态" value={displayStatus(selectedRow.status)} />
+                <Detail label="退回原因" value={selectedRow.rejected_reason || ""} />
+                <Detail label="最近修改说明" value={selectedRow.resubmission_remark || ""} />
                 {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
                   <Detail key={field} label={field} value={getTemplateCell(selectedRow, field)} />
                 ))}
               </div>
               <div className="difficulty-detail-actions">
                 {renderRecordActions(selectedRow, "detail")}
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {resubmitRow && (
+        <div className="bos-modal-backdrop">
+          <section className="bos-modal bos-modal--compact">
+            <div className="bos-modal-header">
+              <h2 style={styles.subTitle}>修改后重新提交</h2>
+              <button disabled={isResubmitting} onClick={() => setResubmitRow(null)}>关闭</button>
+            </div>
+            <div className="bos-modal-body">
+              <div className="difficulty-status-notice" data-tone="danger">
+                退回原因：{resubmitRow.rejected_reason || "学校未填写退回原因"}
+              </div>
+              <label style={{ ...styles.fieldLabel, marginTop: 14 }}>
+                修改说明 <span style={{ color: "#c2414d" }}>*</span>
+                <textarea
+                  style={{ ...styles.input, minHeight: 110, resize: "vertical" }}
+                  value={resubmitRemark}
+                  onChange={(event) => setResubmitRemark(event.target.value)}
+                  placeholder="请说明已修改的字段和内容，例如：已更正家庭收入及困难等级证明信息。"
+                />
+              </label>
+              <p style={styles.description}>修改说明将写入操作日志；提交后状态回到“学院确认审核及上载”，等待学校重新接收审核。</p>
+              <div style={{ ...styles.modalFooter, marginTop: 16 }}>
+                <button style={styles.secondaryButton} disabled={isResubmitting} onClick={() => setResubmitRow(null)}>取消</button>
+                <button
+                  style={isResubmitting || !resubmitRemark.trim() ? styles.disabledButton : styles.primaryButton}
+                  disabled={isResubmitting || !resubmitRemark.trim()}
+                  onClick={() => void handleResubmit()}
+                >
+                  {isResubmitting ? "提交中..." : "确认重新提交"}
+                </button>
               </div>
             </div>
           </section>
@@ -475,6 +563,8 @@ const styles: Record<string, CSSProperties> = {
   input: { border: "1px solid #cfdbe7", borderRadius: 6, padding: "7px 9px", color: "#15304f", background: "#fff", fontSize: 12 },
   secondaryButton: { border: "1px solid #cbd8e6", borderRadius: 6, minHeight: 34, padding: "7px 11px", background: "#fff", color: "#26364e", fontSize: 12, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" },
   primaryButton: { border: "1px solid #1e5aa8", borderRadius: 6, minHeight: 34, padding: "7px 11px", background: "#1e5aa8", color: "#fff", fontSize: 12, fontWeight: 800, cursor: "pointer", whiteSpace: "nowrap" },
+  disabledButton: { border: "1px solid #cbd5e1", borderRadius: 6, minHeight: 34, padding: "7px 11px", background: "#e2e8f0", color: "#64748b", fontSize: 12, fontWeight: 800, cursor: "not-allowed", whiteSpace: "nowrap" },
+  modalFooter: { display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 },
   metaRow: { display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, color: "#64748b", fontSize: 12 },
   info: { marginTop: 7, padding: 8, borderRadius: 6, background: "#f3f9ff", color: "#0875bd", border: "1px solid #cce3f8", fontSize: 12 },
   warning: { marginTop: 7, padding: 8, borderRadius: 6, background: "#fff8e6", color: "#9a6700", border: "1px solid #fde6a7", fontSize: 12 },

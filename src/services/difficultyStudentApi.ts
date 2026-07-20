@@ -89,6 +89,15 @@ export const transitionDifficultyStudent = (
   body?: Record<string, unknown>
 ) => requestDifficultyApi<{ data: Record<string, unknown> }>(`/${id}/${action}`, "POST", body);
 
+export const resubmitDifficultyStudent = (
+  id: string | number,
+  remark: string
+) => requestDifficultyApi<{ data: Record<string, unknown> }>(
+  `/${id}/resubmit`,
+  "POST",
+  { remark }
+);
+
 export const reportDifficultyStudentBatch = (ids: (string | number)[]) =>
   requestDifficultyApi<{ data: Record<string, unknown>[]; processed: number }>(
     "/batch-report",

@@ -5,7 +5,7 @@ import {
 } from "../constants/statusTransitions";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 import {
-  editDifficultyStudent,
+  resubmitDifficultyStudent,
   submitDifficultyStudentBatch,
   transitionDifficultyStudent,
 } from "./difficultyStudentApi";
@@ -22,6 +22,7 @@ export type DifficultyStudentRow = {
   difficulty_level: string;
   status: DifficultyStudentStatus;
   rejected_reason?: string;
+  resubmission_remark?: string;
   raw_data?: Record<string, unknown> | null;
   source: "supabase" | "local";
 };
@@ -38,6 +39,7 @@ type CloudStudentRow = {
   difficulty_level?: string | null;
   status?: string | null;
   rejected_reason?: string | null;
+  resubmission_remark?: string | null;
   raw_data?: Record<string, unknown> | null;
 };
 
@@ -164,6 +166,7 @@ const toDifficultyStudent = (row: CloudStudentRow): DifficultyStudentRow => ({
   difficulty_level: String(row.difficulty_level || ""),
   status: normalizeDifficultyStudentStatus(row.status, "college_confirmed"),
   rejected_reason: String(row.rejected_reason || ""),
+  resubmission_remark: String(row.resubmission_remark || ""),
   raw_data: row.raw_data || null,
   source: "supabase",
 });
@@ -201,7 +204,7 @@ export const fetchCollegeDifficultyStudents = async (
   let errorMessage = "";
 
   if (isSupabaseConfigured) {
-    const fullSelect = "id,academic_year,college_name,student_id,name,id_card,grade,gender,difficulty_level,status,rejected_reason,raw_data";
+    const fullSelect = "id,academic_year,college_name,student_id,name,id_card,grade,gender,difficulty_level,status,rejected_reason,resubmission_remark,raw_data";
     const { data, error } = await supabase
       .from("students")
       .select(fullSelect)
@@ -242,7 +245,7 @@ export const rejectStudentRecords = async (
 
   try {
     for (const id of ids) {
-      await transitionDifficultyStudent(id, "reject", { reason });
+      await transitionDifficultyStudent(id, "reject", { remark: reason });
     }
   } catch (error) {
     return { success: false, message: `退回失败：${error instanceof Error ? error.message : "未知错误"}` };
@@ -252,7 +255,8 @@ export const rejectStudentRecords = async (
 };
 
 export const resubmitStudentRecords = async (
-  ids: (number | string)[]
+  ids: (number | string)[],
+  remark: string
 ): Promise<{ success: boolean; message: string }> => {
   if (!isSupabaseConfigured) {
     return { success: false, message: "Supabase 未配置，无法执行重新提交操作。" };
@@ -260,9 +264,7 @@ export const resubmitStudentRecords = async (
 
   try {
     for (const id of ids) {
-      await editDifficultyStudent(id, { rejected_reason: "" });
-      await transitionDifficultyStudent(id, "submit");
-      await transitionDifficultyStudent(id, "submit");
+      await resubmitDifficultyStudent(id, remark);
     }
   } catch (error) {
     return { success: false, message: `重新提交失败：${error instanceof Error ? error.message : "未知错误"}` };

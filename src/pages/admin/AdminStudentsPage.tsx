@@ -51,6 +51,7 @@ type MergedDifficultyRow = {
   status: string;
   rawStatus?: string;
   rejectedReason?: string;
+  resubmissionRemark?: string;
   cloudId?: number | string;
   rawData: Record<string, unknown>;
   familyMembers: string[];
@@ -69,6 +70,7 @@ type CloudStudentRow = {
   difficulty_level?: string | null;
   status?: string | null;
   rejected_reason?: string | null;
+  resubmission_remark?: string | null;
   raw_data?: Record<string, unknown> | null;
 };
 
@@ -127,7 +129,9 @@ const displayStatus = (status: string) => getDifficultyStudentStatusLabel(status
 
 const getWorkflowStatus = (row: MergedDifficultyRow) => row.rawStatus || row.status;
 
-const hasCloudRecordId = (row: MergedDifficultyRow) =>
+const hasCloudRecordId = (
+  row: MergedDifficultyRow
+): row is MergedDifficultyRow & { cloudId: number | string } =>
   row.cloudId !== undefined && row.cloudId !== null && String(row.cloudId).trim() !== "";
 
 const formatWorkflowError = (error: unknown) => {
@@ -233,6 +237,7 @@ const makeCloudMergedRows = (rows: CloudStudentRow[]): MergedDifficultyRow[] =>
     status: displayStatus(String(row.status || "")),
     rawStatus: String(row.status || ""),
     rejectedReason: String(row.rejected_reason || ""),
+    resubmissionRemark: String(row.resubmission_remark || ""),
     cloudId: row.id,
     rawData: row.raw_data || {},
     familyMembers: [],
@@ -441,7 +446,7 @@ export default function AdminStudentsPage() {
 
     setIsLoadingDatabase(true);
     setLoadError("");
-    const fullSelect = "id,academic_year,college_name,student_id,name,id_card,grade,gender,difficulty_level,status,rejected_reason,raw_data";
+    const fullSelect = "id,academic_year,college_name,student_id,name,id_card,grade,gender,difficulty_level,status,rejected_reason,resubmission_remark,raw_data";
     const { data, error } = await supabase
       .from("students")
       .select(fullSelect)
@@ -926,12 +931,13 @@ export default function AdminStudentsPage() {
                   ))}
                   <th style={styles.th}>状态</th>
                   <th style={styles.th}>退回原因</th>
+                  <th style={styles.th}>学院修改说明</th>
                   <th style={styles.actionColumn}>操作与状态说明</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredRows.length === 0 ? (
-                  <tr><td style={styles.empty} colSpan={DIFFICULTY_STUDENT_TEMPLATE_FIELDS.length + 4}>{mergedRows.length === 0 ? "暂无当前学年已合并数据" : "没有符合筛选条件的数据"}</td></tr>
+                  <tr><td style={styles.empty} colSpan={DIFFICULTY_STUDENT_TEMPLATE_FIELDS.length + 5}>{mergedRows.length === 0 ? "暂无当前学年已合并数据" : "没有符合筛选条件的数据"}</td></tr>
                 ) : (
                   filteredRows.map((row) => (
                     <tr
@@ -959,6 +965,7 @@ export default function AdminStudentsPage() {
                       ))}
                       <td style={styles.td}>{displayStatus(getWorkflowStatus(row))}</td>
                       <td style={styles.td}>{row.rejectedReason || "-"}</td>
+                      <td style={styles.td}>{row.resubmissionRemark || "-"}</td>
                       <td style={styles.actionCell}>{renderRecordActions(row, "table")}</td>
                     </tr>
                   ))
@@ -1063,6 +1070,7 @@ export default function AdminStudentsPage() {
           <div style={styles.detailGrid}>
             <Detail label="当前状态" value={displayStatus(getWorkflowStatus(selectedRow))} />
             <Detail label="退回原因" value={selectedRow.rejectedReason || ""} />
+            <Detail label="学院修改说明" value={selectedRow.resubmissionRemark || ""} />
             {DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => (
               <Detail key={field} label={field} value={getTemplateCell(selectedRow, field)} />
             ))}

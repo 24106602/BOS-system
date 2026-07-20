@@ -9,6 +9,7 @@ export type DifficultyStudentUiAction =
   | "edit"
   | "delete"
   | "confirm_upload"
+  | "resubmit"
   | "start_review"
   | "approve"
   | "reject"
@@ -25,7 +26,7 @@ const COLLEGE_ACTIONS: Record<DifficultyStudentStatus, readonly DifficultyStuden
   school_reviewing: [],
   school_approved: [],
   reported: [],
-  rejected_by_school: ["edit", "delete"],
+  rejected_by_school: ["edit", "delete", "resubmit"],
   returned_by_center: ["edit"],
 };
 
@@ -79,6 +80,7 @@ export const DIFFICULTY_STUDENT_ACTION_LABELS: Record<DifficultyStudentUiAction,
   edit: "编辑",
   delete: "删除",
   confirm_upload: "确认上载",
+  resubmit: "修改后重新提交",
   start_review: "开始审核",
   approve: "审核通过",
   reject: "审核退回",

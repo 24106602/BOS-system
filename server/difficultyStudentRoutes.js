@@ -17,6 +17,12 @@ import {
   assertDifficultyImportConstraints,
   translateDifficultyStudentUniqueError,
 } from "./difficultyImportValidation.js";
+import {
+  applyLoggedDifficultyTransition,
+  getTransitionLogAction,
+  readRequiredWorkflowRemark,
+  resolveResubmitTransition,
+} from "./difficultyReviewWorkflow.js";
 
 const EDITABLE_FIELDS = [
   "academic_year",
@@ -135,7 +141,7 @@ const authenticate = async (req, _res, next) => {
     });
     const { data: profile, error: profileError } = await admin
       .from("user_profiles")
-      .select("auth_user_id,role,college_name,enabled")
+      .select("auth_user_id,role,college_name,display_name,enabled")
       .eq("auth_user_id", userResult.user.id)
       .maybeSingle();
     if (profileError) throw profileError;
@@ -304,13 +310,13 @@ export const createDifficultyStudentRouter = () => {
       guardStatus(student.status, "edit", DIFFICULTY_STUDENT_STATUS_TRANSITIONS);
       const currentStatus = normalizeDifficultyStudentStatus(student.status);
       const nextStatus = getDifficultyStudentActionTarget(currentStatus, "edit") || currentStatus;
-      const { data, error } = await admin
-        .from("students")
-        .update({ ...pickEditableFields(req.body), status: nextStatus })
-        .eq("id", student.id)
-        .select()
-        .single();
-      if (error) throw error;
+      const data = await applyLoggedDifficultyTransition(admin, student, {
+        currentStatus,
+        nextStatus,
+        operationAction: "college_edit",
+        changes: pickEditableFields(req.body),
+        context: req.difficultyContext,
+      });
       res.json({ data });
     } catch (error) {
       next(error);
@@ -340,21 +346,27 @@ export const createDifficultyStudentRouter = () => {
       assertCollegeScope(profile, student.college_name);
       const currentStatus = normalizeDifficultyStudentStatus(student.status);
       const nextStatus = getTransitionTarget(currentStatus, action);
+      if (action === "submit" && currentStatus === "draft" && text(student.rejected_reason)) {
+        throw invalidRequest("学校退回后的修改记录必须填写修改说明并通过“修改后重新提交”操作提交");
+      }
       const transitionKey = `${currentStatus}->${nextStatus}`;
       const isCenterOnly = CENTER_ONLY_DIFFICULTY_STATUS_TRANSITIONS.includes(transitionKey);
       if (isCenterOnly !== centerOnly) {
         throw forbidden("该状态转换必须通过对应角色的专用接口执行", currentStatus, action);
       }
-      const transitionChanges = action === "reject" && nextStatus === "rejected_by_school"
-        ? { status: nextStatus, rejected_reason: text(req.body?.reason) }
-        : { status: nextStatus };
-      const { data, error } = await admin
-        .from("students")
-        .update(transitionChanges)
-        .eq("id", student.id)
-        .select()
-        .single();
-      if (error) throw error;
+      const remark = action === "reject" && nextStatus === "rejected_by_school"
+        ? readRequiredWorkflowRemark(req.body, {
+          fields: ["remark", "reason"],
+          label: "退回原因",
+        })
+        : "";
+      const data = await applyLoggedDifficultyTransition(admin, student, {
+        currentStatus,
+        nextStatus,
+        operationAction: getTransitionLogAction(currentStatus, nextStatus),
+        remark,
+        context: req.difficultyContext,
+      });
       res.json({ data });
     } catch (error) {
       next(error);
@@ -364,6 +376,32 @@ export const createDifficultyStudentRouter = () => {
   router.post("/:id/submit", transitionHandler("submit", ["college", "admin"]));
   router.post("/:id/approve", transitionHandler("approve", ["admin"]));
   router.post("/:id/reject", transitionHandler("reject", ["admin"]));
+  router.post("/:id/resubmit", async (req, res, next) => {
+    try {
+      const { admin, profile } = req.difficultyContext;
+      requireRole(profile, ["college"]);
+      const student = await findStudent(admin, req.params.id);
+      assertCollegeScope(profile, student.college_name);
+      const { currentStatus, nextStatus } = resolveResubmitTransition(
+        student.status,
+        Boolean(text(student.rejected_reason))
+      );
+      const remark = readRequiredWorkflowRemark(req.body, {
+        fields: ["remark", "modificationRemark"],
+        label: "修改说明",
+      });
+      const data = await applyLoggedDifficultyTransition(admin, student, {
+        currentStatus,
+        nextStatus,
+        operationAction: "college_resubmit",
+        remark,
+        context: req.difficultyContext,
+      });
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  });
   router.post("/:id/report", async (req, res, next) => {
     try {
       const { admin, profile } = req.difficultyContext;

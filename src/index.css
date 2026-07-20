@@ -2437,6 +2437,7 @@ button:not(:disabled):hover {
 }
 
 .difficulty-record-action.is-confirm_upload,
+.difficulty-record-action.is-resubmit,
 .difficulty-record-action.is-start_review {
   border-color: #9cc9f2;
   color: #1769aa;

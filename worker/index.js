@@ -16,6 +16,12 @@ import {
   assertDifficultyImportConstraints,
   translateDifficultyStudentUniqueError,
 } from "../server/difficultyImportValidation.js";
+import {
+  applyLoggedDifficultyTransition,
+  getTransitionLogAction,
+  readRequiredWorkflowRemark,
+  resolveResubmitTransition,
+} from "../server/difficultyReviewWorkflow.js";
 
 const DEFAULT_ALLOWED_HEADERS = "Content-Type, Authorization";
 const DEFAULT_ALLOWED_METHODS = "GET, POST, PATCH, DELETE, OPTIONS";
@@ -144,7 +150,7 @@ const getSupabaseClients = async (request, env) => {
   });
   const { data: profile, error: profileError } = await admin
     .from("user_profiles")
-    .select("auth_user_id,role,college_name,enabled")
+    .select("auth_user_id,role,college_name,display_name,enabled")
     .eq("auth_user_id", userResult.user.id)
     .maybeSingle();
   if (profileError) throw profileError;
@@ -302,13 +308,13 @@ const handleEdit = async (request, context, id) => {
   const currentStatus = normalizeDifficultyStudentStatus(student.status);
   const nextStatus = getDifficultyStudentActionTarget(currentStatus, "edit") || currentStatus;
   const body = await readJsonBody(request);
-  const { data, error } = await admin
-    .from("students")
-    .update({ ...pickEditableFields(body), status: nextStatus })
-    .eq("id", student.id)
-    .select()
-    .single();
-  if (error) throw error;
+  const data = await applyLoggedDifficultyTransition(admin, student, {
+    currentStatus,
+    nextStatus,
+    operationAction: "college_edit",
+    changes: pickEditableFields(body),
+    context,
+  });
   return { body: { data }, status: 200 };
 };
 
@@ -339,6 +345,13 @@ const handleTransition = async (request, context, id, routeAction) => {
   assertCollegeScope(profile, student.college_name);
   const currentStatus = normalizeDifficultyStudentStatus(student.status);
   const nextStatus = getTransitionTarget(currentStatus, actionConfig.action);
+  if (actionConfig.action === "submit" && currentStatus === "draft" && text(student.rejected_reason)) {
+    throw apiError(
+      "学校退回后的修改记录必须填写修改说明并通过“修改后重新提交”操作提交",
+      400,
+      "INVALID_REQUEST"
+    );
+  }
   const transitionKey = `${currentStatus}->${nextStatus}`;
   const isCenterOnly = CENTER_ONLY_DIFFICULTY_STATUS_TRANSITIONS.includes(transitionKey);
   if (isCenterOnly !== actionConfig.centerOnly) {
@@ -349,16 +362,43 @@ const handleTransition = async (request, context, id, routeAction) => {
   if (request.headers.get("Content-Type")?.includes("application/json")) {
     body = await readJsonBody(request);
   }
-  const changes = actionConfig.action === "reject" && nextStatus === "rejected_by_school"
-    ? { status: nextStatus, rejected_reason: text(body?.reason) }
-    : { status: nextStatus };
-  const { data, error } = await admin
-    .from("students")
-    .update(changes)
-    .eq("id", student.id)
-    .select()
-    .single();
-  if (error) throw error;
+  const remark = actionConfig.action === "reject" && nextStatus === "rejected_by_school"
+    ? readRequiredWorkflowRemark(body, {
+      fields: ["remark", "reason"],
+      label: "退回原因",
+    })
+    : "";
+  const data = await applyLoggedDifficultyTransition(admin, student, {
+    currentStatus,
+    nextStatus,
+    operationAction: getTransitionLogAction(currentStatus, nextStatus),
+    remark,
+    context,
+  });
+  return { body: { data }, status: 200 };
+};
+
+const handleResubmit = async (request, context, id) => {
+  const { admin, profile } = context;
+  requireRole(profile, ["college"]);
+  const student = await findStudent(admin, id);
+  assertCollegeScope(profile, student.college_name);
+  const { currentStatus, nextStatus } = resolveResubmitTransition(
+    student.status,
+    Boolean(text(student.rejected_reason))
+  );
+  const body = await readJsonBody(request);
+  const remark = readRequiredWorkflowRemark(body, {
+    fields: ["remark", "modificationRemark"],
+    label: "修改说明",
+  });
+  const data = await applyLoggedDifficultyTransition(admin, student, {
+    currentStatus,
+    nextStatus,
+    operationAction: "college_resubmit",
+    remark,
+    context,
+  });
   return { body: { data }, status: 200 };
 };
 
@@ -385,8 +425,15 @@ const handleDifficultyApi = async (request, env) => {
     return handleDelete(request, context, decodeURIComponent(recordMatch[1]));
   }
 
-  const transitionMatch = relativePath.match(/^\/([^/]+)\/(submit|approve|reject|report|return-by-center)$/);
+  const transitionMatch = relativePath.match(/^\/([^/]+)\/(submit|approve|reject|resubmit|report|return-by-center)$/);
   if (transitionMatch && request.method === "POST") {
+    if (transitionMatch[2] === "resubmit") {
+      return handleResubmit(
+        request,
+        context,
+        decodeURIComponent(transitionMatch[1])
+      );
+    }
     if (transitionMatch[2] === "report") {
       return handleReport(
         request,
