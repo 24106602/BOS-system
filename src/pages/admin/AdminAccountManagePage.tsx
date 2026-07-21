@@ -6,9 +6,9 @@ export default function AdminAccountManagePage() {
     <section>
       <div style={styles.notice}>
         <div style={styles.eyebrow}>基础信息 / 账号管理</div>
-        <h1 style={styles.title}>账号管理</h1>
+        <h1 style={styles.title}>辅导员与学院账号管理</h1>
         <p style={styles.description}>
-          账号密码后续接入正式权限系统，目前只做账号基础配置预留。页面不会展示、保存或写入任何真实密码。
+          页面读取 Supabase user_profiles，并通过受保护的后端 API 更新或停用账号。手机号、登录账号、所属院系和排序号导入后不可原地修改。
         </p>
       </div>
       <AdminCollegesPage />

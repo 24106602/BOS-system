@@ -29,11 +29,22 @@ import {
   resolveResubmitTransition,
   saveDifficultyStudentWithLog,
 } from "../server/difficultyReviewWorkflow.js";
+import {
+  disableCounselor,
+  disableDepartment,
+  importCounselors,
+  importDepartments,
+  listCounselors,
+  listDepartments,
+  updateCounselor,
+  updateDepartment,
+} from "../server/baseInfoService.js";
 
 const DEFAULT_ALLOWED_HEADERS = "Content-Type, Authorization";
 const DEFAULT_ALLOWED_METHODS = "GET, POST, PATCH, DELETE, OPTIONS";
 const DEFAULT_MAX_PROMPT_LENGTH = 20000;
 const DIFFICULTY_API_PREFIX = "/api/difficulty-students";
+const BASE_INFO_API_PREFIX = "/api/base-info";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SYSTEM_PROMPT =
   "你是高校困难生数据治理系统助手，负责分析 Excel 治理结果、生成问题总结和整改建议。";
@@ -530,6 +541,82 @@ const handleDifficultyApi = async (request, env) => {
   throw apiError("困难生接口不存在", 404, "NOT_FOUND");
 };
 
+const handleBaseInfoApi = async (request, env) => {
+  const context = await getSupabaseClients(request, env);
+  const url = new URL(request.url);
+  const relativePath = url.pathname.slice(BASE_INFO_API_PREFIX.length) || "/";
+
+  if (request.method === "GET" && relativePath === "/departments") {
+    return { body: { data: await listDepartments(context.admin, context.profile) }, status: 200 };
+  }
+  if (request.method === "POST" && relativePath === "/departments/import") {
+    const body = await readJsonBody(request);
+    return {
+      body: await importDepartments(context.admin, context.profile, body?.rows),
+      status: 200,
+    };
+  }
+  const departmentMatch = relativePath.match(/^\/departments\/([^/]+)$/);
+  if (departmentMatch && request.method === "PATCH") {
+    const body = await readJsonBody(request);
+    return {
+      body: {
+        data: await updateDepartment(
+          context.admin,
+          context.profile,
+          decodeURIComponent(departmentMatch[1]),
+          body
+        ),
+      },
+      status: 200,
+    };
+  }
+  if (departmentMatch && request.method === "DELETE") {
+    await disableDepartment(
+      context.admin,
+      context.profile,
+      decodeURIComponent(departmentMatch[1])
+    );
+    return { body: null, status: 204 };
+  }
+
+  if (request.method === "GET" && relativePath === "/counselors") {
+    return { body: { data: await listCounselors(context.admin, context.profile) }, status: 200 };
+  }
+  if (request.method === "POST" && relativePath === "/counselors/import") {
+    const body = await readJsonBody(request);
+    return {
+      body: await importCounselors(context.admin, context.profile, body?.rows),
+      status: 200,
+    };
+  }
+  const counselorMatch = relativePath.match(/^\/counselors\/([^/]+)$/);
+  if (counselorMatch && request.method === "PATCH") {
+    const body = await readJsonBody(request);
+    return {
+      body: {
+        data: await updateCounselor(
+          context.admin,
+          context.profile,
+          decodeURIComponent(counselorMatch[1]),
+          body
+        ),
+      },
+      status: 200,
+    };
+  }
+  if (counselorMatch && request.method === "DELETE") {
+    await disableCounselor(
+      context.admin,
+      context.profile,
+      decodeURIComponent(counselorMatch[1])
+    );
+    return { body: null, status: 204 };
+  }
+
+  throw apiError("基础信息接口不存在", 404, "NOT_FOUND");
+};
+
 const handleDeepSeek = async (request, env) => {
   if (!env.DEEPSEEK_API_KEY) {
     throw apiError("Worker Secret 未配置 DEEPSEEK_API_KEY", 503, "BACKEND_NOT_CONFIGURED");
@@ -617,6 +704,8 @@ export default {
       let result;
       if (url.pathname === "/api/deepseek" && request.method === "POST") {
         result = await handleDeepSeek(request, env);
+      } else if (url.pathname.startsWith(`${BASE_INFO_API_PREFIX}/`)) {
+        result = await handleBaseInfoApi(request, env);
       } else if (url.pathname.startsWith(`${DIFFICULTY_API_PREFIX}/`)) {
         result = await handleDifficultyApi(request, env);
       } else {

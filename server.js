@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import OpenAI from "openai";
 import cors from "cors";
+import { registerBaseInfoRoutes } from "./server/baseInfoRoutes.js";
 import { registerDifficultyStudentRoutes } from "./server/difficultyStudentRoutes.js";
 
 const app = express();
@@ -40,6 +41,7 @@ app.use(express.json({
   limit: process.env.API_MAX_BODY_SIZE || process.env.DEEPSEEK_MAX_BODY_SIZE || "12mb",
 }));
 
+registerBaseInfoRoutes(app);
 registerDifficultyStudentRoutes(app);
 
 const client = new OpenAI({

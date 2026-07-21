@@ -87,7 +87,7 @@ const pageTitles: Record<string, string> = {
   "/admin/base-info": "学校基础信息",
   "/admin/departments": "院系基础信息",
   "/admin/accounts": "学校账号维护",
-  "/admin/colleges": "院系账号维护",
+  "/admin/colleges": "辅导员信息",
   "/admin/awards": "三奖提交总览",
   "/admin/awards/national": "国家奖学金汇总",
   "/admin/awards/inspirational": "国家励志奖学金汇总",

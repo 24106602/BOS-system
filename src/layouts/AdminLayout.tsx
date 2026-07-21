@@ -43,7 +43,7 @@ const accountMenuGroup: ExpandableMenuGroup = {
   icon: "账",
   items: [
     { path: "/admin/accounts", label: "学校账号维护", mark: "校" },
-    { path: "/admin/colleges", label: "院系账号维护", mark: "院" },
+    { path: "/admin/colleges", label: "辅导员信息", mark: "辅" },
   ],
 };
 
