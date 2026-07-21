@@ -16,6 +16,7 @@ import { exportFamilyExcel, processFamilyRows } from "./services/familyProcessor
 import { exportStudentExcel, processStudentRows } from "./services/studentProcessor";
 import { syncCollegeStudentsToSupabase } from "./services/difficultyStudentService";
 import { verifyEnrolledStudent, getEnrolledStudentCount } from "./db/localEnrolledStudentDb";
+import { useDifficultyRecognitionWindow } from "./hooks/useDifficultyRecognitionWindow";
 
 import {
   findHeaderRowIndex,
@@ -245,6 +246,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   const [familyAnalysis, setFamilyAnalysis] = useState<Record<string, number>>({});
   const [familyStats, setFamilyStats] = useState<FamilyProcessingStats>(initialFamilyStats);
   const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear());
+  const recognitionWindow = useDifficultyRecognitionWindow(academicYear);
   const [studentReviewConfirmed, setStudentReviewConfirmed] = useState(false);
   const [familyReviewConfirmed, setFamilyReviewConfirmed] = useState(false);
   const [studentUploadedToSchool, setStudentUploadedToSchool] = useState(false);
@@ -314,7 +316,14 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     familyStats.errors > 0 ||
     familyReviewRows.length > 0;
 
+  const ensureRecognitionWindowOpen = () => {
+    if (!recognitionWindow.loading && recognitionWindow.isOpen) return true;
+    alert(recognitionWindow.message);
+    return false;
+  };
+
   const addStudentResultToMergePool = async () => {
+    if (!ensureRecognitionWindowOpen()) return;
     if (processedData.length === 0) {
       alert("没有可上载的本专科处理结果");
       return;
@@ -374,6 +383,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   };
 
   const addFamilyResultToMergePool = async () => {
+    if (!ensureRecognitionWindowOpen()) return;
     if (familyProcessedData.length === 0) {
       alert("没有可上载的家庭成员处理结果");
       return;
@@ -444,6 +454,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   });
 
   const confirmStudentCollegeReview = () => {
+    if (!ensureRecognitionWindowOpen()) return;
     if (processedData.length === 0) {
       alert("请先完成本专科信息处理");
       return;
@@ -472,6 +483,7 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
   };
 
   const confirmFamilyCollegeReview = () => {
+    if (!ensureRecognitionWindowOpen()) return;
     if (familyProcessedData.length === 0) {
       alert("请先完成家庭成员信息处理");
       return;
@@ -1645,6 +1657,7 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
               academicYear={academicYear}
               onAcademicYearChange={setAcademicYear}
               studentCollegeName={studentCollegeName}
+              recognitionWindow={recognitionWindow}
               stats={stats}
               renderTable={renderTable}
               processedData={processedData}
@@ -1671,6 +1684,7 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
               academicYear={academicYear}
               onAcademicYearChange={setAcademicYear}
               familyCollegeName={familyCollegeName}
+              recognitionWindow={recognitionWindow}
               familyStats={familyStats}
               renderTable={renderTable}
               familyProcessedData={familyProcessedData}

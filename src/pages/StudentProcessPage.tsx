@@ -19,6 +19,7 @@ import {
   type DifficultyImportConfirmResult,
   type DifficultyImportValidationResult,
 } from "../services/difficultyStudentApi";
+import type { DifficultyRecognitionWindowState } from "../hooks/useDifficultyRecognitionWindow";
 
 type StudentProcessPageProps = {
   dataRef: RefObject<HTMLInputElement | null>;
@@ -39,6 +40,7 @@ type StudentProcessPageProps = {
   academicYear: string;
   onAcademicYearChange: (year: string) => void;
   studentCollegeName: string;
+  recognitionWindow: DifficultyRecognitionWindowState;
   stats: ProcessingStats;
   renderTable: (rows: Record<string, unknown>[] | DisqualifiedRow[], dataType: "student" | "family", academicYear?: string, collegeName?: string, pagination?: { currentPage: number; pageSize: number; total: number }) => ReactNode;
   processedData: Record<string, unknown>[];
@@ -71,6 +73,7 @@ export default function StudentProcessPage({
   academicYear,
   onAcademicYearChange,
   studentCollegeName,
+  recognitionWindow,
   stats,
   renderTable,
   processedData,
@@ -142,6 +145,7 @@ export default function StudentProcessPage({
 
   const hasProcessedRows = processedData.length > 0 && !isProcessing;
   const hasBlockingRows = disqualifiedRows.length > 0 || stats.errors > 0;
+  const recognitionWindowBlocked = recognitionWindow.loading || !recognitionWindow.isOpen;
   const canConfirm = hasProcessedRows && !reviewConfirmed && !hasBlockingRows;
   const reviewStatus =
     !processedData.length ? "未处理" :
@@ -163,6 +167,10 @@ export default function StudentProcessPage({
   };
 
   const openImportModal = () => {
+    if (recognitionWindowBlocked) {
+      alert(recognitionWindow.message);
+      return;
+    }
     setActiveModal("import");
     setImportStep(1);
     setImportTab("success");
@@ -172,6 +180,10 @@ export default function StudentProcessPage({
   };
 
   const validateImportFile = async (file: File, retryFailedOnly = false) => {
+    if (recognitionWindowBlocked) {
+      alert(recognitionWindow.message);
+      return;
+    }
     if (!/\.(xlsx|xls)$/i.test(file.name)) {
       alert("仅支持 .xls 或 .xlsx 格式的 Excel 文件");
       return;
@@ -249,6 +261,10 @@ export default function StudentProcessPage({
   };
 
   const handleConfirmImport = async () => {
+    if (recognitionWindowBlocked) {
+      alert(recognitionWindow.message);
+      return;
+    }
     if (!importValidation || importValidation.passed === 0) {
       alert("没有可正式导入的通过数据");
       return;
@@ -267,7 +283,8 @@ export default function StudentProcessPage({
     try {
       const result = await confirmDifficultyStudentImport(
         importValidation.validationToken,
-        importValidation.passedRows
+        importValidation.passedRows,
+        academicYear
       );
       setImportConfirmResult(result);
       setImportStep(3);
@@ -404,27 +421,42 @@ export default function StudentProcessPage({
       </div>
 
       <div style={pageStyles.toolbarSection}>
-        <button style={pageStyles.toolbarButton} onClick={openImportModal}>数据导入</button>
+        <button
+          style={pageStyles.toolbarButton}
+          disabled={recognitionWindowBlocked}
+          title={recognitionWindowBlocked ? recognitionWindow.message : undefined}
+          onClick={openImportModal}
+        >
+          数据导入
+        </button>
         <button style={pageStyles.toolbarButton} disabled={!hasProcessedRows} onClick={exportExcel}>导出通过名单</button>
         <button style={pageStyles.toolbarButton} disabled={!hasProcessedRows} onClick={exportStudentErrorReport}>导出不通过名单</button>
         {!hideSubmitAction && (
           <>
             <button
               style={reviewConfirmed ? { ...pageStyles.toolbarButton, background: "#67c23a", borderColor: "#67c23a", color: "#fff" } : pageStyles.toolbarButton}
-              disabled={!canConfirm}
+              disabled={!canConfirm || recognitionWindowBlocked}
+              title={recognitionWindowBlocked ? recognitionWindow.message : undefined}
               onClick={confirmCollegeReview}
             >
               {reviewConfirmed ? "学院已确认" : "学院确认审核"}
             </button>
             <button
               style={hasProcessedRows && reviewConfirmed && !hasBlockingRows && !uploadedToSchool ? { ...pageStyles.toolbarButton, background: "#67c23a", borderColor: "#67c23a", color: "#fff" } : pageStyles.toolbarButton}
-              disabled={!hasProcessedRows || !reviewConfirmed || hasBlockingRows || uploadedToSchool}
+              disabled={!hasProcessedRows || !reviewConfirmed || hasBlockingRows || uploadedToSchool || recognitionWindowBlocked}
+              title={recognitionWindowBlocked ? recognitionWindow.message : undefined}
               onClick={addStudentResultToMergePool}
             >
               {uploadedToSchool ? "已上载学校端" : "上载到学校端"}
             </button>
           </>
         )}
+      </div>
+
+      <div className="bos-status-row">
+        <span className={`bos-status-badge${recognitionWindowBlocked ? " is-danger" : " is-success"}`}>
+          认定时间：{recognitionWindow.message}
+        </span>
       </div>
 
       {importTotalCount > 0 && (
@@ -616,7 +648,8 @@ export default function StudentProcessPage({
                     />
                     <button
                       style={isImportValidating ? pageStyles.modalDisabledButton : pageStyles.modalGreenButton}
-                      disabled={isImportValidating}
+                      disabled={isImportValidating || recognitionWindowBlocked}
+                      title={recognitionWindowBlocked ? recognitionWindow.message : undefined}
                       onClick={() => retryFileRef.current?.click()}
                     >
                       {isImportValidating ? "正在重新校验" : "只重新校验失败数据"}
@@ -624,8 +657,9 @@ export default function StudentProcessPage({
                   </>
                 ) : (
                   <button
-                    style={isImportConfirming || hasBlockingRows ? pageStyles.modalDisabledButton : pageStyles.modalGreenButton}
-                    disabled={isImportConfirming || hasBlockingRows}
+                    style={isImportConfirming || hasBlockingRows || recognitionWindowBlocked ? pageStyles.modalDisabledButton : pageStyles.modalGreenButton}
+                    disabled={isImportConfirming || hasBlockingRows || recognitionWindowBlocked}
+                    title={recognitionWindowBlocked ? recognitionWindow.message : undefined}
                     onClick={handleConfirmImport}
                   >
                     {isImportConfirming ? "正在正式导入" : hasBlockingRows ? "原有治理未通过" : "正式导入"}

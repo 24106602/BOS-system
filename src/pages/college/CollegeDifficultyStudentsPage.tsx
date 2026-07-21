@@ -24,6 +24,7 @@ import {
   type DifficultyStudentTemplateField,
 } from "../../constants/difficultyStudentTemplate";
 import DifficultyOperationHistory from "../../components/DifficultyOperationHistory";
+import { useDifficultyRecognitionWindow } from "../../hooks/useDifficultyRecognitionWindow";
 
 type CollegeDifficultyStudentsPageProps = {
   profile: UserProfile;
@@ -52,6 +53,7 @@ const getRawDetail = (row: DifficultyStudentRow, aliases: string[]) => {
 
 export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: CollegeDifficultyStudentsPageProps) {
   const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear());
+  const recognitionWindow = useDifficultyRecognitionWindow(academicYear);
   const [nameKeyword, setNameKeyword] = useState("");
   const [studentIdKeyword, setStudentIdKeyword] = useState("");
   const [idCardKeyword, setIdCardKeyword] = useState("");
@@ -69,6 +71,7 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
   const [resubmitRemark, setResubmitRemark] = useState("");
   const [isResubmitting, setIsResubmitting] = useState(false);
   const [dataSource, setDataSource] = useState<"supabase" | "local">("supabase");
+  const recognitionWindowBlocked = recognitionWindow.loading || !recognitionWindow.isOpen;
 
   const collegeName = normalizeSubmissionCollegeName(profile.college_name || profile.display_name || "");
 
@@ -180,6 +183,13 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
     action: DifficultyStudentUiAction,
     row: DifficultyStudentRow
   ) => {
+    if (
+      recognitionWindowBlocked
+      && (action === "confirm_upload" || action === "resubmit")
+    ) {
+      setActionMessage(recognitionWindow.message);
+      return;
+    }
     if (action === "edit") {
       setSelectedRow(null);
       setActionMessage(
@@ -234,6 +244,9 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
       ? { text: "学校退回资料已修改，请填写修改说明后重新提交。", tone: "warning" as const }
       : getDifficultyStudentActionHint(row.status, "college");
     const isPending = pendingRowKey === getRowKey(row);
+    const hasTimedAction = actions.some(
+      (action) => action === "confirm_upload" || action === "resubmit"
+    );
     return (
       <div className={`difficulty-record-actions is-${location}`}>
         {actions.length > 0 && (
@@ -242,7 +255,17 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
               <button
                 key={action}
                 className={`difficulty-record-action is-${action}`}
-                disabled={isPending}
+                disabled={
+                  isPending
+                  || (recognitionWindowBlocked
+                    && (action === "confirm_upload" || action === "resubmit"))
+                }
+                title={
+                  recognitionWindowBlocked
+                    && (action === "confirm_upload" || action === "resubmit")
+                    ? recognitionWindow.message
+                    : undefined
+                }
                 onClick={() => void handleRecordAction(action, row)}
               >
                 {isPending && action === "confirm_upload" ? "处理中..." : DIFFICULTY_STUDENT_ACTION_LABELS[action]}
@@ -251,6 +274,11 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
           </div>
         )}
         <span className="difficulty-status-notice" data-tone={hint.tone}>{hint.text}</span>
+        {recognitionWindowBlocked && hasTimedAction && (
+          <span className="difficulty-status-notice" data-tone="danger">
+            {recognitionWindow.message}
+          </span>
+        )}
         {(row.status === "rejected_by_school" || isEditedRejectedDraft) && row.rejected_reason && (
           <span className="difficulty-status-notice" data-tone="danger">
             退回原因：{row.rejected_reason}
@@ -366,6 +394,11 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
       </div>
 
       {actionMessage && <div className="difficulty-page-action-message">{actionMessage}</div>}
+      <div className="bos-status-row">
+        <span className={`bos-status-badge${recognitionWindowBlocked ? " is-danger" : " is-success"}`}>
+          认定时间：{recognitionWindow.message}
+        </span>
+      </div>
 
       <div className="bos-status-row">
         <span className="bos-status-badge">学年 {academicYear}</span>
@@ -531,8 +564,9 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
               <div style={{ ...styles.modalFooter, marginTop: 16 }}>
                 <button style={styles.secondaryButton} disabled={isResubmitting} onClick={() => setResubmitRow(null)}>取消</button>
                 <button
-                  style={isResubmitting || !resubmitRemark.trim() ? styles.disabledButton : styles.primaryButton}
-                  disabled={isResubmitting || !resubmitRemark.trim()}
+                  style={isResubmitting || !resubmitRemark.trim() || recognitionWindowBlocked ? styles.disabledButton : styles.primaryButton}
+                  disabled={isResubmitting || !resubmitRemark.trim() || recognitionWindowBlocked}
+                  title={recognitionWindowBlocked ? recognitionWindow.message : undefined}
                   onClick={() => void handleResubmit()}
                 >
                   {isResubmitting ? "提交中..." : "确认重新提交"}

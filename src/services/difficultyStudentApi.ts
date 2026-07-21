@@ -83,7 +83,7 @@ export type DifficultyOperationLog = {
 
 const requestDifficultyApi = async <T>(
   path: string,
-  method: "GET" | "POST" | "PATCH" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   body?: unknown
 ): Promise<T> => {
   const { data: sessionData } = await supabase.auth.getSession();
@@ -124,6 +124,16 @@ export type DifficultyBatchSubmitResult = {
   failed: number;
 };
 
+export type DifficultyRecognitionWindow = {
+  academicYear: string;
+  startDate: string;
+  endDate: string;
+  currentDate: string;
+  configured: boolean;
+  isOpen: boolean;
+  message: string;
+};
+
 export const submitDifficultyStudentBatch = (rows: Record<string, unknown>[]) =>
   requestDifficultyApi<DifficultyBatchSubmitResult>("/batch-submit", "POST", { rows });
 
@@ -157,11 +167,28 @@ export const validateDifficultyStudentImport = async (
 
 export const confirmDifficultyStudentImport = (
   validationToken: string,
-  passedRows: Record<string, unknown>[]
+  passedRows: Record<string, unknown>[],
+  academicYear = ""
 ) => requestDifficultyApi<DifficultyImportConfirmResult>(
   "/import/confirm",
   "POST",
-  { validationToken, passedRows }
+  { validationToken, passedRows, academicYear }
+);
+
+export const getDifficultyRecognitionWindow = (academicYear: string) =>
+  requestDifficultyApi<{ data: DifficultyRecognitionWindow }>(
+    `/time-window?academicYear=${encodeURIComponent(academicYear)}`,
+    "GET"
+  );
+
+export const updateDifficultyRecognitionWindow = (
+  academicYear: string,
+  startDate: string,
+  endDate: string
+) => requestDifficultyApi<{ data: DifficultyRecognitionWindow }>(
+  `/time-window/${encodeURIComponent(academicYear)}`,
+  "PUT",
+  { startDate, endDate }
 );
 
 export const importHistoricalDifficultyStudent = (row: Record<string, unknown>) =>

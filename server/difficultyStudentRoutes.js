@@ -9,6 +9,12 @@ import {
 } from "../src/constants/statusTransitions.ts";
 import { ForbiddenError, guardStatus } from "../src/utils/guardStatus.ts";
 import {
+  getDifficultyRecognitionWindow,
+  guardDifficultyRecognitionWindow,
+  guardDifficultyRecognitionWindows,
+  saveDifficultyRecognitionWindow,
+} from "./difficultyRecognitionWindow.js";
+import {
   IncompleteDataError,
   reportDifficultyStudentsAtomically,
 } from "./difficultyReportIntegrity.js";
@@ -50,6 +56,9 @@ const EDITABLE_FIELDS = [
 const text = (value) => String(value ?? "").trim();
 const normalizeIdCard = (value) => text(value).replace(/\s|-/g, "").toUpperCase();
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const getAcademicYears = (rows) => [
+  ...new Set((rows || []).map((row) => text(row?.academic_year)).filter(Boolean)),
+];
 
 const pickEditableFields = (input) => Object.fromEntries(
   EDITABLE_FIELDS
@@ -198,6 +207,10 @@ export const difficultyStudentErrorHandler = (error, _req, res, _next) => {
     currentStatus: error?.currentStatus,
     action: error?.action,
     allowedPrerequisiteStatuses: error?.allowedPrerequisiteStatuses,
+    academicYear: error?.academicYear,
+    startDate: error?.startDate,
+    endDate: error?.endDate,
+    currentDate: error?.currentDate,
     failures: Array.isArray(error?.failures) ? error.failures : undefined,
   });
 };
@@ -218,8 +231,40 @@ export const createDifficultyStudentRouter = () => {
     || process.env.SUPABASE_SECRET_KEY
     || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+  router.get("/time-window", async (req, res, next) => {
+    try {
+      const { admin, profile } = req.difficultyContext;
+      requireRole(profile, ["college", "admin", "center"]);
+      const data = await getDifficultyRecognitionWindow(admin, req.query.academicYear);
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put("/time-window/:academicYear", async (req, res, next) => {
+    try {
+      const { admin, profile } = req.difficultyContext;
+      requireRole(profile, ["admin", "center"]);
+      const data = await saveDifficultyRecognitionWindow(
+        admin,
+        req.params.academicYear,
+        req.body || {},
+        req.difficultyContext
+      );
+      res.json({ data });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/import/validate", async (req, res, next) => {
     try {
+      const { admin, profile } = req.difficultyContext;
+      requireRole(profile, ["college", "admin"]);
+      await guardDifficultyRecognitionWindow(admin, req.body?.academicYear, {
+        action: "import",
+      });
       const result = await validateDifficultyStudentImport({
         context: req.difficultyContext,
         body: req.body || {},
@@ -233,6 +278,13 @@ export const createDifficultyStudentRouter = () => {
 
   router.post("/import/confirm", async (req, res, next) => {
     try {
+      const { admin, profile } = req.difficultyContext;
+      requireRole(profile, ["college", "admin"]);
+      const academicYear = text(req.body?.academicYear)
+        || text(req.body?.passedRows?.[0]?.academic_year);
+      await guardDifficultyRecognitionWindow(admin, academicYear, {
+        action: "import",
+      });
       const result = await confirmDifficultyStudentImport({
         context: req.difficultyContext,
         body: req.body || {},
@@ -286,6 +338,9 @@ export const createDifficultyStudentRouter = () => {
         preparedRows.push(row);
       }
 
+      await guardDifficultyRecognitionWindows(admin, getAcademicYears(preparedRows), {
+        action: "confirm",
+      });
       await assertDifficultyImportConstraints(admin, preparedRows, { allowExisting: true });
 
       for (const row of preparedRows) {
@@ -330,6 +385,9 @@ export const createDifficultyStudentRouter = () => {
       row.college_name = text(row.college_name);
       row.student_id = text(row.student_id);
       row.id_card = normalizeIdCard(row.id_card);
+      await guardDifficultyRecognitionWindow(admin, row.academic_year, {
+        action: "import",
+      });
       await assertDifficultyImportConstraints(admin, [row]);
       const existing = await findStudentByIdentity(admin, row);
       const currentStatus = existing
@@ -379,6 +437,9 @@ export const createDifficultyStudentRouter = () => {
         .filter((id) => !studentsById.has(id))
         .map((id) => ({ studentId: id, reasons: ["困难生记录不存在"] }));
       const students = validIds.map((id) => studentsById.get(id)).filter(Boolean);
+      await guardDifficultyRecognitionWindows(admin, getAcademicYears(students), {
+        action: "report",
+      });
       const updated = await reportStudents(
         admin,
         students,
@@ -475,6 +536,9 @@ export const createDifficultyStudentRouter = () => {
       requireRole(profile, roles);
       const student = await findStudent(admin, req.params.id);
       assertCollegeScope(profile, student.college_name);
+      await guardDifficultyRecognitionWindow(admin, student.academic_year, {
+        action,
+      });
       const currentStatus = normalizeDifficultyStudentStatus(student.status);
       const nextStatus = getTransitionTarget(currentStatus, action);
       if (action === "submit" && currentStatus === "draft" && text(student.rejected_reason)) {
@@ -513,6 +577,9 @@ export const createDifficultyStudentRouter = () => {
       requireRole(profile, ["college"]);
       const student = await findStudent(admin, req.params.id);
       assertCollegeScope(profile, student.college_name);
+      await guardDifficultyRecognitionWindow(admin, student.academic_year, {
+        action: "resubmit",
+      });
       const { currentStatus, nextStatus } = resolveResubmitTransition(
         student.status,
         Boolean(text(student.rejected_reason))
@@ -538,6 +605,9 @@ export const createDifficultyStudentRouter = () => {
       const { admin, profile } = req.difficultyContext;
       requireRole(profile, ["admin"]);
       const student = await findStudent(admin, req.params.id);
+      await guardDifficultyRecognitionWindow(admin, student.academic_year, {
+        action: "report",
+      });
       const updated = await reportStudents(admin, [student], req.difficultyContext);
       res.json({ data: updated[0] || null });
     } catch (error) {

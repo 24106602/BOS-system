@@ -8,6 +8,12 @@ import {
 } from "../src/constants/statusTransitions.ts";
 import { ForbiddenError, guardStatus } from "../src/utils/guardStatus.ts";
 import {
+  getDifficultyRecognitionWindow,
+  guardDifficultyRecognitionWindow,
+  guardDifficultyRecognitionWindows,
+  saveDifficultyRecognitionWindow,
+} from "../server/difficultyRecognitionWindow.js";
+import {
   IncompleteDataError,
   reportDifficultyStudentsAtomically,
 } from "../server/difficultyReportIntegrity.js";
@@ -45,7 +51,7 @@ import {
 } from "../server/baseInfoService.js";
 
 const DEFAULT_ALLOWED_HEADERS = "Content-Type, Authorization";
-const DEFAULT_ALLOWED_METHODS = "GET, POST, PATCH, DELETE, OPTIONS";
+const DEFAULT_ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
 const DEFAULT_MAX_PROMPT_LENGTH = 20000;
 const DIFFICULTY_API_PREFIX = "/api/difficulty-students";
 const BASE_INFO_API_PREFIX = "/api/base-info";
@@ -70,6 +76,9 @@ const EDITABLE_FIELDS = [
 
 const text = (value) => String(value ?? "").trim();
 const normalizeIdCard = (value) => text(value).replace(/\s|-/g, "").toUpperCase();
+const getAcademicYears = (rows) => [
+  ...new Set((rows || []).map((row) => text(row?.academic_year)).filter(Boolean)),
+];
 
 const pickEditableFields = (input) => Object.fromEntries(
   EDITABLE_FIELDS
@@ -244,6 +253,9 @@ const handleBatchSubmit = async (request, context) => {
     preparedRows.push(row);
   }
 
+  await guardDifficultyRecognitionWindows(admin, getAcademicYears(preparedRows), {
+    action: "confirm",
+  });
   await assertDifficultyImportConstraints(admin, preparedRows, { allowExisting: true });
 
   for (const row of preparedRows) {
@@ -286,6 +298,9 @@ const handleHistoricalImport = async (request, context) => {
   row.college_name = text(row.college_name);
   row.student_id = text(row.student_id);
   row.id_card = normalizeIdCard(row.id_card);
+  await guardDifficultyRecognitionWindow(admin, row.academic_year, {
+    action: "import",
+  });
   await assertDifficultyImportConstraints(admin, [row]);
   const existing = await findStudentByIdentity(admin, row);
   const currentStatus = existing
@@ -334,6 +349,9 @@ const handleBatchReport = async (request, context, env) => {
     .filter((id) => !studentsById.has(id))
     .map((id) => ({ studentId: id, reasons: ["困难生记录不存在"] }));
   const students = validIds.map((id) => studentsById.get(id)).filter(Boolean);
+  await guardDifficultyRecognitionWindows(admin, getAcademicYears(students), {
+    action: "report",
+  });
   const updated = await reportDifficultyStudentsAtomically(admin, students, {
     configuredChecks: env.DIFFICULTY_REPORT_REQUIRED_CHECKS,
     additionalFailures: [...invalidIdFailures, ...missingFailures],
@@ -346,6 +364,9 @@ const handleReport = async (_request, context, env, id) => {
   const { admin, profile } = context;
   requireRole(profile, ["admin"]);
   const student = await findStudent(admin, id);
+  await guardDifficultyRecognitionWindow(admin, student.academic_year, {
+    action: "report",
+  });
   const updated = await reportDifficultyStudentsAtomically(admin, [student], {
     configuredChecks: env.DIFFICULTY_REPORT_REQUIRED_CHECKS,
     context,
@@ -426,6 +447,9 @@ const handleTransition = async (request, context, id, routeAction) => {
   requireRole(profile, actionConfig.roles);
   const student = await findStudent(admin, id);
   assertCollegeScope(profile, student.college_name);
+  await guardDifficultyRecognitionWindow(admin, student.academic_year, {
+    action: actionConfig.action,
+  });
   const currentStatus = normalizeDifficultyStudentStatus(student.status);
   const nextStatus = getTransitionTarget(currentStatus, actionConfig.action);
   if (actionConfig.action === "submit" && currentStatus === "draft" && text(student.rejected_reason)) {
@@ -466,6 +490,9 @@ const handleResubmit = async (request, context, id) => {
   requireRole(profile, ["college"]);
   const student = await findStudent(admin, id);
   assertCollegeScope(profile, student.college_name);
+  await guardDifficultyRecognitionWindow(admin, student.academic_year, {
+    action: "resubmit",
+  });
   const { currentStatus, nextStatus } = resolveResubmitTransition(
     student.status,
     Boolean(text(student.rejected_reason))
@@ -490,8 +517,41 @@ const handleDifficultyApi = async (request, env) => {
   const url = new URL(request.url);
   const relativePath = url.pathname.slice(DIFFICULTY_API_PREFIX.length) || "/";
 
+  if (request.method === "GET" && relativePath === "/time-window") {
+    requireRole(context.profile, ["college", "admin", "center"]);
+    return {
+      body: {
+        data: await getDifficultyRecognitionWindow(
+          context.admin,
+          url.searchParams.get("academicYear")
+        ),
+      },
+      status: 200,
+    };
+  }
+  const timeWindowMatch = relativePath.match(/^\/time-window\/([^/]+)$/);
+  if (timeWindowMatch && request.method === "PUT") {
+    requireRole(context.profile, ["admin", "center"]);
+    const body = await readJsonBody(request);
+    return {
+      body: {
+        data: await saveDifficultyRecognitionWindow(
+          context.admin,
+          decodeURIComponent(timeWindowMatch[1]),
+          body,
+          context
+        ),
+      },
+      status: 200,
+    };
+  }
+
   if (request.method === "POST" && relativePath === "/import/validate") {
     const body = await readJsonBody(request);
+    requireRole(context.profile, ["college", "admin"]);
+    await guardDifficultyRecognitionWindow(context.admin, body?.academicYear, {
+      action: "import",
+    });
     return {
       body: await validateDifficultyStudentImport({
         context,
@@ -505,6 +565,12 @@ const handleDifficultyApi = async (request, env) => {
   }
   if (request.method === "POST" && relativePath === "/import/confirm") {
     const body = await readJsonBody(request);
+    requireRole(context.profile, ["college", "admin"]);
+    const academicYear = text(body?.academicYear)
+      || text(body?.passedRows?.[0]?.academic_year);
+    await guardDifficultyRecognitionWindow(context.admin, academicYear, {
+      action: "import",
+    });
     return {
       body: await confirmDifficultyStudentImport({
         context,
@@ -790,6 +856,10 @@ const formatError = (error) => {
       currentStatus: error?.currentStatus,
       action: error?.action,
       allowedPrerequisiteStatuses: error?.allowedPrerequisiteStatuses,
+      academicYear: error?.academicYear,
+      startDate: error?.startDate,
+      endDate: error?.endDate,
+      currentDate: error?.currentDate,
       failures: Array.isArray(error?.failures) ? error.failures : undefined,
     },
   };

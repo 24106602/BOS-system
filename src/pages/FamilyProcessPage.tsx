@@ -4,6 +4,7 @@ import AdminCard from "../components/ui/AdminCard";
 import PageHeader from "../components/ui/PageHeader";
 import StatCard from "../components/ui/StatCard";
 import Toolbar from "../components/ui/Toolbar";
+import type { DifficultyRecognitionWindowState } from "../hooks/useDifficultyRecognitionWindow";
 
 type FamilyProcessPageProps = {
   familyDataRef: RefObject<HTMLInputElement | null>;
@@ -20,6 +21,7 @@ type FamilyProcessPageProps = {
   academicYear: string;
   onAcademicYearChange: (year: string) => void;
   familyCollegeName: string;
+  recognitionWindow: DifficultyRecognitionWindowState;
   familyStats: FamilyProcessingStats;
   renderTable: (rows: Record<string, unknown>[] | FamilyReviewRow[], dataType: "student" | "family", academicYear?: string, collegeName?: string, pagination?: { currentPage: number; pageSize: number; total: number }) => ReactNode;
   familyProcessedData: Record<string, unknown>[];
@@ -46,6 +48,7 @@ export default function FamilyProcessPage({
   academicYear,
   onAcademicYearChange,
   familyCollegeName,
+  recognitionWindow,
   familyStats,
   renderTable,
   familyProcessedData,
@@ -65,6 +68,7 @@ export default function FamilyProcessPage({
 
   const hasProcessedRows = familyProcessedData.length > 0 && !isFamilyProcessing;
   const hasBlockingRows = familyReviewRows.length > 0 || familyStats.errors > 0;
+  const recognitionWindowBlocked = recognitionWindow.loading || !recognitionWindow.isOpen;
   const canConfirm = hasProcessedRows && !reviewConfirmed && !hasBlockingRows;
   const reviewStatus =
     !familyProcessedData.length ? "未处理" :
@@ -74,12 +78,21 @@ export default function FamilyProcessPage({
     "已处理，待确认";
 
   const selectFile = () => {
+    if (recognitionWindowBlocked) {
+      alert(recognitionWindow.message);
+      return;
+    }
     if (!familyDataRef.current) return;
     familyDataRef.current.value = "";
     familyDataRef.current.click();
   };
 
   const handleFileChange: ChangeEventHandler<HTMLInputElement> = async (event) => {
+    if (recognitionWindowBlocked) {
+      alert(recognitionWindow.message);
+      event.currentTarget.value = "";
+      return;
+    }
     const file = event.currentTarget.files?.[0];
     if (file) setImportFileName(file.name);
     await uploadFamilyData(event);
@@ -87,6 +100,10 @@ export default function FamilyProcessPage({
 
   const handleDrop = async (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
+    if (recognitionWindowBlocked) {
+      alert(recognitionWindow.message);
+      return;
+    }
     const file = event.dataTransfer.files?.[0];
     if (!file) return;
     setImportFileName(file.name);
@@ -133,19 +150,38 @@ export default function FamilyProcessPage({
       </div>
 
       <div className="bos-action-toolbar">
-        <button className="is-primary" onClick={() => setActiveModal("import")}>数据导入</button>
+        <button
+          className="is-primary"
+          disabled={recognitionWindowBlocked}
+          title={recognitionWindowBlocked ? recognitionWindow.message : undefined}
+          onClick={() => setActiveModal("import")}
+        >
+          数据导入
+        </button>
         <button className="is-purple" disabled={!hasProcessedRows} onClick={exportFamilyResult}>导出通过名单</button>
         <button className="is-purple" disabled={!hasProcessedRows} onClick={exportFamilyErrorReport}>导出不通过名单</button>
-        <button className={reviewConfirmed ? "is-success" : "is-warning"} disabled={!canConfirm} onClick={confirmCollegeReview}>
+        <button
+          className={reviewConfirmed ? "is-success" : "is-warning"}
+          disabled={!canConfirm || recognitionWindowBlocked}
+          title={recognitionWindowBlocked ? recognitionWindow.message : undefined}
+          onClick={confirmCollegeReview}
+        >
           {reviewConfirmed ? "学院已确认" : "学院确认审核"}
         </button>
         <button
           className={hasProcessedRows && reviewConfirmed && !hasBlockingRows && !uploadedToSchool ? "is-success" : "is-warning"}
-          disabled={!hasProcessedRows || !reviewConfirmed || hasBlockingRows || uploadedToSchool}
+          disabled={!hasProcessedRows || !reviewConfirmed || hasBlockingRows || uploadedToSchool || recognitionWindowBlocked}
+          title={recognitionWindowBlocked ? recognitionWindow.message : undefined}
           onClick={addFamilyResultToMergePool}
         >
           {uploadedToSchool ? "已上载学校端" : "上载到学校端"}
         </button>
+      </div>
+
+      <div className="bos-status-row">
+        <span className={`bos-status-badge${recognitionWindowBlocked ? " is-danger" : " is-success"}`}>
+          认定时间：{recognitionWindow.message}
+        </span>
       </div>
 
       {familyStats.total > 0 && (
@@ -249,7 +285,14 @@ export default function FamilyProcessPage({
               link.click();
               URL.revokeObjectURL(url);
             }}>下载模板</button>
-            <button style={isFamilyProcessing ? pageStyles.disabledButton : pageStyles.greenButton} disabled={isFamilyProcessing} onClick={selectFile}>上传文件</button>
+            <button
+              style={isFamilyProcessing || recognitionWindowBlocked ? pageStyles.disabledButton : pageStyles.greenButton}
+              disabled={isFamilyProcessing || recognitionWindowBlocked}
+              title={recognitionWindowBlocked ? recognitionWindow.message : undefined}
+              onClick={selectFile}
+            >
+              上传文件
+            </button>
             <button style={pageStyles.secondaryButton} onClick={() => setActiveModal(null)}>关闭</button>
           </div>
         </Modal>

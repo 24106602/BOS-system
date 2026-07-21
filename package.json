@@ -17,6 +17,7 @@
     "test:operation-log": "node --experimental-strip-types --test tests/difficultyOperationLog.test.mjs",
     "test:review-workflow": "node --experimental-strip-types --test tests/difficultyReviewWorkflow.test.mjs",
     "test:report-integrity": "node --experimental-strip-types --test tests/difficultyReportIntegrity.test.mjs",
+    "test:recognition-window": "node --experimental-strip-types --test tests/difficultyRecognitionWindow.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

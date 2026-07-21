@@ -29,6 +29,7 @@ import {
   reportDifficultyStudentBatch,
   restoreDifficultyStudent,
   transitionDifficultyStudent,
+  updateDifficultyRecognitionWindow,
 } from "../../services/difficultyStudentApi";
 import {
   getDifficultyStudentStatusLabel,
@@ -41,6 +42,7 @@ import {
   getDifficultyStudentActionHint,
   type DifficultyStudentUiAction,
 } from "../../utils/difficultyStudentActions";
+import { useDifficultyRecognitionWindow } from "../../hooks/useDifficultyRecognitionWindow";
 
 type MergedDifficultyRow = {
   academicYear: string;
@@ -409,6 +411,8 @@ export default function AdminStudentsPage() {
   const [batches, setBatches] = useState<CollegeProcessedBatch[]>([]);
   const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear());
   const [historicalYear, setHistoricalYear] = useState(getCurrentAcademicYear());
+  const recognitionWindow = useDifficultyRecognitionWindow(academicYear);
+  const historicalRecognitionWindow = useDifficultyRecognitionWindow(historicalYear);
   const [historicalFile, setHistoricalFile] = useState<File | null>(null);
   const [cloudStudents, setCloudStudents] = useState<CloudStudentRow[]>([]);
   const [importStats, setImportStats] = useState<HistoricalImportStats>({ total: 0, inserted: 0, updated: 0, skipped: 0, failed: 0 });
@@ -423,6 +427,10 @@ export default function AdminStudentsPage() {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showDisabledModal, setShowDisabledModal] = useState(false);
+  const [showRecognitionWindowModal, setShowRecognitionWindowModal] = useState(false);
+  const [recognitionStartDate, setRecognitionStartDate] = useState("");
+  const [recognitionEndDate, setRecognitionEndDate] = useState("");
+  const [isSavingRecognitionWindow, setIsSavingRecognitionWindow] = useState(false);
   const [disabledStudents, setDisabledStudents] = useState<CloudStudentRow[]>([]);
   const [isLoadingDisabled, setIsLoadingDisabled] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -430,6 +438,9 @@ export default function AdminStudentsPage() {
   const [pendingRowKey, setPendingRowKey] = useState("");
   const [isBulkActionPending, setIsBulkActionPending] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionWindowBlocked = recognitionWindow.loading || !recognitionWindow.isOpen;
+  const historicalWindowBlocked =
+    historicalRecognitionWindow.loading || !historicalRecognitionWindow.isOpen;
 
   const getTemplateCell = (row: MergedDifficultyRow, field: DifficultyStudentTemplateField) => {
     if (field === "姓名(*)") return getDifficultyTemplateValue(row.rawData, field, row.name);
@@ -507,6 +518,41 @@ export default function AdminStudentsPage() {
       setActionMessage(`已恢复困难生“${student.name || student.student_id || student.id}”。`);
     } catch (error) {
       setActionMessage(formatWorkflowError(error));
+    }
+  };
+
+  const openRecognitionWindowModal = () => {
+    setRecognitionStartDate(recognitionWindow.startDate);
+    setRecognitionEndDate(recognitionWindow.endDate);
+    setShowRecognitionWindowModal(true);
+  };
+
+  const saveRecognitionWindow = async () => {
+    if (!recognitionStartDate || !recognitionEndDate) {
+      setActionMessage("请完整填写认定开始日期和结束日期。");
+      return;
+    }
+    if (recognitionStartDate > recognitionEndDate) {
+      setActionMessage("认定开始日期不能晚于结束日期。");
+      return;
+    }
+    setIsSavingRecognitionWindow(true);
+    try {
+      const result = await updateDifficultyRecognitionWindow(
+        academicYear,
+        recognitionStartDate,
+        recognitionEndDate
+      );
+      await recognitionWindow.refresh();
+      if (historicalYear === academicYear) {
+        await historicalRecognitionWindow.refresh();
+      }
+      setShowRecognitionWindowModal(false);
+      setActionMessage(`${academicYear} 学年认定时间已设置为 ${result.data.startDate} ~ ${result.data.endDate}。`);
+    } catch (error) {
+      setActionMessage(formatWorkflowError(error));
+    } finally {
+      setIsSavingRecognitionWindow(false);
     }
   };
 
@@ -591,6 +637,10 @@ export default function AdminStudentsPage() {
     action: DifficultyStudentUiAction,
     row: MergedDifficultyRow
   ) => {
+    if (recognitionWindowBlocked) {
+      setActionMessage(recognitionWindow.message);
+      return;
+    }
     if (action === "reject") {
       setSelectedKeys(new Set([getMergedRowKey(row)]));
       setSelectedRow(null);
@@ -624,6 +674,10 @@ export default function AdminStudentsPage() {
 
   const handleSelectedAction = async (action: "start_review" | "approve" | "report") => {
     if (!canPerformSelectedAction(action)) return;
+    if (recognitionWindowBlocked) {
+      setActionMessage(recognitionWindow.message);
+      return;
+    }
     const rowsToProcess = selectedRows.filter(hasCloudRecordId);
     setIsBulkActionPending(true);
     setActionMessage("");
@@ -658,8 +712,14 @@ export default function AdminStudentsPage() {
               <button
                 key={action}
                 className={`difficulty-record-action is-${action}`}
-                disabled={isPending || !hasCloudRecordId(row)}
-                title={!hasCloudRecordId(row) ? "该记录尚未同步到 Supabase" : undefined}
+                disabled={isPending || !hasCloudRecordId(row) || recognitionWindowBlocked}
+                title={
+                  !hasCloudRecordId(row)
+                    ? "该记录尚未同步到 Supabase"
+                    : recognitionWindowBlocked
+                    ? recognitionWindow.message
+                    : undefined
+                }
                 onClick={() => void handleRecordAction(action, row)}
               >
                 {isPending ? "处理中..." : DIFFICULTY_STUDENT_ACTION_LABELS[action]}
@@ -671,12 +731,22 @@ export default function AdminStudentsPage() {
         {!hasCloudRecordId(row) && actions.length > 0 && (
           <span className="difficulty-status-notice" data-tone="danger">未同步云端，暂不能执行状态操作。</span>
         )}
+        {recognitionWindowBlocked && actions.length > 0 && (
+          <span className="difficulty-status-notice" data-tone="danger">
+            {recognitionWindow.message}
+          </span>
+        )}
       </div>
     );
   };
 
   const handleReject = async () => {
     if (selectedKeys.size === 0) return;
+    if (recognitionWindowBlocked) {
+      setShowRejectModal(false);
+      setActionMessage(recognitionWindow.message);
+      return;
+    }
     if (!canPerformSelectedAction("reject")) {
       setShowRejectModal(false);
       setActionMessage("只有“学校审核中”的云端记录可以执行审核退回。");
@@ -741,6 +811,10 @@ export default function AdminStudentsPage() {
   };
 
   const importHistoricalData = async () => {
+    if (historicalWindowBlocked) {
+      alert(historicalRecognitionWindow.message);
+      return;
+    }
     if (!historicalFile) {
       alert("请先选择往年困难生数据库文件");
       return;
@@ -898,29 +972,37 @@ export default function AdminStudentsPage() {
       </section>
 
       <Toolbar>
-        <button className="is-primary" onClick={() => setShowImportModal(true)}>数据导入</button>
+        <button
+          className="is-primary"
+          disabled={historicalWindowBlocked}
+          title={historicalWindowBlocked ? historicalRecognitionWindow.message : undefined}
+          onClick={() => setShowImportModal(true)}
+        >
+          数据导入
+        </button>
+        <button onClick={openRecognitionWindowModal}>认定时间设置</button>
         <button onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>{isLoadingDatabase ? "刷新中..." : "刷新"}</button>
         <button onClick={() => void loadDisabledStudents()} disabled={isLoadingDisabled}>
           {isLoadingDisabled ? "读取中..." : "查看已禁用记录"}
         </button>
         <button className="is-purple" onClick={exportCurrentYearDatabase}>导出当前名单</button>
         {canPerformSelectedAction("start_review") && (
-          <button className="is-primary" disabled={isBulkActionPending} onClick={() => void handleSelectedAction("start_review")}>
+          <button className="is-primary" disabled={isBulkActionPending || recognitionWindowBlocked} title={recognitionWindowBlocked ? recognitionWindow.message : undefined} onClick={() => void handleSelectedAction("start_review")}>
             开始审核（{selectedRows.length}）
           </button>
         )}
         {canPerformSelectedAction("approve") && (
-          <button className="is-success" disabled={isBulkActionPending} onClick={() => void handleSelectedAction("approve")}>
+          <button className="is-success" disabled={isBulkActionPending || recognitionWindowBlocked} title={recognitionWindowBlocked ? recognitionWindow.message : undefined} onClick={() => void handleSelectedAction("approve")}>
             审核通过（{selectedRows.length}）
           </button>
         )}
         {canPerformSelectedAction("reject") && (
-          <button className="is-warning" disabled={isBulkActionPending} onClick={() => setShowRejectModal(true)}>
+          <button className="is-warning" disabled={isBulkActionPending || recognitionWindowBlocked} title={recognitionWindowBlocked ? recognitionWindow.message : undefined} onClick={() => setShowRejectModal(true)}>
             审核退回（{selectedRows.length}）
           </button>
         )}
         {canPerformSelectedAction("report") && (
-          <button className="is-success" disabled={isBulkActionPending} onClick={() => void handleSelectedAction("report")}>
+          <button className="is-success" disabled={isBulkActionPending || recognitionWindowBlocked} title={recognitionWindowBlocked ? recognitionWindow.message : undefined} onClick={() => void handleSelectedAction("report")}>
             上报（{selectedRows.length}）
           </button>
         )}
@@ -936,6 +1018,9 @@ export default function AdminStudentsPage() {
       {actionMessage && <div className="difficulty-page-action-message">{actionMessage}</div>}
 
       <div className="bos-status-row">
+        <span className={`bos-status-badge${recognitionWindowBlocked ? " is-danger" : " is-success"}`}>
+          认定时间：{recognitionWindow.message}
+        </span>
         <span className="bos-status-badge">合并学生 {mergedRows.length}</span>
         <span className="bos-status-badge">本专科 {studentCount}</span>
         <span className="bos-status-badge">家庭成员 {familyCount}</span>
@@ -1051,7 +1136,12 @@ export default function AdminStudentsPage() {
               <button style={styles.secondaryButton} onClick={() => fileInputRef.current?.click()}>选择往年困难生数据库文件</button>
               <span style={styles.fileName}>{historicalFile?.name || "未选择文件"}</span>
             </div>
-            <button style={isImporting ? styles.disabledButton : styles.importButton} disabled={isImporting} onClick={importHistoricalData}>
+            <button
+              style={isImporting || historicalWindowBlocked ? styles.disabledButton : styles.importButton}
+              disabled={isImporting || historicalWindowBlocked}
+              title={historicalWindowBlocked ? historicalRecognitionWindow.message : undefined}
+              onClick={importHistoricalData}
+            >
               {isImporting ? "导入中..." : "开始导入"}
             </button>
           </div>
@@ -1072,7 +1162,12 @@ export default function AdminStudentsPage() {
           </div>
           <div style={styles.modalFooter}>
             <button style={styles.secondaryButton} onClick={() => setShowImportModal(false)}>关闭</button>
-            <button style={isImporting ? styles.disabledButton : styles.importButton} disabled={isImporting} onClick={importHistoricalData}>
+            <button
+              style={isImporting || historicalWindowBlocked ? styles.disabledButton : styles.importButton}
+              disabled={isImporting || historicalWindowBlocked}
+              title={historicalWindowBlocked ? historicalRecognitionWindow.message : undefined}
+              onClick={importHistoricalData}
+            >
               {isImporting ? "导入中..." : "开始导入"}
             </button>
           </div>
@@ -1100,7 +1195,12 @@ export default function AdminStudentsPage() {
           </div>
           <div style={styles.modalFooter}>
             <button style={styles.secondaryButton} onClick={() => setShowRejectModal(false)}>取消</button>
-            <button style={isBulkActionPending ? styles.disabledButton : styles.importButton} disabled={isBulkActionPending} onClick={handleReject}>
+            <button
+              style={isBulkActionPending || recognitionWindowBlocked ? styles.disabledButton : styles.importButton}
+              disabled={isBulkActionPending || recognitionWindowBlocked}
+              title={recognitionWindowBlocked ? recognitionWindow.message : undefined}
+              onClick={handleReject}
+            >
               {isBulkActionPending ? "处理中..." : "确认退回"}
             </button>
           </div>
@@ -1167,6 +1267,49 @@ export default function AdminStudentsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </Modal>
+      )}
+
+      {showRecognitionWindowModal && (
+        <Modal title={`${academicYear} 学年困难生认定时间设置`} onClose={() => setShowRecognitionWindowModal(false)}>
+          <p style={styles.description}>
+            仅学校管理员或中心管理员可配置。配置后，困难生导入、学院确认、学校审核和上报必须同时通过时间窗口与状态守卫。
+          </p>
+          <div style={styles.importGrid}>
+            <label style={styles.yearSelectLabel}>
+              开始日期
+              <input
+                style={styles.yearSelect}
+                type="date"
+                value={recognitionStartDate}
+                onChange={(event) => setRecognitionStartDate(event.target.value)}
+              />
+            </label>
+            <label style={styles.yearSelectLabel}>
+              结束日期
+              <input
+                style={styles.yearSelect}
+                type="date"
+                value={recognitionEndDate}
+                onChange={(event) => setRecognitionEndDate(event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="bos-status-row">
+            <span className={`bos-status-badge${recognitionWindowBlocked ? " is-danger" : " is-success"}`}>
+              当前状态：{recognitionWindow.message}
+            </span>
+          </div>
+          <div style={styles.modalFooter}>
+            <button style={styles.secondaryButton} disabled={isSavingRecognitionWindow} onClick={() => setShowRecognitionWindowModal(false)}>取消</button>
+            <button
+              style={isSavingRecognitionWindow ? styles.disabledButton : styles.importButton}
+              disabled={isSavingRecognitionWindow}
+              onClick={() => void saveRecognitionWindow()}
+            >
+              {isSavingRecognitionWindow ? "保存中..." : "保存时间窗口"}
+            </button>
           </div>
         </Modal>
       )}

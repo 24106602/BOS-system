@@ -33,7 +33,7 @@ test("IndexedDB 和 localStorage 业务降级层使用禁用标记", async () =>
 
 test("迁移为业务表增加软删除并在数据库层阻止物理删除", async () => {
   const migration = await read(
-    "supabase/migrations/20260721122609_soft_delete_business_records.sql"
+    "supabase/migrations/20260721130442_soft_delete_business_records.sql"
   );
   assert.match(migration, /add column if not exists is_deleted boolean not null default false/);
   assert.match(migration, /prevent_business_hard_delete/);
