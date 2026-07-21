@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
-import * as XLSX from "xlsx-js-style";
 import type { UserProfile } from "../../types/auth";
 import { ACADEMIC_YEAR_OPTIONS, getCurrentAcademicYear } from "../../utils/academicYear";
 import {
@@ -24,6 +23,7 @@ import {
   type DifficultyStudentTemplateField,
 } from "../../constants/difficultyStudentTemplate";
 import DifficultyOperationHistory from "../../components/DifficultyOperationHistory";
+import DifficultyExportDialog from "../../components/DifficultyExportDialog";
 import { useDifficultyRecognitionWindow } from "../../hooks/useDifficultyRecognitionWindow";
 
 type CollegeDifficultyStudentsPageProps = {
@@ -32,24 +32,6 @@ type CollegeDifficultyStudentsPageProps = {
 };
 
 const displayStatus = (status: string) => getDifficultyStudentStatusLabel(status);
-
-const normalizeRawKey = (value: string) =>
-  value.replace(/\s|\*|（.*?）|\(.*?\)/g, "").toLowerCase();
-
-const getRawDetail = (row: DifficultyStudentRow, aliases: string[]) => {
-  const rawData = row.raw_data || {};
-  for (const alias of aliases) {
-    const value = rawData[alias];
-    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
-  }
-
-  const normalizedAliases = aliases.map(normalizeRawKey);
-  const matchedKey = Object.keys(rawData).find((key) => {
-    const normalizedKey = normalizeRawKey(key);
-    return normalizedAliases.some((alias) => normalizedKey.includes(alias) || alias.includes(normalizedKey));
-  });
-  return matchedKey ? String(rawData[matchedKey] ?? "").trim() : "";
-};
 
 export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: CollegeDifficultyStudentsPageProps) {
   const [academicYear, setAcademicYear] = useState(getCurrentAcademicYear());
@@ -63,6 +45,7 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
   const [selectedRow, setSelectedRow] = useState<DifficultyStudentRow | null>(null);
   const [detailTab, setDetailTab] = useState<"detail" | "history">("detail");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [showExportModal, setShowExportModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadMessage, setLoadMessage] = useState("");
   const [actionMessage, setActionMessage] = useState("");
@@ -307,29 +290,6 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
     await loadRows();
   };
 
-  const exportCurrentRows = () => {
-    if (filteredRows.length === 0) {
-      alert("当前筛选条件下暂无可导出的困难生明细");
-      return;
-    }
-    const exportRows = filteredRows.map((row) => ({
-      学年: row.academic_year,
-      学院: row.college_name,
-      姓名: row.name,
-      学号: row.student_id,
-      身份证号: row.id_card,
-      年级: getRawDetail(row, ["grade", "年级", "所在年级"]),
-      性别: getRawDetail(row, ["gender", "性别"]),
-      困难等级: row.difficulty_level,
-      状态: displayStatus(row.status),
-    }));
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    worksheet["!cols"] = Object.keys(exportRows[0]).map(() => ({ wch: 18 }));
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "困难生明细");
-    XLSX.writeFile(workbook, `${academicYear}_${collegeName || "学院"}_困难生明细.xlsx`);
-  };
-
   const selectedRows = rows.filter((row) => selectedKeys.has(getRowKey(row)));
   const canDeleteSelected = selectedRows.length > 0 && selectedRows.every((row) =>
     getAvailableActions(row.status, "college").includes("delete")
@@ -381,7 +341,7 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
 
       <div className="bos-action-toolbar">
         <button className="is-primary" onClick={() => void loadRows()} disabled={isLoading}>{isLoading ? "刷新中..." : "刷新数据"}</button>
-        <button className="is-purple" onClick={exportCurrentRows}>导出当前名单</button>
+        <button className="is-purple" onClick={() => setShowExportModal(true)}>导出当前名单</button>
         {canDeleteSelected ? (
           <button className="is-danger" onClick={deleteSelectedRows}>
             删除选中（{selectedKeys.size}）
@@ -495,6 +455,22 @@ export default function CollegeDifficultyStudentsPage({ profile, onNavigate }: C
           <span>共 {filteredRows.length} 条</span>
         </div>
       </section>
+
+      {showExportModal && (
+        <DifficultyExportDialog
+          academicYear={academicYear}
+          filters={{
+            collegeName,
+            name: nameKeyword,
+            studentId: studentIdKeyword,
+            idCard: idCardKeyword,
+            difficultyLevel: difficultyKeyword,
+            status: statusKeyword,
+          }}
+          onClose={() => setShowExportModal(false)}
+          onCompleted={setActionMessage}
+        />
+      )}
 
       {selectedRow && (
         <div className="bos-modal-backdrop">

@@ -37,6 +37,10 @@ import {
   saveDifficultyStudentWithLog,
 } from "../server/difficultyReviewWorkflow.js";
 import {
+  exportDifficultyStudents,
+  getDifficultyExportResponseHeaders,
+} from "../server/difficultyStudentExport.js";
+import {
   disableCounselor,
   disableDepartment,
   importCounselors,
@@ -52,6 +56,14 @@ import {
 
 const DEFAULT_ALLOWED_HEADERS = "Content-Type, Authorization";
 const DEFAULT_ALLOWED_METHODS = "GET, POST, PUT, PATCH, DELETE, OPTIONS";
+const DEFAULT_EXPOSED_HEADERS = [
+  "Content-Disposition",
+  "X-Export-Row-Count",
+  "X-Export-Limit",
+  "X-Export-Offset",
+  "X-Export-Next-Offset",
+  "X-Export-Has-More",
+].join(", ");
 const DEFAULT_MAX_PROMPT_LENGTH = 20000;
 const DIFFICULTY_API_PREFIX = "/api/difficulty-students";
 const BASE_INFO_API_PREFIX = "/api/base-info";
@@ -109,6 +121,7 @@ const getCors = (request, env) => {
       "Access-Control-Allow-Origin": allowAnyOrigin ? "*" : requestOrigin || sameOrigin,
       "Access-Control-Allow-Methods": DEFAULT_ALLOWED_METHODS,
       "Access-Control-Allow-Headers": DEFAULT_ALLOWED_HEADERS,
+      "Access-Control-Expose-Headers": DEFAULT_EXPOSED_HEADERS,
       "Access-Control-Max-Age": "86400",
       Vary: "Origin",
     },
@@ -583,6 +596,17 @@ const handleDifficultyApi = async (request, env) => {
     };
   }
 
+  if (request.method === "POST" && relativePath === "/export") {
+    requireRole(context.profile, ["college", "admin", "center"]);
+    const body = await readJsonBody(request);
+    const result = await exportDifficultyStudents(context.admin, body, context);
+    return {
+      rawBody: result.file,
+      headers: getDifficultyExportResponseHeaders(result),
+      status: 200,
+    };
+  }
+
   if (request.method === "POST" && relativePath === "/batch-submit") {
     return handleBatchSubmit(request, context);
   }
@@ -887,6 +911,12 @@ export default {
       }
 
       if (result.status === 204) return new Response(null, { status: 204, headers: cors.headers });
+      if (result.rawBody !== undefined) {
+        return new Response(result.rawBody, {
+          status: result.status,
+          headers: { ...cors.headers, ...result.headers },
+        });
+      }
       return jsonResponse(result.body, result.status, cors.headers);
     } catch (error) {
       console.error("BOS worker request failed:", error);

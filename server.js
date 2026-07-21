@@ -34,6 +34,14 @@ app.use(
     },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    exposedHeaders: [
+      "Content-Disposition",
+      "X-Export-Row-Count",
+      "X-Export-Limit",
+      "X-Export-Offset",
+      "X-Export-Next-Offset",
+      "X-Export-Has-More",
+    ],
     maxAge: 86400,
   })
 );

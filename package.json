@@ -18,6 +18,7 @@
     "test:review-workflow": "node --experimental-strip-types --test tests/difficultyReviewWorkflow.test.mjs",
     "test:report-integrity": "node --experimental-strip-types --test tests/difficultyReportIntegrity.test.mjs",
     "test:recognition-window": "node --experimental-strip-types --test tests/difficultyRecognitionWindow.test.mjs",
+    "test:export": "node --experimental-strip-types --test tests/difficultyStudentExport.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

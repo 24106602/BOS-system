@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import * as XLSX from "xlsx-js-style";
 import { getMergeBatches } from "../../db/localMergeDb";
 import { isSupabaseConfigured, supabase } from "../../lib/supabaseClient";
 import { readWorkbook } from "../../services/templateParser";
@@ -21,6 +20,7 @@ import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
 import Toolbar from "../../components/ui/Toolbar";
 import DifficultyOperationHistory from "../../components/DifficultyOperationHistory";
+import DifficultyExportDialog from "../../components/DifficultyExportDialog";
 import { rejectStudentRecords } from "../../services/difficultyStudentService";
 import {
   DifficultyStudentApiError,
@@ -422,6 +422,7 @@ export default function AdminStudentsPage() {
   const [loadError, setLoadError] = useState("");
   const [searchFilters, setSearchFilters] = useState<SearchFilters>(emptyFilters);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
   const [selectedRow, setSelectedRow] = useState<MergedDifficultyRow | null>(null);
   const [detailTab, setDetailTab] = useState<"detail" | "history">("detail");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -775,27 +776,6 @@ export default function AdminStudentsPage() {
     void loadCloudStudents();
   };
 
-  const exportCurrentYearDatabase = () => {
-    if (filteredRows.length === 0) {
-      alert("暂无当前学年困难生数据库可导出");
-      return;
-    }
-
-    const exportRows = filteredRows.map((row) => ({
-      学年: row.academicYear || academicYear,
-      学院: row.collegeName,
-      状态: row.status,
-      ...Object.fromEntries(
-        DIFFICULTY_STUDENT_TEMPLATE_FIELDS.map((field) => [field, getTemplateCell(row, field)])
-      ),
-    }));
-    const worksheet = XLSX.utils.json_to_sheet(exportRows);
-    worksheet["!cols"] = Object.keys(exportRows[0]).map(() => ({ wch: 18 }));
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, `${academicYear}困难生数据库`);
-    XLSX.writeFile(workbook, `${academicYear}困难生数据库.xlsx`);
-  };
-
   const pushImportLog = (message: string) => {
     setImportLogs((current) => [`[${new Date().toLocaleTimeString()}] ${message}`, ...current].slice(0, 80));
   };
@@ -985,7 +965,7 @@ export default function AdminStudentsPage() {
         <button onClick={() => void loadDisabledStudents()} disabled={isLoadingDisabled}>
           {isLoadingDisabled ? "读取中..." : "查看已禁用记录"}
         </button>
-        <button className="is-purple" onClick={exportCurrentYearDatabase}>导出当前名单</button>
+        <button className="is-purple" onClick={() => setShowExportModal(true)}>导出当前名单</button>
         {canPerformSelectedAction("start_review") && (
           <button className="is-primary" disabled={isBulkActionPending || recognitionWindowBlocked} title={recognitionWindowBlocked ? recognitionWindow.message : undefined} onClick={() => void handleSelectedAction("start_review")}>
             开始审核（{selectedRows.length}）
@@ -1106,6 +1086,15 @@ export default function AdminStudentsPage() {
           <span>共 {filteredRows.length} 条 · Supabase 云端 {cloudStudents.length} 条</span>
         </div>
       </section>
+
+      {showExportModal && (
+        <DifficultyExportDialog
+          academicYear={academicYear}
+          filters={searchFilters}
+          onClose={() => setShowExportModal(false)}
+          onCompleted={setActionMessage}
+        />
+      )}
 
       {showImportModal && (
         <Modal title="往年困难生数据导入" onClose={() => setShowImportModal(false)}>

@@ -37,6 +37,10 @@ import {
   resolveResubmitTransition,
   saveDifficultyStudentWithLog,
 } from "./difficultyReviewWorkflow.js";
+import {
+  exportDifficultyStudents,
+  getDifficultyExportResponseHeaders,
+} from "./difficultyStudentExport.js";
 
 const EDITABLE_FIELDS = [
   "academic_year",
@@ -291,6 +295,23 @@ export const createDifficultyStudentRouter = () => {
         secret: getImportTokenSecret(),
       });
       res.json(result);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/export", async (req, res, next) => {
+    try {
+      const { admin, profile } = req.difficultyContext;
+      requireRole(profile, ["college", "admin", "center"]);
+      const result = await exportDifficultyStudents(
+        admin,
+        req.body || {},
+        req.difficultyContext
+      );
+      Object.entries(getDifficultyExportResponseHeaders(result))
+        .forEach(([name, value]) => res.setHeader(name, value));
+      res.status(200).send(Buffer.from(result.file));
     } catch (error) {
       next(error);
     }

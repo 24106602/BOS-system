@@ -81,14 +81,58 @@ export type DifficultyOperationLog = {
   created_at: string;
 };
 
+export type DifficultyExportFormat = "xlsx" | "csv";
+
+export type DifficultyExportFilters = {
+  collegeName?: string;
+  name?: string;
+  studentId?: string;
+  idCard?: string;
+  grade?: string;
+  gender?: string;
+  difficultyLevel?: string;
+  status?: string;
+};
+
+export type DifficultyExportRequest = {
+  academicYear: string;
+  columns: string[];
+  includeSensitive: boolean;
+  limit: number;
+  offset: number;
+  format: DifficultyExportFormat;
+  filters?: DifficultyExportFilters;
+};
+
+export type DifficultyExportResult = {
+  blob: Blob;
+  fileName: string;
+  rowCount: number;
+  limit: number;
+  offset: number;
+  nextOffset: number;
+  hasMore: boolean;
+};
+
+const getDifficultyAccessToken = async () => {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) {
+    throw new DifficultyStudentApiError(
+      "登录状态已失效，请重新登录",
+      401,
+      "UNAUTHENTICATED"
+    );
+  }
+  return accessToken;
+};
+
 const requestDifficultyApi = async <T>(
   path: string,
   method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   body?: unknown
 ): Promise<T> => {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
-  if (!accessToken) throw new DifficultyStudentApiError("登录状态已失效，请重新登录", 401, "UNAUTHENTICATED");
+  const accessToken = await getDifficultyAccessToken();
 
   const response = await fetch(`${DIFFICULTY_API_URL}${path}`, {
     method,
@@ -115,6 +159,55 @@ const requestDifficultyApi = async <T>(
     );
   }
   return payload as T;
+};
+
+const parseDownloadFileName = (contentDisposition: string | null, format: DifficultyExportFormat) => {
+  const encodedName = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+  if (encodedName) {
+    try {
+      return decodeURIComponent(encodedName);
+    } catch {
+      return encodedName;
+    }
+  }
+  return `困难生名单.${format}`;
+};
+
+export const exportDifficultyStudents = async (
+  input: DifficultyExportRequest
+): Promise<DifficultyExportResult> => {
+  const accessToken = await getDifficultyAccessToken();
+  const response = await fetch(`${DIFFICULTY_API_URL}/export`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({})) as {
+      message?: string;
+      error?: string;
+      code?: string;
+    };
+    throw new DifficultyStudentApiError(
+      payload.message || payload.error || `困难生导出失败（HTTP ${response.status}）`,
+      response.status,
+      payload.code || "DIFFICULTY_EXPORT_ERROR"
+    );
+  }
+
+  return {
+    blob: await response.blob(),
+    fileName: parseDownloadFileName(response.headers.get("Content-Disposition"), input.format),
+    rowCount: Number(response.headers.get("X-Export-Row-Count") || 0),
+    limit: Number(response.headers.get("X-Export-Limit") || input.limit),
+    offset: Number(response.headers.get("X-Export-Offset") || input.offset),
+    nextOffset: Number(response.headers.get("X-Export-Next-Offset") || input.offset),
+    hasMore: response.headers.get("X-Export-Has-More") === "true",
+  };
 };
 
 export type DifficultyBatchSubmitResult = {
