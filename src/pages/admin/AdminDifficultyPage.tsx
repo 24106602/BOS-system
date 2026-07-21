@@ -35,6 +35,14 @@ export default function AdminDifficultyPage({ onNavigate }: AdminDifficultyPageP
       color: "#67c23a",
     },
     {
+      icon: "审",
+      title: "困难生审核与上报",
+      desc: "学校审核、退回、上报与认定时间设置",
+      count: studentCount,
+      path: "/admin/students",
+      color: "#8b5cf6",
+    },
+    {
       icon: "库",
       title: "困难生数据库",
       desc: "合并后的困难生明细数据",

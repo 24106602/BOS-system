@@ -12,6 +12,7 @@ import AdminDifficultyPage from "./pages/admin/AdminDifficultyPage";
 import AdminStudentInfoPage from "./pages/admin/AdminStudentInfoPage";
 import AdminFamilyInfoPage from "./pages/admin/AdminFamilyInfoPage";
 import AdminDifficultyGuidePage from "./pages/admin/AdminDifficultyGuidePage";
+import AdminStudentsPage from "./pages/admin/AdminStudentsPage";
 import AdminGrantPage from "./pages/admin/AdminGrantPage";
 import AdminGrantDatabasePage from "./pages/admin/AdminGrantDatabasePage";
 import AdminAnnouncementPage from "./pages/admin/AdminAnnouncementPage";
@@ -56,6 +57,7 @@ const normalizePath = (path: string) => {
     "/admin/awards/inspirational",
     "/admin/awards/shanghai",
     "/admin/difficulty",
+    "/admin/students",
     "/admin/difficulty/student",
     "/admin/difficulty/family",
     "/admin/difficulty/database",
@@ -93,6 +95,7 @@ const pageTitles: Record<string, string> = {
   "/admin/awards/inspirational": "国家励志奖学金汇总",
   "/admin/awards/shanghai": "上海市奖学金汇总",
   "/admin/difficulty": "困难生业务",
+  "/admin/students": "困难生审核与上报",
   "/admin/difficulty/database": "困难生数据库",
   "/admin/difficulty/enrolled": "在校生数据库",
   "/admin/enrolled": "在校生数据库",
@@ -123,6 +126,7 @@ const pageIcons: Record<string, string> = {
   "/admin/awards/inspirational": "励",
   "/admin/awards/shanghai": "沪",
   "/admin/difficulty": "困",
+  "/admin/students": "审",
   "/admin/difficulty/database": "库",
   "/admin/difficulty/enrolled": "在",
   "/admin/enrolled": "在",
@@ -270,6 +274,8 @@ function AppContent() {
           <AdminShanghaiScholarshipPage />
         ) : pagePath === "/admin/difficulty" ? (
           <AdminDifficultyPage onNavigate={navigate} />
+        ) : pagePath === "/admin/students" ? (
+          <AdminStudentsPage />
         ) : pagePath === "/admin/difficulty/student" ? (
           <AdminStudentInfoPage onNavigate={navigate} />
         ) : pagePath === "/admin/difficulty/family" ? (
