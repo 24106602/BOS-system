@@ -13,6 +13,7 @@
     "test:import-constraints": "node --experimental-strip-types --test tests/difficultyImportValidation.test.mjs",
     "test:two-step-import": "node --experimental-strip-types --test tests/difficultyTwoStepImport.test.mjs",
     "test:base-info": "node --experimental-strip-types --test tests/baseInfoImmutability.test.mjs",
+    "test:soft-delete": "node --experimental-strip-types --test tests/softDeleteBusinessData.test.mjs",
     "test:operation-log": "node --experimental-strip-types --test tests/difficultyOperationLog.test.mjs",
     "test:review-workflow": "node --experimental-strip-types --test tests/difficultyReviewWorkflow.test.mjs",
     "test:report-integrity": "node --experimental-strip-types --test tests/difficultyReportIntegrity.test.mjs",

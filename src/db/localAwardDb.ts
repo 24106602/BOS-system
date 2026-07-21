@@ -16,7 +16,7 @@ import {
 
 // ---- 本地存储降级（与原有 localStorage 逻辑兼容）----
 
-const getLocalSubmissions = (awardType: AwardType): AwardSubmission[] => {
+const readLocalSubmissions = (awardType: AwardType): AwardSubmission[] => {
   try {
     const stored = JSON.parse(localStorage.getItem(awardStorageKeys[awardType]) || "[]");
     return stored.map((s: Partial<AwardSubmission>) => normalizeSubmission(s, awardType));
@@ -24,6 +24,9 @@ const getLocalSubmissions = (awardType: AwardType): AwardSubmission[] => {
     return [];
   }
 };
+
+const getLocalSubmissions = (awardType: AwardType): AwardSubmission[] =>
+  readLocalSubmissions(awardType).filter((submission) => !submission.isDeleted);
 
 const setLocalSubmissions = (awardType: AwardType, submissions: AwardSubmission[]) => {
   localStorage.setItem(awardStorageKeys[awardType], JSON.stringify(submissions));
@@ -51,6 +54,8 @@ const normalizeSubmission = (
     awardTypeCounts: submission.awardTypeCounts || {},
     fields,
     rows,
+    isDeleted: submission.isDeleted === true,
+    deletedAt: submission.deletedAt,
   };
 };
 
@@ -94,21 +99,25 @@ export async function saveAwardSubmission(
   }
 
   // 本地降级
-  const submissions = getLocalSubmissions(awardType);
+  const submissions = readLocalSubmissions(awardType);
   const normalized = normalizeSubmission({
     ...submission,
     awardType,
     collegeName: normalizeSubmissionCollegeName(submission.collegeName),
+    isDeleted: false,
+    deletedAt: undefined,
   });
-  const duplicateIndex = submissions.findIndex(
-    (item) =>
-      item.academicYear === normalized.academicYear &&
-      item.collegeName === normalized.collegeName
-  );
-  const nextSubmissions =
-    duplicateIndex >= 0
-      ? submissions.map((item, index) => (index === duplicateIndex ? normalized : item))
-      : [...submissions, normalized];
+  const deletedAt = new Date().toISOString();
+  const nextSubmissions = [
+    ...submissions.map((item) =>
+      !item.isDeleted
+      && item.academicYear === normalized.academicYear
+      && item.collegeName === normalized.collegeName
+        ? { ...item, isDeleted: true, deletedAt }
+        : item
+    ),
+    normalized,
+  ];
   setLocalSubmissions(awardType, nextSubmissions);
 }
 
@@ -124,8 +133,12 @@ export async function deleteAwardSubmission(id: string): Promise<void> {
 
   // 本地降级
   (["national", "inspirational", "shanghai"] as AwardType[]).forEach((awardType) => {
-    const submissions = getLocalSubmissions(awardType);
-    const next = submissions.filter((s) => s.id !== id);
+    const submissions = readLocalSubmissions(awardType);
+    const next = submissions.map((submission) =>
+      submission.id === id
+        ? { ...submission, isDeleted: true, deletedAt: new Date().toISOString() }
+        : submission
+    );
     setLocalSubmissions(awardType, next);
   });
 }
@@ -141,6 +154,12 @@ export async function clearAwardSubmissions(): Promise<void> {
 
   // 本地降级
   (["national", "inspirational", "shanghai"] as AwardType[]).forEach((awardType) => {
-    localStorage.removeItem(awardStorageKeys[awardType]);
+    const deletedAt = new Date().toISOString();
+    const submissions = readLocalSubmissions(awardType).map((submission) => ({
+      ...submission,
+      isDeleted: true,
+      deletedAt,
+    }));
+    setLocalSubmissions(awardType, submissions);
   });
 }

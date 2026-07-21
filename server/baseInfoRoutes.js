@@ -8,6 +8,9 @@ import {
   importDepartments,
   listCounselors,
   listDepartments,
+  renameDepartment,
+  restoreCounselor,
+  restoreDepartment,
   updateCounselor,
   updateDepartment,
 } from "./baseInfoService.js";
@@ -59,7 +62,11 @@ export const createBaseInfoRouter = () => {
   router.get("/departments", async (req, res, next) => {
     try {
       const { admin, profile } = req.baseInfoContext;
-      res.json({ data: await listDepartments(admin, profile) });
+      res.json({
+        data: await listDepartments(admin, profile, {
+          includeDisabled: req.query.includeDisabled === "true",
+        }),
+      });
     } catch (error) {
       next(error);
     }
@@ -93,10 +100,32 @@ export const createBaseInfoRouter = () => {
     }
   });
 
+  router.post("/departments/:id/restore", async (req, res, next) => {
+    try {
+      const { admin, profile } = req.baseInfoContext;
+      res.json({ data: await restoreDepartment(admin, profile, req.params.id) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/departments/:id/rename", async (req, res, next) => {
+    try {
+      const { admin, profile } = req.baseInfoContext;
+      res.json({ data: await renameDepartment(admin, profile, req.params.id, req.body || {}) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.get("/counselors", async (req, res, next) => {
     try {
       const { admin, profile } = req.baseInfoContext;
-      res.json({ data: await listCounselors(admin, profile) });
+      res.json({
+        data: await listCounselors(admin, profile, {
+          includeDisabled: req.query.includeDisabled === "true",
+        }),
+      });
     } catch (error) {
       next(error);
     }
@@ -125,6 +154,15 @@ export const createBaseInfoRouter = () => {
       const { admin, profile } = req.baseInfoContext;
       await disableCounselor(admin, profile, req.params.id);
       res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/counselors/:id/restore", async (req, res, next) => {
+    try {
+      const { admin, profile } = req.baseInfoContext;
+      res.json({ data: await restoreCounselor(admin, profile, req.params.id) });
     } catch (error) {
       next(error);
     }

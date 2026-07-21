@@ -87,8 +87,9 @@ const requestBaseInfoApi = async <T>(
   return payload as T;
 };
 
-export const listDepartments = async () => {
-  const result = await requestBaseInfoApi<{ data: DepartmentInfo[] }>("/departments", "GET");
+export const listDepartments = async (includeDisabled = false) => {
+  const query = includeDisabled ? "?includeDisabled=true" : "";
+  const result = await requestBaseInfoApi<{ data: DepartmentInfo[] }>(`/departments${query}`, "GET");
   return result.data;
 };
 
@@ -98,11 +99,22 @@ export const updateDepartment = (id: string, changes: Partial<DepartmentInfo>) =
 export const disableDepartment = (id: string) =>
   requestBaseInfoApi<void>(`/departments/${encodeURIComponent(id)}`, "DELETE");
 
+export const restoreDepartment = (id: string) =>
+  requestBaseInfoApi<{ data: DepartmentInfo }>(`/departments/${encodeURIComponent(id)}/restore`, "POST");
+
+export const renameDepartment = (id: string, departmentName: string) =>
+  requestBaseInfoApi<{ data: DepartmentInfo }>(
+    `/departments/${encodeURIComponent(id)}/rename`,
+    "POST",
+    { department_name: departmentName }
+  );
+
 export const importDepartments = (rows: Array<Partial<DepartmentInfo>>) =>
   requestBaseInfoApi<BaseInfoImportResult>("/departments/import", "POST", { rows });
 
-export const listCounselors = async () => {
-  const result = await requestBaseInfoApi<{ data: CounselorInfo[] }>("/counselors", "GET");
+export const listCounselors = async (includeDisabled = false) => {
+  const query = includeDisabled ? "?includeDisabled=true" : "";
+  const result = await requestBaseInfoApi<{ data: CounselorInfo[] }>(`/counselors${query}`, "GET");
   return result.data;
 };
 
@@ -111,6 +123,9 @@ export const updateCounselor = (id: string, changes: Partial<CounselorInfo>) =>
 
 export const disableCounselor = (id: string) =>
   requestBaseInfoApi<void>(`/counselors/${encodeURIComponent(id)}`, "DELETE");
+
+export const restoreCounselor = (id: string) =>
+  requestBaseInfoApi<{ data: CounselorInfo }>(`/counselors/${encodeURIComponent(id)}/restore`, "POST");
 
 export const importCounselors = (rows: Array<Partial<CounselorInfo>>) =>
   requestBaseInfoApi<BaseInfoImportResult>("/counselors/import", "POST", { rows });

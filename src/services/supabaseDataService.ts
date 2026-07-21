@@ -19,6 +19,7 @@ export async function fetchEnrolledStudents(): Promise<EnrolledStudentRecord[]> 
   const { data, error } = await supabase
     .from("enrolled_students")
     .select("*")
+    .eq("is_deleted", false)
     .order("student_id", { ascending: true });
   if (error) throw new Error(error.message);
   return (data || []).map(mapEnrolledRow);
@@ -29,11 +30,11 @@ export async function saveEnrolledStudentsToCloud(
 ): Promise<number> {
   if (!isSupabaseConfigured) return 0;
 
-  // 先清空再批量插入
+  // 全量替换改为“禁用旧记录 + upsert 新记录”，保留历史数据。
   const { error: delError } = await supabase
     .from("enrolled_students")
-    .delete()
-    .neq("id", "00000000-0000-0000-0000-000000000000"); // 删除所有行
+    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+    .eq("is_deleted", false);
   if (delError) throw new Error(delError.message);
 
   const rows = students.map((s) => ({
@@ -48,9 +49,14 @@ export async function saveEnrolledStudentsToCloud(
     grade: s.grade || null,
     academic_year: s.academicYear || null,
     source_file: s.sourceFile || null,
+    is_deleted: false,
+    deleted_at: null,
+    deleted_by: null,
   }));
 
-  const { error } = await supabase.from("enrolled_students").insert(rows);
+  const { error } = await supabase
+    .from("enrolled_students")
+    .upsert(rows, { onConflict: "student_id" });
   if (error) throw new Error(error.message);
   return rows.length;
 }
@@ -63,11 +69,13 @@ export async function addEnrolledStudentsToCloud(
   // 获取已有学号集合
   const { data: existing } = await supabase
     .from("enrolled_students")
-    .select("student_id");
-  const existingIds = new Set((existing || []).map((r) => r.student_id));
+    .select("student_id,is_deleted");
+  const activeIds = new Set(
+    (existing || []).filter((row) => row.is_deleted !== true).map((row) => row.student_id)
+  );
 
   const rows = newStudents
-    .filter((s) => !existingIds.has(s.studentId))
+    .filter((s) => !activeIds.has(s.studentId))
     .map((s) => ({
       student_id: s.studentId,
       name: s.name,
@@ -80,10 +88,15 @@ export async function addEnrolledStudentsToCloud(
       grade: s.grade || null,
       academic_year: s.academicYear || null,
       source_file: s.sourceFile || null,
+      is_deleted: false,
+      deleted_at: null,
+      deleted_by: null,
     }));
 
   if (rows.length === 0) return 0;
-  const { error } = await supabase.from("enrolled_students").insert(rows);
+  const { error } = await supabase
+    .from("enrolled_students")
+    .upsert(rows, { onConflict: "student_id" });
   if (error) throw new Error(error.message);
   return rows.length;
 }
@@ -92,8 +105,8 @@ export async function clearEnrolledStudentsFromCloud(): Promise<void> {
   if (!isSupabaseConfigured) return;
   const { error } = await supabase
     .from("enrolled_students")
-    .delete()
-    .neq("id", "00000000-0000-0000-0000-000000000000");
+    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+    .eq("is_deleted", false);
   if (error) throw new Error(error.message);
 }
 
@@ -112,6 +125,7 @@ export async function verifyEnrolledStudentFromCloud(
       .from("enrolled_students")
       .select("name")
       .eq("student_id", studentId)
+      .eq("is_deleted", false)
       .maybeSingle();
     if (data) {
       if (data.name === name) return { verified: true };
@@ -125,6 +139,7 @@ export async function verifyEnrolledStudentFromCloud(
       .from("enrolled_students")
       .select("name")
       .eq("id_card", idCard)
+      .eq("is_deleted", false)
       .maybeSingle();
     if (data) {
       if (data.name === name) return { verified: true };
@@ -147,6 +162,7 @@ export async function fetchHardshipStudents(): Promise<StudentRecord[]> {
   const { data, error } = await supabase
     .from("hardship_students")
     .select("*")
+    .eq("is_deleted", false)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return (data || []).map(mapHardshipRow);
@@ -157,11 +173,11 @@ export async function saveHardshipStudentsToCloud(
 ): Promise<number> {
   if (!isSupabaseConfigured) return 0;
 
-  // 清空再插入
+  // 全量替换保留旧记录，仅将其标记为已禁用。
   const { error: delError } = await supabase
     .from("hardship_students")
-    .delete()
-    .neq("id", "00000000-0000-0000-0000-000000000000");
+    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+    .eq("is_deleted", false);
   if (delError) throw new Error(delError.message);
 
   const rows = students.map((s) => ({
@@ -178,9 +194,14 @@ export async function saveHardshipStudentsToCloud(
     remark: s.remark || null,
     source_file: s.sourceFile || null,
     imported_at: s.importedAt || null,
+    is_deleted: false,
+    deleted_at: null,
+    deleted_by: null,
   }));
 
-  const { error } = await supabase.from("hardship_students").insert(rows);
+  const { error } = await supabase
+    .from("hardship_students")
+    .upsert(rows, { onConflict: "key" });
   if (error) throw new Error(error.message);
   return rows.length;
 }
@@ -205,6 +226,9 @@ export async function mergeHardshipStudentsToCloud(
     remark: s.remark || null,
     source_file: s.sourceFile || null,
     imported_at: s.importedAt || null,
+    is_deleted: false,
+    deleted_at: null,
+    deleted_by: null,
   }));
 
   const { error } = await supabase
@@ -218,8 +242,8 @@ export async function clearHardshipStudentsFromCloud(): Promise<void> {
   if (!isSupabaseConfigured) return;
   const { error } = await supabase
     .from("hardship_students")
-    .delete()
-    .neq("id", "00000000-0000-0000-0000-000000000000");
+    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+    .eq("is_deleted", false);
   if (error) throw new Error(error.message);
 }
 
@@ -234,6 +258,7 @@ export async function findHardshipStudentFromCloud(
   const { data } = await supabase
     .from("hardship_students")
     .select("*")
+    .eq("is_deleted", false)
     .or(`student_id.eq.${text},id_card.eq.${text},name.eq.${text}`)
     .limit(1)
     .maybeSingle();
@@ -243,6 +268,7 @@ export async function findHardshipStudentFromCloud(
   const { data: fuzzy } = await supabase
     .from("hardship_students")
     .select("*")
+    .eq("is_deleted", false)
     .or(`name.ilike.%${text},student_id.ilike.%${text},id_card.ilike.%${text}`)
     .limit(1)
     .maybeSingle();
@@ -253,13 +279,15 @@ export async function findHardshipStudentFromCloud(
 // 3. 学院提交批次
 // ============================================================
 
-export async function fetchCollegeBatches(): Promise<CollegeProcessedBatch[]> {
+export async function fetchCollegeBatches(includeDeleted = false): Promise<CollegeProcessedBatch[]> {
   if (!isSupabaseConfigured) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("college_batches")
     .select("*, batch_rows(*)")
     .order("created_at", { ascending: true });
+  if (!includeDeleted) query = query.eq("is_deleted", false);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
 
   return (data || []).map(mapBatchWithRows);
@@ -283,6 +311,9 @@ export async function saveCollegeBatchToCloud(
         academic_year: academicYear,
         row_count: batch.rowCount,
         status: "uploaded",
+        is_deleted: false,
+        deleted_at: null,
+        deleted_by: null,
       },
       { onConflict: "college_name,data_type,academic_year" }
     )
@@ -292,14 +323,20 @@ export async function saveCollegeBatchToCloud(
   if (batchError) throw new Error(batchError.message);
   const batchId = batchData.id;
 
-  // 删除旧的明细行
-  await supabase.from("batch_rows").delete().eq("batch_id", batchId);
+  // 旧明细保留为禁用，新明细单独写入，便于追溯覆盖历史。
+  const { error: disableRowsError } = await supabase
+    .from("batch_rows")
+    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+    .eq("batch_id", batchId)
+    .eq("is_deleted", false);
+  if (disableRowsError) throw new Error(disableRowsError.message);
 
   // 插入新的明细行
   const rows = (batch.rows || []).map((row, index) => ({
     batch_id: batchId,
     row_data: row,
     row_index: index,
+    is_deleted: false,
   }));
 
   if (rows.length > 0) {
@@ -314,23 +351,34 @@ export async function deleteCollegeBatchFromCloud(
   id: string
 ): Promise<void> {
   if (!isSupabaseConfigured) return;
-  const { error } = await supabase.from("college_batches").delete().eq("id", id);
+  const deletedAt = new Date().toISOString();
+  const { error } = await supabase
+    .from("college_batches")
+    .update({ is_deleted: true, deleted_at: deletedAt })
+    .eq("id", id)
+    .eq("is_deleted", false);
   if (error) throw new Error(error.message);
 }
 
 export async function clearCollegeBatchesFromCloud(): Promise<void> {
   if (!isSupabaseConfigured) return;
-  // 先删明细，再删批次
-  const { error: rowsError } = await supabase
-    .from("batch_rows")
-    .delete()
-    .neq("id", "00000000-0000-0000-0000-000000000000");
-  if (rowsError) throw new Error(rowsError.message);
+  // 父批次禁用后默认查询不可见；明细继续保留，恢复批次时可直接复用。
+  const deletedAt = new Date().toISOString();
   const { error: batchError } = await supabase
     .from("college_batches")
-    .delete()
-    .neq("id", "00000000-0000-0000-0000-000000000000");
+    .update({ is_deleted: true, deleted_at: deletedAt })
+    .eq("is_deleted", false);
   if (batchError) throw new Error(batchError.message);
+}
+
+export async function restoreCollegeBatchFromCloud(id: string): Promise<void> {
+  if (!isSupabaseConfigured) return;
+  const { error } = await supabase
+    .from("college_batches")
+    .update({ is_deleted: false, deleted_at: null, deleted_by: null })
+    .eq("id", id)
+    .eq("is_deleted", true);
+  if (error) throw new Error(error.message);
 }
 
 // ============================================================
@@ -378,6 +426,7 @@ function mapBatchWithRows(
   const batchRows = (batch.batch_rows || []) as Record<string, unknown>[];
   const academicYear = String(batch.academic_year || "");
   const rows = batchRows
+    .filter((row) => row.is_deleted !== true)
     .sort((a, b) => Number(a.row_index) - Number(b.row_index))
     .map((r) => (r.row_data || {}) as Record<string, unknown>);
 
@@ -389,5 +438,7 @@ function mapBatchWithRows(
     rowCount: Number(batch.row_count ?? 0),
     createdAt: String(batch.created_at ?? ""),
     rows: withAcademicYear(rows, academicYear),
+    isDeleted: batch.is_deleted === true,
+    deletedAt: batch.deleted_at ? String(batch.deleted_at) : undefined,
   };
 }

@@ -8,6 +8,8 @@ export type CollegeProcessedBatch = {
   rowCount: number;
   createdAt: string;
   rows: Record<string, unknown>[];
+  isDeleted?: boolean;
+  deletedAt?: string;
 };
 
 export type MergeResult = {

@@ -17,6 +17,7 @@ export async function fetchAwardSubmissions(
   let query = supabase
     .from("award_batches")
     .select("*, award_batch_rows(*)")
+    .eq("is_deleted", false)
     .order("created_at", { ascending: true });
 
   if (awardType) {
@@ -54,6 +55,9 @@ export async function saveAwardSubmissionToCloud(
         row_count: submission.rowCount,
         review_status: submission.reviewStatus,
         submit_status: submission.submitStatus,
+        is_deleted: false,
+        deleted_at: null,
+        deleted_by: null,
       },
       { onConflict: "college_name,award_type,academic_year" }
     )
@@ -63,14 +67,20 @@ export async function saveAwardSubmissionToCloud(
   if (batchError) throw new Error(batchError.message);
   const batchId = batchData.id;
 
-  // 删除旧的明细行
-  await supabase.from("award_batch_rows").delete().eq("batch_id", batchId);
+  // 禁用旧明细后写入新明细，保留每次上载的历史行。
+  const { error: disableRowsError } = await supabase
+    .from("award_batch_rows")
+    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+    .eq("batch_id", batchId)
+    .eq("is_deleted", false);
+  if (disableRowsError) throw new Error(disableRowsError.message);
 
   // 插入新的明细行
   const rows = (submission.rows || []).map((row, index) => ({
     batch_id: batchId,
     row_data: row,
     row_index: index,
+    is_deleted: false,
   }));
 
   if (rows.length > 0) {
@@ -89,21 +99,22 @@ export async function deleteAwardSubmissionFromCloud(
   id: string
 ): Promise<void> {
   if (!isSupabaseConfigured) return;
-  const { error } = await supabase.from("award_batches").delete().eq("id", id);
+  const deletedAt = new Date().toISOString();
+  const { error } = await supabase
+    .from("award_batches")
+    .update({ is_deleted: true, deleted_at: deletedAt })
+    .eq("id", id)
+    .eq("is_deleted", false);
   if (error) throw new Error(error.message);
 }
 
 export async function clearAwardSubmissionsFromCloud(): Promise<void> {
   if (!isSupabaseConfigured) return;
-  const { error: rowsError } = await supabase
-    .from("award_batch_rows")
-    .delete()
-    .neq("id", "00000000-0000-0000-0000-000000000000");
-  if (rowsError) throw new Error(rowsError.message);
+  const deletedAt = new Date().toISOString();
   const { error: batchError } = await supabase
     .from("award_batches")
-    .delete()
-    .neq("id", "00000000-0000-0000-0000-000000000000");
+    .update({ is_deleted: true, deleted_at: deletedAt })
+    .eq("is_deleted", false);
   if (batchError) throw new Error(batchError.message);
 }
 
@@ -114,6 +125,7 @@ export async function clearAwardSubmissionsFromCloud(): Promise<void> {
 function mapBatchWithRows(batch: Record<string, unknown>): AwardSubmission {
   const batchRows = (batch.award_batch_rows || []) as Record<string, unknown>[];
   const rows = batchRows
+    .filter((row) => row.is_deleted !== true)
     .sort((a, b) => Number(a.row_index) - Number(b.row_index))
     .map((r) => (r.row_data || {}) as Record<string, unknown>);
 

@@ -372,7 +372,7 @@ export default function EnrolledStudentDatabasePage() {
   };
 
   const handleClear = async () => {
-    if (!confirm("确定要清空当前学年的在校生数据吗？此操作不可撤销。")) return;
+    if (!confirm("确定要禁用当前学年的在校生数据吗？历史记录将保留。")) return;
     await clearEnrolledStudents();
     setStudents([]);
     setImportStatus("");

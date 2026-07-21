@@ -11,6 +11,7 @@ import {
   saveCollegeBatchToCloud,
   deleteCollegeBatchFromCloud,
   clearCollegeBatchesFromCloud,
+  restoreCollegeBatchFromCloud,
 } from "../services/supabaseDataService";
 
 // ---- 本地存储降级 ----
@@ -26,8 +27,21 @@ const normalizeBatch = (batch: CollegeProcessedBatch): CollegeProcessedBatch => 
     academic_year: academicYear,
     collegeName: normalizeSubmissionCollegeName(batch.collegeName),
     rows: withAcademicYear(batch.rows || [], academicYear),
+    isDeleted: batch.isDeleted === true,
+    deletedAt: batch.deletedAt,
   };
 };
+
+const disableBatch = (batch: CollegeProcessedBatch, deletedAt = new Date().toISOString()) => ({
+  ...normalizeBatch(batch),
+  isDeleted: true,
+  deletedAt,
+});
+
+const archiveReplacedBatch = (batch: CollegeProcessedBatch, deletedAt: string) => ({
+  ...disableBatch(batch, deletedAt),
+  id: `${batch.id}__disabled__${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+});
 
 const isSameYearScope = (left: CollegeProcessedBatch, right: CollegeProcessedBatch) =>
   normalizeSubmissionCollegeName(left.collegeName) === normalizeSubmissionCollegeName(right.collegeName) &&
@@ -61,7 +75,8 @@ async function saveToLocalStorage(batches: CollegeProcessedBatch[]) {
 }
 
 async function saveMergeBatchLocal(batch: CollegeProcessedBatch) {
-  const normalizedBatch = normalizeBatch(batch);
+  const normalizedBatch = { ...normalizeBatch(batch), isDeleted: false, deletedAt: undefined };
+  const deletedAt = new Date().toISOString();
   try {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
@@ -72,7 +87,11 @@ async function saveMergeBatchLocal(batch: CollegeProcessedBatch) {
         (request.result || [])
           .map(normalizeBatch)
           .filter((item) => item.id !== normalizedBatch.id && isSameYearScope(item, normalizedBatch))
-          .forEach((item) => store.delete(item.id));
+          .forEach((item) => store.put(disableBatch(item, deletedAt)));
+        const sameId = (request.result || [])
+          .map(normalizeBatch)
+          .find((item) => item.id === normalizedBatch.id && !item.isDeleted);
+        if (sameId) store.put(archiveReplacedBatch(sameId, deletedAt));
         store.put(normalizedBatch);
       };
       tx.oncomplete = () => resolve();
@@ -81,24 +100,58 @@ async function saveMergeBatchLocal(batch: CollegeProcessedBatch) {
   } catch {
     const batches = await getFromLocalStorage();
     const next = [
-      ...batches.filter((item) => item.id !== normalizedBatch.id && !isSameYearScope(item, normalizedBatch)),
+      ...batches.map((item) => {
+        if (item.id === normalizedBatch.id && !item.isDeleted) {
+          return archiveReplacedBatch(item, deletedAt);
+        }
+        return isSameYearScope(item, normalizedBatch) && !item.isDeleted
+          ? disableBatch(item, deletedAt)
+          : item;
+      }),
       normalizedBatch,
     ];
     await saveToLocalStorage(next);
   }
 }
 
-async function getMergeBatchesLocal(): Promise<CollegeProcessedBatch[]> {
+async function getMergeBatchesLocal(includeDeleted = false): Promise<CollegeProcessedBatch[]> {
   try {
     const db = await openDb();
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readonly");
       const request = tx.objectStore(STORE_NAME).getAll();
-      request.onsuccess = () => resolve((request.result || []).map(normalizeBatch));
+      request.onsuccess = () => resolve(
+        (request.result || [])
+          .map(normalizeBatch)
+          .filter((item) => includeDeleted || !item.isDeleted)
+      );
       request.onerror = () => reject(request.error);
     });
   } catch {
-    return getFromLocalStorage();
+    return (await getFromLocalStorage()).filter((item) => includeDeleted || !item.isDeleted);
+  }
+}
+
+async function restoreMergeBatchLocal(id: string) {
+  try {
+    const db = await openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(STORE_NAME, "readwrite");
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.get(id);
+      request.onsuccess = () => {
+        if (request.result) {
+          store.put({ ...normalizeBatch(request.result), isDeleted: false, deletedAt: undefined });
+        }
+      };
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch {
+    const batches = await getFromLocalStorage();
+    await saveToLocalStorage(batches.map((item) =>
+      item.id === id ? { ...normalizeBatch(item), isDeleted: false, deletedAt: undefined } : item
+    ));
   }
 }
 
@@ -107,13 +160,19 @@ async function deleteMergeBatchLocal(id: string) {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).delete(id);
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.get(id);
+      request.onsuccess = () => {
+        if (request.result) store.put(disableBatch(request.result));
+      };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } catch {
     const batches = await getFromLocalStorage();
-    await saveToLocalStorage(batches.filter((item) => item.id !== id));
+    await saveToLocalStorage(
+      batches.map((item) => item.id === id ? disableBatch(item) : item)
+    );
   }
 }
 
@@ -122,12 +181,19 @@ async function clearMergeBatchesLocal() {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).clear();
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const deletedAt = new Date().toISOString();
+        (request.result || []).forEach((item) => store.put(disableBatch(item, deletedAt)));
+      };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } catch {
-    localStorage.removeItem(LOCAL_KEY);
+    const batches = await getFromLocalStorage();
+    const deletedAt = new Date().toISOString();
+    await saveToLocalStorage(batches.map((item) => disableBatch(item, deletedAt)));
   }
 }
 
@@ -156,6 +222,17 @@ export async function getMergeBatches(): Promise<CollegeProcessedBatch[]> {
   return getMergeBatchesLocal();
 }
 
+export async function getDisabledMergeBatches(): Promise<CollegeProcessedBatch[]> {
+  if (isSupabaseConfigured) {
+    try {
+      return (await fetchCollegeBatches(true)).filter((batch) => batch.isDeleted);
+    } catch (e) {
+      console.warn("Supabase 读取已禁用批次失败，降级到本地存储", e);
+    }
+  }
+  return (await getMergeBatchesLocal(true)).filter((batch) => batch.isDeleted);
+}
+
 export async function deleteMergeBatch(id: string) {
   if (isSupabaseConfigured) {
     try {
@@ -177,4 +254,16 @@ export async function clearMergeBatches() {
     }
   }
   await clearMergeBatchesLocal();
+}
+
+export async function restoreMergeBatch(id: string) {
+  if (isSupabaseConfigured) {
+    try {
+      await restoreCollegeBatchFromCloud(id);
+      return;
+    } catch (e) {
+      console.warn("Supabase 恢复批次失败，降级到本地存储", e);
+    }
+  }
+  await restoreMergeBatchLocal(id);
 }

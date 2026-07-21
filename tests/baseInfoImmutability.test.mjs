@@ -7,6 +7,8 @@ import {
   disableDepartment,
   normalizeCounselorImportRow,
   normalizeDepartmentImportRow,
+  renameDepartment,
+  restoreDepartment,
 } from "../server/baseInfoService.js";
 
 test("院系不可变字段在普通编辑中被明确拒绝", () => {
@@ -106,4 +108,79 @@ test("院系删除仅写入 disabled 状态，不调用物理 delete", async () 
   await disableDepartment(admin, { role: "admin" }, current.id);
   assert.deepEqual(updates, [{ status: "disabled" }]);
   assert.equal(deleteCalled, false);
+});
+
+test("院系恢复只将 disabled 改回 active", async () => {
+  const updates = [];
+  const current = { id: "department-2", department_name: "材料学院", status: "disabled" };
+  const admin = {
+    from() {
+      return {
+        select() {
+          return {
+            eq() {
+              return { maybeSingle: async () => ({ data: current, error: null }) };
+            },
+          };
+        },
+        update(payload) {
+          updates.push(payload);
+          return {
+            eq() {
+              return {
+                select() {
+                  return { maybeSingle: async () => ({ data: { ...current, ...payload }, error: null }) };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+  const restored = await restoreDepartment(admin, { role: "admin" }, current.id);
+  assert.deepEqual(updates, [{ status: "active" }]);
+  assert.equal(restored.status, "active");
+});
+
+test("院系更名调用禁用旧记录并新建记录的事务 RPC", async () => {
+  const current = {
+    id: "department-3",
+    department_name: "原学院",
+    school_name: "上海应用技术大学",
+    department_type: "本科",
+    login_account: "old@bos.local",
+    sort_order: 8,
+    status: "active",
+  };
+  const rpcCalls = [];
+  const admin = {
+    from() {
+      return {
+        select() {
+          return {
+            eq() {
+              return { maybeSingle: async () => ({ data: current, error: null }) };
+            },
+          };
+        },
+      };
+    },
+    async rpc(name, params) {
+      rpcCalls.push({ name, params });
+      return {
+        data: [{ ...current, id: "department-new", department_name: "新学院" }],
+        error: null,
+      };
+    },
+  };
+  const renamed = await renameDepartment(
+    admin,
+    { role: "admin" },
+    current.id,
+    { department_name: "新学院" }
+  );
+  assert.equal(renamed.department_name, "新学院");
+  assert.equal(rpcCalls[0].name, "replace_department_for_rename");
+  assert.equal(rpcCalls[0].params.p_department_id, current.id);
 });

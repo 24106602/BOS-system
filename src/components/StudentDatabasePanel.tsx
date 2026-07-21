@@ -165,11 +165,11 @@ export default function StudentDatabasePanel() {
   };
 
   const clearDatabase = async () => {
-    if (!window.confirm("确定清空困难生数据库吗？")) return;
+    if (!window.confirm("确定禁用当前困难生数据库记录吗？历史数据将保留。")) return;
 
     await clearStudents();
     setResult(null);
-    setMessage("数据库已清空");
+    setMessage("当前困难生数据库记录已禁用");
     await refreshDatabaseInfo();
   };
 

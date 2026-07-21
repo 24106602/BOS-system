@@ -3,7 +3,9 @@ import type { CollegeProcessedBatch } from "../types/merge";
 import {
   clearMergeBatches,
   deleteMergeBatch,
+  getDisabledMergeBatches,
   getMergeBatches,
+  restoreMergeBatch,
 } from "../db/localMergeDb";
 import { checkMergeDuplicates } from "../services/mergeDuplicateChecker";
 import { exportMergedExcel } from "../services/mergeService";
@@ -13,10 +15,23 @@ export default function MergePanel() {
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [selectedFamilyIds, setSelectedFamilyIds] = useState<string[]>([]);
   const [exportMessage, setExportMessage] = useState("");
+  const [disabledBatches, setDisabledBatches] = useState<CollegeProcessedBatch[]>([]);
+  const [showDisabled, setShowDisabled] = useState(false);
 
   const load = async () => {
     const data = await getMergeBatches();
     setBatches(data);
+    if (showDisabled) setDisabledBatches(await getDisabledMergeBatches());
+  };
+
+  const toggleDisabledRecords = async () => {
+    if (showDisabled) {
+      setShowDisabled(false);
+      setDisabledBatches([]);
+      return;
+    }
+    setDisabledBatches(await getDisabledMergeBatches());
+    setShowDisabled(true);
   };
 
   useEffect(() => {
@@ -143,7 +158,7 @@ export default function MergePanel() {
       <div style={{ marginBottom: 12 }}>
         <button
           onClick={async () => {
-            if (!confirm("确定清空全部汇总池数据吗？")) return;
+            if (!confirm("确定禁用全部汇总池数据吗？历史记录将保留。")) return;
             await clearMergeBatches();
             setSelectedStudentIds([]);
             setSelectedFamilyIds([]);
@@ -151,6 +166,9 @@ export default function MergePanel() {
           }}
         >
           清空汇总池
+        </button>
+        <button style={{ marginLeft: 8 }} onClick={() => void toggleDisabledRecords()}>
+          {showDisabled ? "隐藏已禁用记录" : "查看已禁用记录"}
         </button>
       </div>
 
@@ -173,6 +191,32 @@ export default function MergePanel() {
       )}
 
       {batches.length === 0 && <p>暂无已加入汇总池的数据。</p>}
+
+      {showDisabled && (
+        <section style={{ marginTop: 28 }}>
+          <h3>已禁用汇总批次</h3>
+          <p>仅管理员可在此查看和恢复误删批次。</p>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr><th>学院</th><th>数据类型</th><th>行数</th><th>禁用时间</th><th>操作</th></tr></thead>
+            <tbody>
+              {disabledBatches.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.collegeName}</td>
+                  <td>{item.dataType === "student" ? "本专科信息" : "家庭成员信息"}</td>
+                  <td>{item.rowCount}</td>
+                  <td>{item.deletedAt ? new Date(item.deletedAt).toLocaleString() : "-"}</td>
+                  <td><button onClick={async () => {
+                    if (!confirm("确定恢复该汇总批次吗？")) return;
+                    await restoreMergeBatch(item.id);
+                    await load();
+                  }}>恢复</button></td>
+                </tr>
+              ))}
+              {disabledBatches.length === 0 && <tr><td colSpan={5}>暂无已禁用批次。</td></tr>}
+            </tbody>
+          </table>
+        </section>
+      )}
     </div>
   );
 }

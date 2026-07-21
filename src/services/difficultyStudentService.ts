@@ -208,6 +208,7 @@ export const fetchCollegeDifficultyStudents = async (
     const { data, error } = await supabase
       .from("students")
       .select(fullSelect)
+      .eq("is_deleted", false)
       .eq("academic_year", academicYear)
       .eq("college_name", normalizedCollege);
 
@@ -217,6 +218,7 @@ export const fetchCollegeDifficultyStudents = async (
       const fallback = await supabase
         .from("students")
         .select("id,academic_year,college_name,student_id,name,id_card,difficulty_level,status")
+        .eq("is_deleted", false)
         .eq("academic_year", academicYear)
         .eq("college_name", normalizedCollege);
       if (fallback.error) errorMessage = `读取 students 表失败：${formatSupabaseError(fallback.error)}`;

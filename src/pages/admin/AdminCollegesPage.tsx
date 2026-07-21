@@ -6,6 +6,7 @@ import {
   importCounselors,
   listCounselors,
   parseCounselorImportFile,
+  restoreCounselor,
   updateCounselor,
   type CounselorInfo,
 } from "../../services/baseInfoService";
@@ -22,6 +23,7 @@ export default function AdminCollegesPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [showDisabled, setShowDisabled] = useState(false);
   const [message, setMessage] = useState("正在读取辅导员账号信息");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -32,7 +34,7 @@ export default function AdminCollegesPage() {
   const loadRows = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await listCounselors();
+      const rows = await listCounselors(showDisabled);
       setCounselors(rows);
       setMessage(`已从后端读取 ${rows.length} 条辅导员/学院账号记录`);
     } catch (error) {
@@ -40,7 +42,7 @@ export default function AdminCollegesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showDisabled]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadRows(), 0);
@@ -68,6 +70,20 @@ export default function AdminCollegesPage() {
       await Promise.all([...selectedIds].map((id) => disableCounselor(id)));
       setSelectedIds(new Set());
       setMessage(`已软删除 ${selectedIds.size} 条辅导员账号，认证和历史关联记录未物理删除`);
+      await loadRows();
+    } catch (error) {
+      window.alert(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRestore = async (counselor: CounselorInfo) => {
+    if (!window.confirm(`确定恢复辅导员“${counselor.display_name || counselor.login_email}”吗？`)) return;
+    setBusy(true);
+    try {
+      await restoreCounselor(counselor.id);
+      setMessage(`辅导员“${counselor.display_name || counselor.login_email}”已恢复`);
       await loadRows();
     } catch (error) {
       window.alert(errorMessage(error));
@@ -138,6 +154,9 @@ export default function AdminCollegesPage() {
       <div className="bos-action-toolbar">
         <button onClick={() => void loadRows()} disabled={loading || busy}>{loading ? "读取中..." : "刷新"}</button>
         <button className="is-primary" onClick={() => setShowImportModal(true)} disabled={busy}>数据导入</button>
+        <button onClick={() => setShowDisabled((value) => !value)} disabled={loading || busy}>
+          {showDisabled ? "仅看启用记录" : "查看已禁用记录"}
+        </button>
         <button className="is-danger" onClick={() => void handleDelete()} disabled={selectedIds.size === 0 || busy} title="删除后需重新导入">删除</button>
         <button onClick={downloadTemplate}>下载模板</button>
       </div>
@@ -166,7 +185,13 @@ export default function AdminCollegesPage() {
                 <td style={styles.td}><span style={counselor.enabled ? styles.submitted : styles.pending}>{counselor.enabled ? "启用" : "已删除"}</span></td>
                 <td style={styles.td}>{lastSubmittedAt ? new Date(lastSubmittedAt).toLocaleString() : "-"}</td>
                 <td style={styles.td}><span style={submitted ? styles.submitted : styles.pending}>{submitted ? "已提交" : "未提交"}</span></td>
-                <td style={styles.td}><button style={styles.actionButton} disabled={!counselor.enabled} onClick={() => setEditing({ ...counselor })}>编辑</button></td>
+                <td style={styles.td}>
+                  {counselor.enabled ? (
+                    <button style={styles.actionButton} onClick={() => setEditing({ ...counselor })}>编辑</button>
+                  ) : (
+                    <button style={styles.actionButton} disabled={busy} onClick={() => void handleRestore(counselor)}>恢复</button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

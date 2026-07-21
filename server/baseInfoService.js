@@ -103,13 +103,15 @@ const ensureCounselor = async (admin, id) => {
   return data;
 };
 
-export const listDepartments = async (admin, profile) => {
+export const listDepartments = async (admin, profile, { includeDisabled = false } = {}) => {
   requireAdmin(profile);
-  const { data, error } = await admin
+  let query = admin
     .from("departments")
     .select("*")
     .order("status", { ascending: true })
     .order("sort_order", { ascending: true });
+  if (!includeDisabled) query = query.eq("status", "active");
+  const { data, error } = await query;
   if (error) throw translateDatabaseError(error);
   return data || [];
 };
@@ -117,6 +119,9 @@ export const listDepartments = async (admin, profile) => {
 export const updateDepartment = async (admin, profile, id, input) => {
   requireAdmin(profile);
   const current = await ensureDepartment(admin, id);
+  if (current.status === "disabled") {
+    throw new BaseInfoError("已禁用院系不可编辑，请先恢复记录", 409, "RECORD_DISABLED");
+  }
   assertImmutableFieldsUnchanged(current, input || {}, DEPARTMENT_IMMUTABLE_FIELDS);
   const changes = pickFields(input, DEPARTMENT_EDITABLE_FIELDS);
   if (Object.keys(changes).length === 0) return current;
@@ -133,7 +138,8 @@ export const updateDepartment = async (admin, profile, id, input) => {
 
 export const disableDepartment = async (admin, profile, id) => {
   requireAdmin(profile);
-  await ensureDepartment(admin, id);
+  const current = await ensureDepartment(admin, id);
+  if (current.status === "disabled") return current;
   const { data, error } = await admin
     .from("departments")
     .update({ status: "disabled" })
@@ -142,6 +148,44 @@ export const disableDepartment = async (admin, profile, id) => {
     .maybeSingle();
   if (error) throw translateDatabaseError(error);
   return data;
+};
+
+export const restoreDepartment = async (admin, profile, id) => {
+  requireAdmin(profile);
+  const current = await ensureDepartment(admin, id);
+  if (current.status === "active") return current;
+  const { data, error } = await admin
+    .from("departments")
+    .update({ status: "active" })
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+  if (error) throw translateDatabaseError(error);
+  return data;
+};
+
+export const renameDepartment = async (admin, profile, id, input) => {
+  requireAdmin(profile);
+  const current = await ensureDepartment(admin, id);
+  if (current.status === "disabled") {
+    throw new BaseInfoError("已禁用院系不能更名，请先恢复记录", 409, "RECORD_DISABLED");
+  }
+  const departmentName = text(input?.department_name);
+  if (!departmentName) {
+    throw new BaseInfoError("新院系名称不能为空", 400, "INVALID_REQUEST");
+  }
+  const { data, error } = await admin.rpc("replace_department_for_rename", {
+    p_department_id: id,
+    p_payload: {
+      ...current,
+      ...input,
+      department_name: departmentName,
+    },
+  });
+  if (error) throw translateDatabaseError(error);
+  const renamed = Array.isArray(data) ? data[0] : data;
+  if (!renamed) throw new BaseInfoError("院系更名未返回新记录", 500, "RENAME_FAILED");
+  return renamed;
 };
 
 export const normalizeDepartmentImportRow = (input, rowNumber = 1) => {
@@ -217,7 +261,7 @@ export const importDepartments = async (admin, profile, inputRows) => {
   }
   const rows = inputRows.map((row, index) => normalizeDepartmentImportRow(row, index + 1));
   assertDepartmentBatchUnique(rows);
-  const existingRows = await listDepartments(admin, profile);
+  const existingRows = await listDepartments(admin, profile, { includeDisabled: true });
   const activeRows = existingRows.filter((row) => row.status === "active");
   const usedIds = new Set();
   const operations = rows.map((row, index) => {
@@ -253,14 +297,16 @@ export const importDepartments = async (admin, profile, inputRows) => {
   return { inserted, reactivated, total: rows.length };
 };
 
-export const listCounselors = async (admin, profile) => {
+export const listCounselors = async (admin, profile, { includeDisabled = false } = {}) => {
   requireAdmin(profile);
-  const { data, error } = await admin
+  let query = admin
     .from("user_profiles")
     .select("id,auth_user_id,role,college_name,display_name,login_email,phone,sort_order,enabled,created_at,updated_at")
     .eq("role", "college")
     .order("enabled", { ascending: false })
     .order("sort_order", { ascending: true });
+  if (!includeDisabled) query = query.eq("enabled", true);
+  const { data, error } = await query;
   if (error) throw translateDatabaseError(error);
   return data || [];
 };
@@ -268,6 +314,9 @@ export const listCounselors = async (admin, profile) => {
 export const updateCounselor = async (admin, profile, id, input) => {
   requireAdmin(profile);
   const current = await ensureCounselor(admin, id);
+  if (current.enabled === false) {
+    throw new BaseInfoError("已禁用辅导员不可编辑，请先恢复记录", 409, "RECORD_DISABLED");
+  }
   assertImmutableFieldsUnchanged(current, input || {}, COUNSELOR_IMMUTABLE_FIELDS);
   const changes = pickFields(input, COUNSELOR_EDITABLE_FIELDS);
   if (Object.keys(changes).length === 0) return current;
@@ -283,12 +332,27 @@ export const updateCounselor = async (admin, profile, id, input) => {
 
 export const disableCounselor = async (admin, profile, id) => {
   requireAdmin(profile);
-  await ensureCounselor(admin, id);
+  const current = await ensureCounselor(admin, id);
+  if (current.enabled === false) return current;
   const { data, error } = await admin
     .from("user_profiles")
     .update({ enabled: false })
     .eq("id", id)
     .select("id,enabled")
+    .maybeSingle();
+  if (error) throw translateDatabaseError(error);
+  return data;
+};
+
+export const restoreCounselor = async (admin, profile, id) => {
+  requireAdmin(profile);
+  const current = await ensureCounselor(admin, id);
+  if (current.enabled !== false) return current;
+  const { data, error } = await admin
+    .from("user_profiles")
+    .update({ enabled: true })
+    .eq("id", id)
+    .select("id,auth_user_id,role,college_name,display_name,login_email,phone,sort_order,enabled,created_at,updated_at")
     .maybeSingle();
   if (error) throw translateDatabaseError(error);
   return data;
@@ -349,8 +413,8 @@ export const importCounselors = async (admin, profile, inputRows) => {
   }
 
   const [existingRows, departments, authUsers] = await Promise.all([
-    listCounselors(admin, profile),
-    listDepartments(admin, profile),
+    listCounselors(admin, profile, { includeDisabled: true }),
+    listDepartments(admin, profile, { includeDisabled: true }),
     listAuthUsersByEmail(admin),
   ]);
   const activeDepartments = new Set(

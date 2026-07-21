@@ -25,7 +25,9 @@ import { rejectStudentRecords } from "../../services/difficultyStudentService";
 import {
   DifficultyStudentApiError,
   importHistoricalDifficultyStudent,
+  listDisabledDifficultyStudents,
   reportDifficultyStudentBatch,
+  restoreDifficultyStudent,
   transitionDifficultyStudent,
 } from "../../services/difficultyStudentApi";
 import {
@@ -73,6 +75,7 @@ type CloudStudentRow = {
   rejected_reason?: string | null;
   resubmission_remark?: string | null;
   raw_data?: Record<string, unknown> | null;
+  deleted_at?: string | null;
 };
 
 type HistoricalImportStats = {
@@ -419,6 +422,9 @@ export default function AdminStudentsPage() {
   const [detailTab, setDetailTab] = useState<"detail" | "history">("detail");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showDisabledModal, setShowDisabledModal] = useState(false);
+  const [disabledStudents, setDisabledStudents] = useState<CloudStudentRow[]>([]);
+  const [isLoadingDisabled, setIsLoadingDisabled] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [actionMessage, setActionMessage] = useState("");
   const [pendingRowKey, setPendingRowKey] = useState("");
@@ -452,6 +458,7 @@ export default function AdminStudentsPage() {
     const { data, error } = await supabase
       .from("students")
       .select(fullSelect)
+      .eq("is_deleted", false)
       .eq("academic_year", academicYear);
 
     if (!error) {
@@ -464,6 +471,7 @@ export default function AdminStudentsPage() {
     const { data: fallbackData, error: fallbackError } = await supabase
       .from("students")
       .select("id,academic_year,college_name,student_id,name,id_card,difficulty_level,status")
+      .eq("is_deleted", false)
       .eq("academic_year", academicYear);
 
     if (fallbackError) {
@@ -476,6 +484,31 @@ export default function AdminStudentsPage() {
     }
     setIsLoadingDatabase(false);
   }, [academicYear]);
+
+  const loadDisabledStudents = useCallback(async () => {
+    setIsLoadingDisabled(true);
+    try {
+      const result = await listDisabledDifficultyStudents(academicYear);
+      setDisabledStudents(result.data as CloudStudentRow[]);
+      setShowDisabledModal(true);
+    } catch (error) {
+      setActionMessage(formatWorkflowError(error));
+    } finally {
+      setIsLoadingDisabled(false);
+    }
+  }, [academicYear]);
+
+  const handleRestoreDisabledStudent = async (student: CloudStudentRow) => {
+    if (!student.id || !window.confirm(`确定恢复困难生“${student.name || student.student_id || student.id}”吗？`)) return;
+    try {
+      await restoreDifficultyStudent(student.id);
+      await loadDisabledStudents();
+      await loadCloudStudents();
+      setActionMessage(`已恢复困难生“${student.name || student.student_id || student.id}”。`);
+    } catch (error) {
+      setActionMessage(formatWorkflowError(error));
+    }
+  };
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -751,6 +784,7 @@ export default function AdminStudentsPage() {
       const { data: existingRows, error: fetchError } = await supabase
         .from("students")
         .select("id,student_id,id_card,academic_year")
+        .eq("is_deleted", false)
         .eq("academic_year", historicalYear);
       if (fetchError) {
         logSupabaseError("查询同学年已有困难生失败", fetchError);
@@ -866,6 +900,9 @@ export default function AdminStudentsPage() {
       <Toolbar>
         <button className="is-primary" onClick={() => setShowImportModal(true)}>数据导入</button>
         <button onClick={() => void loadCloudStudents()} disabled={isLoadingDatabase}>{isLoadingDatabase ? "刷新中..." : "刷新"}</button>
+        <button onClick={() => void loadDisabledStudents()} disabled={isLoadingDisabled}>
+          {isLoadingDisabled ? "读取中..." : "查看已禁用记录"}
+        </button>
         <button className="is-purple" onClick={exportCurrentYearDatabase}>导出当前名单</button>
         {canPerformSelectedAction("start_review") && (
           <button className="is-primary" disabled={isBulkActionPending} onClick={() => void handleSelectedAction("start_review")}>
@@ -1106,6 +1143,31 @@ export default function AdminStudentsPage() {
               recordId={selectedRow.cloudId}
             />
           )}
+        </Modal>
+      )}
+
+      {showDisabledModal && (
+        <Modal title={`${academicYear} 学年已禁用困难生记录`} onClose={() => setShowDisabledModal(false)}>
+          <p style={styles.description}>仅学校管理员可见。恢复后记录将重新进入当前困难生数据库，原审核状态和操作历史保持不变。</p>
+          <div className="difficulty-table-scroll">
+            <table className="difficulty-wide-table">
+              <thead><tr><th>姓名</th><th>学号</th><th>学院</th><th>原状态</th><th>禁用时间</th><th>操作</th></tr></thead>
+              <tbody>
+                {disabledStudents.length === 0 ? (
+                  <tr><td colSpan={6} style={styles.empty}>当前学年没有已禁用困难生记录</td></tr>
+                ) : disabledStudents.map((student) => (
+                  <tr key={String(student.id)}>
+                    <td>{student.name || "-"}</td>
+                    <td>{student.student_id || "-"}</td>
+                    <td>{student.college_name || "-"}</td>
+                    <td>{displayStatus(String(student.status || "draft"))}</td>
+                    <td>{student.deleted_at ? new Date(student.deleted_at).toLocaleString() : "-"}</td>
+                    <td><button className="is-primary" onClick={() => void handleRestoreDisabledStudent(student)}>恢复</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Modal>
       )}
     </section>

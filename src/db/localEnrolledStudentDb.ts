@@ -48,17 +48,31 @@ async function saveToLocalStorage(records: EnrolledStudentRecord[]) {
   }
 }
 
+const disableRecord = (
+  record: EnrolledStudentRecord,
+  deletedAt = new Date().toISOString()
+): EnrolledStudentRecord => ({ ...record, isDeleted: true, deletedAt });
+
+const activeRecord = (record: EnrolledStudentRecord): EnrolledStudentRecord => {
+  const value = Object.fromEntries(
+    Object.entries(record).filter(([key]) => key !== "_localId")
+  ) as EnrolledStudentRecord;
+  return { ...value, isDeleted: false, deletedAt: undefined };
+};
+
 async function getAllLocal(): Promise<EnrolledStudentRecord[]> {
   try {
     const db = await openDb();
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readonly");
       const request = tx.objectStore(STORE_NAME).getAll();
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => resolve(
+        (request.result || []).filter((record: EnrolledStudentRecord) => !record.isDeleted)
+      );
       request.onerror = () => reject(request.error);
     });
   } catch {
-    return getFromLocalStorage();
+    return (await getFromLocalStorage()).filter((record) => !record.isDeleted);
   }
 }
 
@@ -68,13 +82,24 @@ async function saveAllLocal(records: EnrolledStudentRecord[]) {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
-      store.clear();
-      records.forEach((r) => store.put(r));
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const deletedAt = new Date().toISOString();
+        (request.result || []).forEach((record: EnrolledStudentRecord) => {
+          store.put(disableRecord(record, deletedAt));
+        });
+        records.forEach((record) => store.put(activeRecord(record)));
+      };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } catch {
-    await saveToLocalStorage(records);
+    const existing = await getFromLocalStorage();
+    const deletedAt = new Date().toISOString();
+    await saveToLocalStorage([
+      ...existing.map((record) => disableRecord(record, deletedAt)),
+      ...records.map(activeRecord),
+    ]);
   }
 }
 
@@ -84,18 +109,34 @@ async function addLocal(newRecords: EnrolledStudentRecord[]) {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
-      newRecords.forEach((r) => store.put(r));
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const activeKeys = new Set(
+          (request.result || [])
+            .filter((record: EnrolledStudentRecord) => !record.isDeleted)
+            .map((record: EnrolledStudentRecord) => record.idCard || record.studentId || record.name)
+        );
+        newRecords.forEach((record) => {
+          const key = record.idCard || record.studentId || record.name;
+          if (!activeKeys.has(key)) {
+            store.put(activeRecord(record));
+            activeKeys.add(key);
+          }
+        });
+      };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } catch {
     const existing = await getFromLocalStorage();
-    const existingKeys = new Set(existing.map((s) => s.idCard || s.studentId || s.name));
+    const existingKeys = new Set(
+      existing.filter((record) => !record.isDeleted).map((s) => s.idCard || s.studentId || s.name)
+    );
     const merged = [...existing];
     for (const student of newRecords) {
       const key = student.idCard || student.studentId || student.name;
       if (!existingKeys.has(key)) {
-        merged.push(student);
+        merged.push(activeRecord(student));
         existingKeys.add(key);
       }
     }
@@ -108,14 +149,23 @@ async function clearLocal() {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).clear();
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const deletedAt = new Date().toISOString();
+        (request.result || []).forEach((record: EnrolledStudentRecord) => {
+          store.put(disableRecord(record, deletedAt));
+        });
+      };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } catch {
     // ignore
   }
-  localStorage.removeItem(LOCAL_KEY);
+  const deletedAt = new Date().toISOString();
+  const existing = await getFromLocalStorage();
+  await saveToLocalStorage(existing.map((record) => disableRecord(record, deletedAt)));
 }
 
 // ---- 对外接口（与原 localEnrolledStudentDb 兼容）----

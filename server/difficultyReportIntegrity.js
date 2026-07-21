@@ -72,15 +72,22 @@ const assertQuerySucceeded = (result) => {
   return result.data || [];
 };
 
+const filterActiveRecords = (query) =>
+  typeof query?.eq === "function" ? query.eq("is_deleted", false) : query;
+
 const queryEnrollmentRows = async (admin, students) => {
   const studentIds = [...new Set(students.map((student) => text(student.student_id)).filter(Boolean))];
   const idCards = [...new Set(students.map((student) => normalizeIdCard(student.id_card)).filter(Boolean))];
   const queries = [];
   if (studentIds.length > 0) {
-    queries.push(admin.from("enrolled_students").select("student_id,id_card").in("student_id", studentIds));
+    queries.push(filterActiveRecords(
+      admin.from("enrolled_students").select("student_id,id_card")
+    ).in("student_id", studentIds));
   }
   if (idCards.length > 0) {
-    queries.push(admin.from("enrolled_students").select("student_id,id_card").in("id_card", idCards));
+    queries.push(filterActiveRecords(
+      admin.from("enrolled_students").select("student_id,id_card")
+    ).in("id_card", idCards));
   }
   const results = await Promise.all(queries);
   return results.flatMap(assertQuerySucceeded);
@@ -93,8 +100,9 @@ const queryFamilyBatches = async (admin, students) => {
 
   const result = await admin
     .from("college_batches")
-    .select("academic_year,college_name,batch_rows(row_data)")
+    .select("academic_year,college_name,batch_rows(row_data,is_deleted)")
     .eq("data_type", "family")
+    .eq("is_deleted", false)
     .in("academic_year", academicYears)
     .in("college_name", collegeNames);
   return assertQuerySucceeded(result);
@@ -119,7 +127,9 @@ const buildEnrollmentIdentitySets = (rows) => ({
 const buildFamilyIdentitySet = (batches) => {
   const identities = new Set();
   batches.forEach((batch) => {
-    const rows = Array.isArray(batch.batch_rows) ? batch.batch_rows : [];
+    const rows = Array.isArray(batch.batch_rows)
+      ? batch.batch_rows.filter((entry) => entry?.is_deleted !== true)
+      : [];
     rows.forEach((entry) => {
       const row = entry?.row_data && typeof entry.row_data === "object" ? entry.row_data : {};
       const idCard = normalizeIdCard(pickAliasedValue(row, ID_CARD_ALIASES));

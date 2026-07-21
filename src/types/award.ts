@@ -83,6 +83,8 @@ export type AwardSubmission = {
   awardTypeCounts: Record<string, number>;
   fields: string[];
   rows: Record<string, unknown>[];
+  isDeleted?: boolean;
+  deletedAt?: string;
 };
 
 export type AwardAdminRecord = {

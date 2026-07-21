@@ -408,14 +408,21 @@ const assertQuerySucceeded = (result) => {
   return result.data || [];
 };
 
+const filterActiveRecords = (query) =>
+  typeof query?.eq === "function" ? query.eq("is_deleted", false) : query;
+
 const queryDatabaseReferences = async (admin, payloads) => {
   const studentIds = [...new Set(payloads.map((row) => text(row.student_id)).filter(Boolean))];
   const academicYears = [...new Set(payloads.map((row) => text(row.academic_year)).filter(Boolean))];
   const enrollmentPromise = studentIds.length
-    ? admin.from("enrolled_students").select("student_id,name,college").in("student_id", studentIds)
+    ? filterActiveRecords(
+        admin.from("enrolled_students").select("student_id,name,college")
+      ).in("student_id", studentIds)
     : Promise.resolve({ data: [], error: null });
   const existingPromise = academicYears.length
-    ? admin.from("students").select("id,student_id,academic_year,name,college_name,raw_data").in("academic_year", academicYears)
+    ? filterActiveRecords(
+        admin.from("students").select("id,student_id,academic_year,name,college_name,raw_data")
+      ).in("academic_year", academicYears)
     : Promise.resolve({ data: [], error: null });
   const [enrollmentResult, existingResult] = await Promise.all([enrollmentPromise, existingPromise]);
   return {

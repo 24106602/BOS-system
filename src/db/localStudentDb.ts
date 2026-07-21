@@ -40,6 +40,18 @@ async function getFromLocalStorage(): Promise<StudentRecord[]> {
   }
 }
 
+const disableRecord = (record: StudentRecord, deletedAt = new Date().toISOString()): StudentRecord => ({
+  ...record,
+  isDeleted: true,
+  deletedAt,
+});
+
+const activeRecord = (record: StudentRecord): StudentRecord => ({
+  ...record,
+  isDeleted: false,
+  deletedAt: undefined,
+});
+
 async function saveToLocalStorage(records: StudentRecord[]) {
   localStorage.setItem(LOCAL_KEY, JSON.stringify(records));
 }
@@ -50,11 +62,13 @@ async function getAllLocal(): Promise<StudentRecord[]> {
     return await new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readonly");
       const request = tx.objectStore(STORE_NAME).getAll();
-      request.onsuccess = () => resolve(request.result || []);
+      request.onsuccess = () => resolve(
+        (request.result || []).filter((record: StudentRecord) => !record.isDeleted)
+      );
       request.onerror = () => reject(request.error);
     });
   } catch {
-    return getFromLocalStorage();
+    return (await getFromLocalStorage()).filter((record) => !record.isDeleted);
   }
 }
 
@@ -64,13 +78,38 @@ async function saveAllLocal(records: StudentRecord[]) {
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
       const store = tx.objectStore(STORE_NAME);
-      store.clear();
-      records.forEach((r) => store.put(r));
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const deletedAt = new Date().toISOString();
+        const incomingKeys = new Set(records.map((record) => record.key));
+        (request.result || []).forEach((record: StudentRecord) => {
+          if (incomingKeys.has(record.key) && !record.isDeleted) {
+            store.put({
+              ...disableRecord(record, deletedAt),
+              key: `${record.key}__disabled__${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+            });
+          } else {
+            store.put(disableRecord(record, deletedAt));
+          }
+        });
+        records.forEach((record) => store.put(activeRecord(record)));
+      };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } catch {
-    await saveToLocalStorage(records);
+    const existing = await getFromLocalStorage();
+    const deletedAt = new Date().toISOString();
+    const incomingKeys = new Set(records.map((record) => record.key));
+    const archived = existing.map((record) =>
+      incomingKeys.has(record.key) && !record.isDeleted
+        ? {
+            ...disableRecord(record, deletedAt),
+            key: `${record.key}__disabled__${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          }
+        : disableRecord(record, deletedAt)
+    );
+    await saveToLocalStorage([...archived, ...records.map(activeRecord)]);
   }
 }
 
@@ -78,7 +117,7 @@ async function mergeLocal(newRecords: StudentRecord[]) {
   const existing = await getAllLocal();
   const map = new Map(existing.map((r) => [r.key, r]));
   for (const r of newRecords) {
-    map.set(r.key, r);
+    map.set(r.key, activeRecord(r));
   }
   const merged = Array.from(map.values());
   await saveAllLocal(merged);
@@ -90,12 +129,21 @@ async function clearLocal() {
     const db = await openDb();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, "readwrite");
-      tx.objectStore(STORE_NAME).clear();
+      const store = tx.objectStore(STORE_NAME);
+      const request = store.getAll();
+      request.onsuccess = () => {
+        const deletedAt = new Date().toISOString();
+        (request.result || []).forEach((record: StudentRecord) => {
+          store.put(disableRecord(record, deletedAt));
+        });
+      };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
   } catch {
-    localStorage.removeItem(LOCAL_KEY);
+    const deletedAt = new Date().toISOString();
+    const existing = await getFromLocalStorage();
+    await saveToLocalStorage(existing.map((record) => disableRecord(record, deletedAt)));
   }
 }
 

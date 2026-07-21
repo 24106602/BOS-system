@@ -26,4 +26,7 @@ export type EnrolledStudentRecord = {
   phone: string;
   sourceFile: string;
   importedAt: string;
+  isDeleted?: boolean;
+  deletedAt?: string;
+  _localId?: number;
 };

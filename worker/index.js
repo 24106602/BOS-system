@@ -26,6 +26,7 @@ import {
   getDifficultyStudentOperationHistory,
   getTransitionLogAction,
   readRequiredWorkflowRemark,
+  restoreDifficultyStudentWithLog,
   resolveResubmitTransition,
   saveDifficultyStudentWithLog,
 } from "../server/difficultyReviewWorkflow.js";
@@ -36,6 +37,9 @@ import {
   importDepartments,
   listCounselors,
   listDepartments,
+  renameDepartment,
+  restoreCounselor,
+  restoreDepartment,
   updateCounselor,
   updateDepartment,
 } from "../server/baseInfoService.js";
@@ -180,7 +184,12 @@ const getSupabaseClients = async (request, env) => {
 };
 
 const findStudent = async (admin, id) => {
-  const { data, error } = await admin.from("students").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await admin
+    .from("students")
+    .select("*")
+    .eq("id", id)
+    .eq("is_deleted", false)
+    .maybeSingle();
   if (error) throw error;
   if (!data) throw apiError("困难生记录不存在", 404, "NOT_FOUND");
   return data;
@@ -191,7 +200,8 @@ const findStudentByIdentity = async (admin, row) => {
     .from("students")
     .select("*")
     .eq("academic_year", text(row.academic_year))
-    .eq("college_name", text(row.college_name));
+    .eq("college_name", text(row.college_name))
+    .eq("is_deleted", false);
   const idCard = normalizeIdCard(row.id_card);
   const studentId = text(row.student_id);
   if (idCard) query = query.eq("id_card", idCard);
@@ -315,7 +325,7 @@ const handleBatchReport = async (request, context, env) => {
     .filter((id) => !UUID_PATTERN.test(id))
     .map((id) => ({ studentId: id, reasons: ["困难生记录不存在"] }));
   const { data, error } = validIds.length > 0
-    ? await admin.from("students").select("*").in("id", validIds)
+    ? await admin.from("students").select("*").eq("is_deleted", false).in("id", validIds)
     : { data: [], error: null };
   if (error) throw error;
 
@@ -370,6 +380,27 @@ const handleDelete = async (_request, context, id) => {
   guardStatus(student.status, "delete", DIFFICULTY_STUDENT_STATUS_TRANSITIONS);
   await deleteDifficultyStudentWithLog(admin, student, context);
   return { body: null, status: 204 };
+};
+
+const handleRestore = async (request, context, id) => {
+  const { admin, profile } = context;
+  requireRole(profile, ["admin"]);
+  const { data: student, error } = await admin
+    .from("students")
+    .select("*")
+    .eq("id", id)
+    .eq("is_deleted", true)
+    .maybeSingle();
+  if (error) throw error;
+  if (!student) throw apiError("已禁用困难生记录不存在", 404, "NOT_FOUND");
+  const body = await request.json().catch(() => ({}));
+  const data = await restoreDifficultyStudentWithLog(
+    admin,
+    student,
+    context,
+    text(body?.remark) || "管理员恢复已禁用困难生记录"
+  );
+  return { body: { data }, status: 200 };
 };
 
 const handleOperationHistory = async (_request, context, id) => {
@@ -495,6 +526,19 @@ const handleDifficultyApi = async (request, env) => {
   if (request.method === "POST" && relativePath === "/batch-report") {
     return handleBatchReport(request, context, env);
   }
+  if (request.method === "GET" && relativePath === "/disabled") {
+    requireRole(context.profile, ["admin"]);
+    let query = context.admin
+      .from("students")
+      .select("*")
+      .eq("is_deleted", true)
+      .order("deleted_at", { ascending: false });
+    const academicYear = text(url.searchParams.get("academicYear"));
+    if (academicYear) query = query.eq("academic_year", academicYear);
+    const { data, error } = await query;
+    if (error) throw error;
+    return { body: { data: data || [] }, status: 200 };
+  }
 
   const recordMatch = relativePath.match(/^\/([^/]+)$/);
   if (recordMatch && request.method === "PATCH") {
@@ -547,7 +591,19 @@ const handleBaseInfoApi = async (request, env) => {
   const relativePath = url.pathname.slice(BASE_INFO_API_PREFIX.length) || "/";
 
   if (request.method === "GET" && relativePath === "/departments") {
-    return { body: { data: await listDepartments(context.admin, context.profile) }, status: 200 };
+    return {
+      body: {
+        data: await listDepartments(context.admin, context.profile, {
+          includeDisabled: url.searchParams.get("includeDisabled") === "true",
+        }),
+      },
+      status: 200,
+    };
+  }
+
+  const restoreMatch = relativePath.match(/^\/([^/]+)\/restore$/);
+  if (restoreMatch && request.method === "POST") {
+    return handleRestore(request, context, decodeURIComponent(restoreMatch[1]));
   }
   if (request.method === "POST" && relativePath === "/departments/import") {
     const body = await readJsonBody(request);
@@ -579,9 +635,44 @@ const handleBaseInfoApi = async (request, env) => {
     );
     return { body: null, status: 204 };
   }
+  const departmentRestoreMatch = relativePath.match(/^\/departments\/([^/]+)\/restore$/);
+  if (departmentRestoreMatch && request.method === "POST") {
+    return {
+      body: {
+        data: await restoreDepartment(
+          context.admin,
+          context.profile,
+          decodeURIComponent(departmentRestoreMatch[1])
+        ),
+      },
+      status: 200,
+    };
+  }
+  const departmentRenameMatch = relativePath.match(/^\/departments\/([^/]+)\/rename$/);
+  if (departmentRenameMatch && request.method === "POST") {
+    const body = await readJsonBody(request);
+    return {
+      body: {
+        data: await renameDepartment(
+          context.admin,
+          context.profile,
+          decodeURIComponent(departmentRenameMatch[1]),
+          body
+        ),
+      },
+      status: 200,
+    };
+  }
 
   if (request.method === "GET" && relativePath === "/counselors") {
-    return { body: { data: await listCounselors(context.admin, context.profile) }, status: 200 };
+    return {
+      body: {
+        data: await listCounselors(context.admin, context.profile, {
+          includeDisabled: url.searchParams.get("includeDisabled") === "true",
+        }),
+      },
+      status: 200,
+    };
   }
   if (request.method === "POST" && relativePath === "/counselors/import") {
     const body = await readJsonBody(request);
@@ -612,6 +703,19 @@ const handleBaseInfoApi = async (request, env) => {
       decodeURIComponent(counselorMatch[1])
     );
     return { body: null, status: 204 };
+  }
+  const counselorRestoreMatch = relativePath.match(/^\/counselors\/([^/]+)\/restore$/);
+  if (counselorRestoreMatch && request.method === "POST") {
+    return {
+      body: {
+        data: await restoreCounselor(
+          context.admin,
+          context.profile,
+          decodeURIComponent(counselorRestoreMatch[1])
+        ),
+      },
+      status: 200,
+    };
   }
 
   throw apiError("基础信息接口不存在", 404, "NOT_FOUND");

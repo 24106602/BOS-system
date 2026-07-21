@@ -5,6 +5,7 @@ import {
   getDifficultyStudentOperationHistory,
   getTransitionLogAction,
   reportDifficultyStudentRecordsWithLog,
+  restoreDifficultyStudentWithLog,
   saveDifficultyStudentWithLog,
 } from "../server/difficultyReviewWorkflow.js";
 
@@ -26,6 +27,9 @@ test("所有独立写入路径通过统一日志入口调用原子 RPC", async (
       if (name === "report_difficulty_students_with_log") {
         return { data: [{ id: "record-id", status: "reported" }], error: null };
       }
+      if (name === "restore_difficulty_student_with_log") {
+        return { data: [{ id: "record-id", status: "draft", is_deleted: false }], error: null };
+      }
       return { data: [{ id: "record-id", status: "college_confirmed" }], error: null };
     },
   };
@@ -43,6 +47,11 @@ test("所有独立写入路径通过统一日志入口调用原子 RPC", async (
     "删除重复草稿"
   );
   await reportDifficultyStudentRecordsWithLog(admin, ["record-id"], context);
+  await restoreDifficultyStudentWithLog(
+    admin,
+    { id: "record-id", status: "draft", is_deleted: true },
+    context
+  );
 
   assert.deepEqual(
     rpcCalls.map((call) => call.name),
@@ -50,6 +59,7 @@ test("所有独立写入路径通过统一日志入口调用原子 RPC", async (
       "save_difficulty_student_with_log",
       "delete_difficulty_student_with_log",
       "report_difficulty_students_with_log",
+      "restore_difficulty_student_with_log",
     ]
   );
   rpcCalls.forEach((call) => {

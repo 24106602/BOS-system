@@ -5,6 +5,8 @@ import {
   importDepartments,
   listDepartments,
   parseDepartmentImportFile,
+  renameDepartment,
+  restoreDepartment,
   updateDepartment,
   type DepartmentInfo,
 } from "../../services/baseInfoService";
@@ -34,13 +36,14 @@ export default function AdminDepartmentsPage() {
   const [currentDepartment, setCurrentDepartment] = useState<DepartmentInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [showDisabled, setShowDisabled] = useState(false);
   const [message, setMessage] = useState("正在读取院系基础信息");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadRows = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await listDepartments();
+      const rows = await listDepartments(showDisabled);
       setDepartments(rows);
       setMessage(`已从后端读取 ${rows.length} 条院系记录`);
     } catch (error) {
@@ -48,7 +51,7 @@ export default function AdminDepartmentsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showDisabled]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadRows(), 0);
@@ -80,6 +83,36 @@ export default function AdminDepartmentsPage() {
       await Promise.all([...selectedIds].map((id) => disableDepartment(id)));
       setSelectedIds(new Set());
       setMessage(`已软删除 ${selectedIds.size} 条院系记录，历史关联数据仍保留`);
+      await loadRows();
+    } catch (error) {
+      window.alert(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRestore = async (department: DepartmentInfo) => {
+    if (!window.confirm(`确定恢复院系“${department.department_name}”吗？`)) return;
+    setBusy(true);
+    try {
+      await restoreDepartment(department.id);
+      setMessage(`院系“${department.department_name}”已恢复`);
+      await loadRows();
+    } catch (error) {
+      window.alert(errorMessage(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRename = async (department: DepartmentInfo) => {
+    const nextName = window.prompt("请输入新院系名称。系统将禁用旧记录并创建新记录：", department.department_name)?.trim();
+    if (!nextName || nextName === department.department_name) return;
+    if (!window.confirm(`院系更名将禁用“${department.department_name}”并新建“${nextName}”，是否继续？`)) return;
+    setBusy(true);
+    try {
+      await renameDepartment(department.id, nextName);
+      setMessage(`院系更名完成：旧记录“${department.department_name}”已禁用，新记录“${nextName}”已创建`);
       await loadRows();
     } catch (error) {
       window.alert(errorMessage(error));
@@ -173,6 +206,9 @@ export default function AdminDepartmentsPage() {
         <button onClick={() => void loadRows()} disabled={loading || busy}>{loading ? "读取中..." : "刷新"}</button>
         <button className="is-primary" onClick={handleAdd} disabled={busy}>新建并导入</button>
         <button onClick={() => setShowImportModal(true)} disabled={busy}>数据导入</button>
+        <button onClick={() => setShowDisabled((value) => !value)} disabled={loading || busy}>
+          {showDisabled ? "仅看启用记录" : "查看已禁用记录"}
+        </button>
         <button className="is-danger" onClick={() => void handleDelete()} disabled={selectedIds.size === 0 || busy} title="删除后需重新导入">
           删除
         </button>
@@ -205,7 +241,16 @@ export default function AdminDepartmentsPage() {
                 <td style={styles.td}>{department.login_account}</td>
                 <td style={styles.td}><span style={department.status === "active" ? styles.enabled : styles.disabled}>{department.status === "active" ? "启用" : "已删除"}</span></td>
                 <td style={styles.td}>{department.sort_order}</td>
-                <td style={styles.td}><button style={styles.actionButton} onClick={() => handleEdit(department)}>编辑</button></td>
+                <td style={styles.td}>
+                  {department.status === "disabled" ? (
+                    <button style={styles.actionButton} disabled={busy} onClick={() => void handleRestore(department)}>恢复</button>
+                  ) : (
+                    <>
+                      <button style={styles.actionButton} onClick={() => handleEdit(department)}>编辑</button>{" "}
+                      <button style={styles.actionButton} disabled={busy} onClick={() => void handleRename(department)}>院系更名</button>
+                    </>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

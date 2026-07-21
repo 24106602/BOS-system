@@ -4,6 +4,7 @@ import {
   saveAnnouncement,
   updateAnnouncement,
   deleteAnnouncement,
+  restoreAnnouncement,
   formatAnnouncementDate,
   priorityLabel,
   type Announcement,
@@ -23,8 +24,15 @@ export default function AdminAnnouncementPage() {
   const [priorityFilter, setPriorityFilter] = useState<AnnouncementPriority | "">("");
   const [modal, setModal] = useState<ModalState>({ mode: null });
   const [detailItem, setDetailItem] = useState<Announcement | null>(null);
+  const [showDisabled, setShowDisabled] = useState(false);
 
-  const allAnnouncements = useMemo(() => getAnnouncements(), [refreshKey]);
+  const allAnnouncements = useMemo(
+    () => {
+      void refreshKey;
+      return getAnnouncements({ includeDisabled: showDisabled });
+    },
+    [refreshKey, showDisabled]
+  );
 
   const filteredList = useMemo(() => {
     let list = allAnnouncements;
@@ -76,19 +84,28 @@ export default function AdminAnnouncementPage() {
   };
 
   const handleDelete = (id: string) => {
-    if (window.confirm("确定要删除此通知吗？")) {
+    if (window.confirm("删除后记录将转为已禁用，可由管理员恢复。确定？")) {
       deleteAnnouncement(id);
       refresh();
     }
+  };
+
+  const handleRestore = (id: string) => {
+    if (!window.confirm("确定恢复此通知吗？")) return;
+    restoreAnnouncement(id);
+    refresh();
   };
 
   return (
     <section className="bos-table-page">
       <div style={styles.header}>
         <h1 style={styles.title}>通知公告管理</h1>
-        <button style={styles.primaryBtn} onClick={() => setModal({ mode: "create" })}>
-          + 发布通知
-        </button>
+        <div style={styles.headerActions}>
+          <button style={styles.resetBtn} onClick={() => setShowDisabled((value) => !value)}>
+            {showDisabled ? "仅看启用记录" : "查看已禁用记录"}
+          </button>
+          <button style={styles.primaryBtn} onClick={() => setModal({ mode: "create" })}>+ 发布通知</button>
+        </div>
       </div>
 
       <div style={styles.filterCard}>
@@ -136,13 +153,14 @@ export default function AdminAnnouncementPage() {
                 <th style={{ ...styles.th, width: 80 }}>优先级</th>
                 <th style={{ ...styles.th, width: 140 }}>发布人</th>
                 <th style={{ ...styles.th, width: 160 }}>发布时间</th>
+                <th style={{ ...styles.th, width: 90 }}>状态</th>
                 <th style={{ ...styles.th, width: 160 }}>操作</th>
               </tr>
             </thead>
             <tbody>
               {filteredList.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={styles.empty}>暂无通知公告</td>
+                  <td colSpan={6} style={styles.empty}>暂无通知公告</td>
                 </tr>
               ) : (
                 filteredList.map((item) => (
@@ -160,12 +178,19 @@ export default function AdminAnnouncementPage() {
                     <td style={styles.td}>{item.publisher}</td>
                     <td style={styles.td}>{formatAnnouncementDate(item.publishedAt)}</td>
                     <td style={styles.td}>
-                      <button style={styles.editBtn} onClick={() => setModal({ mode: "edit", editing: item })}>
-                        编辑
-                      </button>
-                      <button style={styles.delBtn} onClick={() => handleDelete(item.id)}>
-                        删除
-                      </button>
+                      <span style={item.status === "disabled" ? styles.disabledTag : styles.activeTag}>
+                        {item.status === "disabled" ? "已禁用" : "启用"}
+                      </span>
+                    </td>
+                    <td style={styles.td}>
+                      {item.status === "disabled" ? (
+                        <button style={styles.restoreBtn} onClick={() => handleRestore(item.id)}>恢复</button>
+                      ) : (
+                        <>
+                          <button style={styles.editBtn} onClick={() => setModal({ mode: "edit", editing: item })}>编辑</button>
+                          <button style={styles.delBtn} onClick={() => handleDelete(item.id)}>删除</button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -293,6 +318,7 @@ const priorityStyles: Record<AnnouncementPriority, CSSProperties> = {
 
 const styles: Record<string, CSSProperties> = {
   header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  headerActions: { display: "flex", gap: 8, alignItems: "center" },
   title: { margin: 0, color: "#172033", fontSize: 22 },
   filterCard: {
     background: "#fff",
@@ -337,6 +363,9 @@ const styles: Record<string, CSSProperties> = {
   linkBtn: { background: "none", border: "none", color: "#409eff", cursor: "pointer", fontSize: 13, padding: 0, fontWeight: 500 },
   editBtn: { padding: "5px 12px", border: "1px solid #dcdfe6", borderRadius: 4, background: "#fff", color: "#409eff", fontSize: 12, cursor: "pointer", marginRight: 6 },
   delBtn: { padding: "5px 12px", border: "1px solid #fbc4c4", borderRadius: 4, background: "#fff", color: "#f56c6c", fontSize: 12, cursor: "pointer" },
+  restoreBtn: { padding: "5px 12px", border: "1px solid #b7eb8f", borderRadius: 4, background: "#f6ffed", color: "#389e0d", fontSize: 12, cursor: "pointer" },
+  activeTag: { display: "inline-flex", padding: "2px 8px", borderRadius: 999, background: "#e8f7f1", color: "#087b5b", fontSize: 12, fontWeight: 700 },
+  disabledTag: { display: "inline-flex", padding: "2px 8px", borderRadius: 999, background: "#f2f4f7", color: "#667085", fontSize: 12, fontWeight: 700 },
   primaryBtn: { padding: "8px 18px", border: "none", borderRadius: 4, background: "#409eff", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" },
   cancelBtn: { padding: "8px 18px", border: "1px solid #dcdfe6", borderRadius: 4, background: "#fff", color: "#606266", fontSize: 13, cursor: "pointer" },
   resetBtn: { padding: "8px 14px", border: "1px solid #dcdfe6", borderRadius: 4, background: "#fff", color: "#606266", fontSize: 13, cursor: "pointer" },

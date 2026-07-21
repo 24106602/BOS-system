@@ -11,12 +11,15 @@ const assertQuerySucceeded = (result) => {
   return result.data || [];
 };
 
+const filterActiveRecords = (query) =>
+  typeof query?.eq === "function" ? query.eq("is_deleted", false) : query;
+
 const queryEnrollmentRows = async (admin, rows) => {
   const studentIds = [...new Set(rows.map((row) => text(row.student_id)).filter(Boolean))];
   if (studentIds.length === 0) return [];
-  const result = await admin
-    .from("enrolled_students")
-    .select("student_id,name,college")
+  const result = await filterActiveRecords(
+    admin.from("enrolled_students").select("student_id,name,college")
+  )
     .in("student_id", studentIds);
   return assertQuerySucceeded(result);
 };
@@ -25,9 +28,9 @@ const queryExistingDifficultyStudents = async (admin, rows) => {
   const studentIds = [...new Set(rows.map((row) => text(row.student_id)).filter(Boolean))];
   const academicYears = [...new Set(rows.map((row) => text(row.academic_year)).filter(Boolean))];
   if (studentIds.length === 0 || academicYears.length === 0) return [];
-  const result = await admin
-    .from("students")
-    .select("id,student_id,academic_year,name,college_name")
+  const result = await filterActiveRecords(
+    admin.from("students").select("id,student_id,academic_year,name,college_name")
+  )
     .in("student_id", studentIds)
     .in("academic_year", academicYears);
   return assertQuerySucceeded(result);

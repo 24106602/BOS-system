@@ -27,6 +27,7 @@ import {
   getDifficultyStudentOperationHistory,
   getTransitionLogAction,
   readRequiredWorkflowRemark,
+  restoreDifficultyStudentWithLog,
   resolveResubmitTransition,
   saveDifficultyStudentWithLog,
 } from "./difficultyReviewWorkflow.js";
@@ -90,7 +91,12 @@ const findReportSourceStatus = () => Object.keys(DIFFICULTY_STUDENT_STATUS_ACTIO
   .find((status) => DIFFICULTY_STUDENT_STATUS_ACTION_TARGETS[status]?.report === "reported");
 
 const findStudent = async (admin, id) => {
-  const { data, error } = await admin.from("students").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await admin
+    .from("students")
+    .select("*")
+    .eq("id", id)
+    .eq("is_deleted", false)
+    .maybeSingle();
   if (error) throw error;
   if (!data) {
     const notFound = new Error("困难生记录不存在");
@@ -105,7 +111,8 @@ const findStudentByIdentity = async (admin, row) => {
     .from("students")
     .select("*")
     .eq("academic_year", text(row.academic_year))
-    .eq("college_name", text(row.college_name));
+    .eq("college_name", text(row.college_name))
+    .eq("is_deleted", false);
   const idCard = normalizeIdCard(row.id_card);
   const studentId = text(row.student_id);
   if (idCard) query = query.eq("id_card", idCard);
@@ -237,6 +244,24 @@ export const createDifficultyStudentRouter = () => {
     }
   });
 
+  router.get("/disabled", async (req, res, next) => {
+    try {
+      const { admin, profile } = req.difficultyContext;
+      requireRole(profile, ["admin"]);
+      let query = admin
+        .from("students")
+        .select("*")
+        .eq("is_deleted", true)
+        .order("deleted_at", { ascending: false });
+      if (text(req.query.academicYear)) query = query.eq("academic_year", text(req.query.academicYear));
+      const { data, error } = await query;
+      if (error) throw error;
+      res.json({ data: data || [] });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.post("/batch-submit", async (req, res, next) => {
     try {
       const { admin, profile } = req.difficultyContext;
@@ -345,7 +370,7 @@ export const createDifficultyStudentRouter = () => {
         .filter((id) => !UUID_PATTERN.test(id))
         .map((id) => ({ studentId: id, reasons: ["困难生记录不存在"] }));
       const { data, error } = validIds.length > 0
-        ? await admin.from("students").select("*").in("id", validIds)
+        ? await admin.from("students").select("*").eq("is_deleted", false).in("id", validIds)
         : { data: [], error: null };
       if (error) throw error;
 
@@ -415,6 +440,30 @@ export const createDifficultyStudentRouter = () => {
         text(req.body?.remark)
       );
       res.status(204).end();
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/:id/restore", async (req, res, next) => {
+    try {
+      const { admin, profile } = req.difficultyContext;
+      requireRole(profile, ["admin"]);
+      const { data: student, error } = await admin
+        .from("students")
+        .select("*")
+        .eq("id", req.params.id)
+        .eq("is_deleted", true)
+        .maybeSingle();
+      if (error) throw error;
+      if (!student) throw invalidRequest("已禁用困难生记录不存在");
+      const data = await restoreDifficultyStudentWithLog(
+        admin,
+        student,
+        req.difficultyContext,
+        text(req.body?.remark) || "管理员恢复已禁用困难生记录"
+      );
+      res.json({ data });
     } catch (error) {
       next(error);
     }

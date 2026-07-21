@@ -183,6 +183,26 @@ export const deleteDifficultyStudentWithLog = async (
   emptyMessage: "困难生删除操作未返回结果",
 });
 
+export const restoreDifficultyStudentWithLog = async (
+  admin,
+  student,
+  context,
+  remark = ""
+) => {
+  const data = await logOperation(admin, {
+    rpcName: "restore_difficulty_student_with_log",
+    params: {
+      p_student_record_id: student.id,
+      p_remark: text(remark) || null,
+      ...getOperatorParams(context),
+    },
+    emptyMessage: "困难生恢复操作未返回结果",
+  });
+  const restored = Array.isArray(data) ? data[0] : data;
+  if (!restored) throw new Error("困难生恢复成功，但未返回记录");
+  return restored;
+};
+
 export const reportDifficultyStudentRecordsWithLog = async (
   admin,
   ids,

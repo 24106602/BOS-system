@@ -7,6 +7,8 @@ export type Announcement = {
   priority: AnnouncementPriority;
   publisher: string;
   publishedAt: string;
+  status: "active" | "disabled";
+  deletedAt?: string;
 };
 
 export type AnnouncementQuery = {
@@ -27,21 +29,25 @@ const defaultAnnouncements: Announcement[] = [
     priority: "important",
     publisher: "学校资助管理中心",
     publishedAt: new Date().toISOString(),
+    status: "active",
   },
 ];
 
-export function getAnnouncements(): Announcement[] {
+export function getAnnouncements(options: { includeDisabled?: boolean } = {}): Announcement[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(defaultAnnouncements));
       return defaultAnnouncements;
     }
-    const parsed = JSON.parse(raw) as Announcement[];
+    const parsed = (JSON.parse(raw) as Array<Partial<Announcement>>).map((item) => ({
+      ...item,
+      status: item.status === "disabled" ? "disabled" as const : "active" as const,
+    })) as Announcement[];
     if (!Array.isArray(parsed)) return defaultAnnouncements;
-    return parsed.sort(
-      (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
-    );
+    return parsed
+      .filter((item) => options.includeDisabled || item.status !== "disabled")
+      .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
   } catch {
     return defaultAnnouncements;
   }
@@ -79,20 +85,26 @@ export function queryAnnouncements(query: AnnouncementQuery): Announcement[] {
   return list;
 }
 
-export function saveAnnouncement(announcement: Omit<Announcement, "id" | "publishedAt">): Announcement {
+export function saveAnnouncement(
+  announcement: Omit<Announcement, "id" | "publishedAt" | "status" | "deletedAt">
+): Announcement {
   const list = getAnnouncements();
   const item: Announcement = {
     ...announcement,
     id: `ann_${Date.now()}`,
     publishedAt: new Date().toISOString(),
+    status: "active",
   };
   list.unshift(item);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   return item;
 }
 
-export function updateAnnouncement(id: string, patch: Partial<Omit<Announcement, "id" | "publishedAt">>): void {
-  const list = getAnnouncements();
+export function updateAnnouncement(
+  id: string,
+  patch: Partial<Omit<Announcement, "id" | "publishedAt" | "status" | "deletedAt">>
+): void {
+  const list = getAnnouncements({ includeDisabled: true });
   const idx = list.findIndex((a) => a.id === id);
   if (idx === -1) return;
   list[idx] = { ...list[idx], ...patch };
@@ -100,7 +112,20 @@ export function updateAnnouncement(id: string, patch: Partial<Omit<Announcement,
 }
 
 export function deleteAnnouncement(id: string): void {
-  const list = getAnnouncements().filter((a) => a.id !== id);
+  const list = getAnnouncements({ includeDisabled: true }).map((announcement) =>
+    announcement.id === id
+      ? { ...announcement, status: "disabled" as const, deletedAt: new Date().toISOString() }
+      : announcement
+  );
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+export function restoreAnnouncement(id: string): void {
+  const list = getAnnouncements({ includeDisabled: true }).map((announcement) =>
+    announcement.id === id
+      ? { ...announcement, status: "active" as const, deletedAt: undefined }
+      : announcement
+  );
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
 

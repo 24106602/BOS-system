@@ -13,4 +13,6 @@ export type StudentRecord = {
   remark: string;
   sourceFile: string;
   importedAt: string;
+  isDeleted?: boolean;
+  deletedAt?: string;
 };

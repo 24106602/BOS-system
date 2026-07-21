@@ -173,6 +173,18 @@ export const editDifficultyStudent = (id: string | number, changes: Record<strin
 export const deleteDifficultyStudent = (id: string | number) =>
   requestDifficultyApi<void>(`/${id}`, "DELETE");
 
+export const listDisabledDifficultyStudents = (academicYear = "") => {
+  const query = academicYear ? `?academicYear=${encodeURIComponent(academicYear)}` : "";
+  return requestDifficultyApi<{ data: Record<string, unknown>[] }>(`/disabled${query}`, "GET");
+};
+
+export const restoreDifficultyStudent = (id: string | number, remark = "") =>
+  requestDifficultyApi<{ data: Record<string, unknown> }>(
+    `/${id}/restore`,
+    "POST",
+    { remark: remark || "管理员恢复已禁用困难生记录" }
+  );
+
 export const transitionDifficultyStudent = (
   id: string | number,
   action: "submit" | "approve" | "reject" | "report" | "return-by-center",
