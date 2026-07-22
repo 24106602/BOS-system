@@ -54,7 +54,7 @@ const awardMenuGroup: ExpandableMenuGroup = {
     { path: "/admin/awards", label: "三奖提交总览", mark: "览" },
     { path: "/admin/awards/national", label: "国家奖学金汇总", mark: "国" },
     { path: "/admin/awards/inspirational", label: "国家励志奖学金汇总", mark: "励" },
-    { path: "/admin/awards/shanghai", label: "上海市奖学金汇总", mark: "沪" },
+    { path: "/admin/awards/shanghai", label: "上海市奖学金汇总", mark: "市" },
   ],
 };
 
@@ -262,6 +262,12 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
           </div>
 
           <ExpandableMenu
+            group={announcementMenuGroup}
+            currentPath={path}
+            onNavigate={onNavigate}
+          />
+
+          <ExpandableMenu
             group={baseInfoMenuGroup}
             currentPath={path}
             onNavigate={onNavigate}
@@ -287,12 +293,6 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
 
           <ExpandableMenu
             group={grantMenuGroup}
-            currentPath={path}
-            onNavigate={onNavigate}
-          />
-
-          <ExpandableMenu
-            group={announcementMenuGroup}
             currentPath={path}
             onNavigate={onNavigate}
           />
