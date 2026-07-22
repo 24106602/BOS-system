@@ -342,6 +342,37 @@ export default function EnrolledStudentDatabasePage() {
         return;
       }
       const { headerIndex, columnMap } = locateHeaderRow(rows);
+      const headerRow = rows[headerIndex];
+
+      // ---- 诊断：打印表头匹配结果 ----
+      const fieldLabels: Record<EnrolledStudentField, string> = {
+        academicYear: "学年", semester: "学期", examineeId: "考生号", studentId: "学号",
+        name: "学生姓名", idCardType: "身份证件类型", idCard: "身份证件号", gender: "性别",
+        birthDate: "出生日期", politicalStatus: "政治面貌", nationality: "民族",
+        studentType: "学生类型", studyForm: "学习形式", department: "院系名称",
+        counselorName: "辅导员姓名", grade: "年级", className: "班级",
+        majorCategory: "专业大类", major: "专业", level: "层次", schoolSystem: "学制",
+        enrollmentDate: "入学日期", isRuralStudent: "是否农村学生", studentSource: "生源地区",
+        phone: "联系电话",
+      };
+      const mappingLines: string[] = [];
+      const unmappedFields: string[] = [];
+      (Object.keys(columnMap) as EnrolledStudentField[]).forEach((field) => {
+        const indexes = columnMap[field];
+        if (indexes.length === 0) {
+          unmappedFields.push(fieldLabels[field]);
+        } else {
+          const colNames = indexes.map((i) => `"${String(headerRow[i] ?? "")}"`).join(", ");
+          mappingLines.push(`  ${fieldLabels[field]} → 第${indexes[0] + 1}列 ${colNames}`);
+        }
+      });
+      console.group(`📋 导入诊断 — ${file.name}`);
+      console.log(`表头行: 第 ${headerIndex + 1} 行`);
+      console.log(`识别到 ${mappingLines.length} 个字段映射`);
+      if (mappingLines.length > 0) console.log("字段映射:\n" + mappingLines.join("\n"));
+      if (unmappedFields.length > 0) console.warn("未匹配字段: " + unmappedFields.join(", "));
+      // ---- 诊断结束 ----
+
       const parsed = parseEnrolledStudentsFromRows(
         rows.slice(headerIndex + 1),
         columnMap,
@@ -349,10 +380,25 @@ export default function EnrolledStudentDatabasePage() {
         academicYear
       );
       if (parsed.length === 0) {
+        console.warn("解析结果为空，请检查表头和数据行");
+        console.groupEnd();
         alert("未能识别到有效学生数据，请检查表头");
         setImportStatus("");
         return;
       }
+
+      // 打印第一条示例数据
+      console.log(`解析到 ${parsed.length} 条记录`);
+      console.log("第一条示例:", JSON.stringify(parsed[0], null, 2));
+      // 检查空值字段
+      const emptyFields = (Object.keys(fieldLabels) as EnrolledStudentField[]).filter(
+        (f) => !parsed[0][f]
+      );
+      if (emptyFields.length > 0) {
+        console.warn("第一条记录中为空的字段: " + emptyFields.map((f) => fieldLabels[f]).join(", "));
+      }
+      console.groupEnd();
+
       const totalCount = await addEnrolledStudents(parsed);
       setStudents(await getAllEnrolledStudents());
       setImportStatus(`已导入 ${parsed.length} 条，现有 ${totalCount} 条`);
