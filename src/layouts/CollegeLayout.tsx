@@ -46,7 +46,7 @@ const awardMenuGroup: ExpandableMenuGroup = {
     { path: "/college/awards", label: "三奖业务首页", mark: "奖" },
     { path: "/college/awards/national", label: "国家奖学金数据处理", mark: "国" },
     { path: "/college/awards/inspirational", label: "国家励志奖学金数据处理", mark: "励" },
-    { path: "/college/awards/shanghai", label: "上海市奖学金数据处理", mark: "沪" },
+    { path: "/college/awards/shanghai", label: "上海市奖学金数据处理", mark: "市" },
   ],
 };
 
