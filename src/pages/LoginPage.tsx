@@ -34,7 +34,7 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
       const profile = await signInWithPassword(account, password);
       onLogin(profile, getProfileLandingPath(profile));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "登录失败，请稍后重试");
+      setMessage(error instanceof Error ? error.message : "\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5");
       setMessageType("error");
     } finally {
       setLoading(false);
@@ -55,7 +55,7 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
       setMessage(result);
       setMessageType("success");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "发送密码重置邮件失败");
+      setMessage(error instanceof Error ? error.message : "\u53d1\u9001\u5bc6\u7801\u91cd\u7f6e\u90ae\u4ef6\u5931\u8d25");
       setMessageType("error");
     } finally {
       setResetting(false);
@@ -66,21 +66,21 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
     <main style={styles.page}>
       <section style={styles.shell}>
         <div style={styles.brandPanel}>
-          <div style={styles.logo}>校</div>
+          <div style={styles.logo}>\u6821</div>
           <p style={styles.eyebrow}>BOS DATA GOVERNANCE PLATFORM</p>
-          <h1 style={styles.brandTitle}>BOS 数据治理平台</h1>
-          <p style={styles.brandText}>面向学校管理部门与学院的数据治理平台，支持线上多人登录与权限隔离。</p>
+          <h1 style={styles.brandTitle}>BOS \u6570\u636e\u6cbb\u7406\u5e73\u53f0</h1>
+          <p style={styles.brandText}>\u9762\u5411\u5b66\u6821\u7ba1\u7406\u90e8\u95e8\u4e0e\u5b66\u9662\u7684\u6570\u636e\u6cbb\u7406\u5e73\u53f0\uff0c\u652f\u6301\u7ebf\u4e0a\u591a\u4eba\u767b\u5f55\u4e0e\u6743\u9650\u9694\u79bb\u3002</p>
           <div style={styles.brandLine} />
-          <p style={styles.brandNote}>规范上载、自动治理、集中汇总</p>
+          <p style={styles.brandNote}>\u89c4\u8303\u4e0a\u8f7d\u3001\u81ea\u52a8\u6cbb\u7406\u3001\u96c6\u4e2d\u6c47\u603b</p>
         </div>
 
         <form style={styles.loginPanel} onSubmit={submitLogin}>
-          <p style={styles.loginEyebrow}>账号登录</p>
-          <h2 style={styles.title}>BOS 数据治理平台</h2>
+          <p style={styles.loginEyebrow}>\u8d26\u53f7\u767b\u5f55</p>
+          <h2 style={styles.title}>BOS \u6570\u636e\u6cbb\u7406\u5e73\u53f0</h2>
           <p style={styles.tip}>
             {currentProfile
-              ? `当前已登录：${currentProfile.display_name || currentProfile.college_name || "已登录用户"}`
-              : "请输入 Supabase Auth 账号和密码"}
+              ? `\u5f53\u524d\u5df2\u767b\u5f55\uff1a${currentProfile.display_name || currentProfile.college_name || "\u5df2\u767b\u5f55\u7528\u6237"}`
+              : "\u8bf7\u8f93\u5165 Supabase Auth \u8d26\u53f7\u548c\u5bc6\u7801"}
           </p>
 
           {envMessage && <div style={styles.errorBox}>{envMessage}</div>}
@@ -89,35 +89,35 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
           )}
 
           <label style={styles.fieldLabel}>
-            <span>账号 / 邮箱</span>
+            <span>\u8d26\u53f7 / \u90ae\u7bb1</span>
             <input
               style={styles.input}
               value={account}
               autoComplete="username"
-              placeholder="请输入账号或邮箱"
+              placeholder="\u8bf7\u8f93\u5165\u8d26\u53f7\u6216\u90ae\u7bb1"
               disabled={busy}
               onChange={(event) => setAccount(event.target.value)}
             />
           </label>
 
           <label style={styles.fieldLabel}>
-            <span>密码</span>
+            <span>\u5bc6\u7801</span>
             <input
               style={styles.input}
               value={password}
               type="password"
               autoComplete="current-password"
-              placeholder="请输入密码"
+              placeholder="\u8bf7\u8f93\u5165\u5bc6\u7801"
               disabled={busy}
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
 
           <button type="submit" style={busy || envMessage ? styles.submitDisabled : styles.submit} disabled={busy || Boolean(envMessage)}>
-            {loading ? "登录中..." : "登录"}
+            {loading ? "\u767b\u5f55\u4e2d..." : "\u767b\u5f55"}
           </button>
           <button type="button" style={styles.forgotButton} disabled={busy} onClick={sendResetEmail}>
-            {resetting ? "正在发送..." : "忘记密码"}
+            {resetting ? "\u6b63\u5728\u53d1\u9001..." : "\u5fd8\u8bb0\u5bc6\u7801"}
           </button>
         </form>
       </section>
@@ -131,7 +131,7 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     placeItems: "center",
     padding: 24,
-    background: "var(--bg-page, #F1F5F9)",
+    background: "#eaf1f8",
   },
   shell: {
     width: "min(900px, 100%)",
@@ -139,15 +139,15 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     gridTemplateColumns: "minmax(260px, 0.85fr) minmax(360px, 1.15fr)",
     overflow: "hidden",
-    background: "var(--panel-bg, #fff)",
-    border: "1px solid var(--border-default, #E2E8F0)",
-    borderRadius: "var(--radius-lg, 12px)",
-    boxShadow: "var(--shadow-xl, 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.06))",
+    background: "#fff",
+    border: "1px solid #d9e3ee",
+    borderRadius: 8,
+    boxShadow: "0 18px 44px rgba(15, 35, 64, 0.12)",
   },
   brandPanel: {
     padding: "46px 38px",
     color: "#fff",
-    background: "var(--navy, #0b1428)",
+    background: "#0b1428",
   },
   logo: {
     width: 54,
@@ -155,9 +155,9 @@ const styles: Record<string, CSSProperties> = {
     display: "grid",
     placeItems: "center",
     marginBottom: 42,
-    borderRadius: "var(--radius-md, 8px)",
+    borderRadius: 8,
     color: "#fff",
-    background: "var(--brand-blue, #0077d4)",
+    background: "#008de5",
     fontSize: 24,
     fontWeight: 900,
   },
@@ -184,7 +184,7 @@ const styles: Record<string, CSSProperties> = {
     height: 3,
     marginTop: 34,
     borderRadius: 2,
-    background: "var(--brand-blue, #0077d4)",
+    background: "#00a8ff",
   },
   brandNote: {
     margin: "15px 0 0",
@@ -196,79 +196,76 @@ const styles: Record<string, CSSProperties> = {
   },
   loginEyebrow: {
     margin: 0,
-    color: "var(--brand-blue, #0077d4)",
+    color: "#0077d4",
     fontSize: 13,
     fontWeight: 800,
   },
   title: {
     margin: "10px 0 8px",
-    color: "var(--text, #172033)",
+    color: "#101d34",
     fontSize: 28,
   },
   tip: {
     margin: "0 0 22px",
-    color: "var(--muted, #63738a)",
+    color: "#718096",
     fontSize: 14,
   },
   fieldLabel: {
     display: "grid",
     gap: 7,
     marginBottom: 14,
-    color: "var(--muted, #63738a)",
+    color: "#40526a",
     fontSize: 13,
     fontWeight: 700,
   },
   input: {
     width: "100%",
     boxSizing: "border-box",
-    border: "1px solid var(--border-default, #E2E8F0)",
-    borderRadius: "var(--radius-md, 8px)",
+    border: "1px solid #cfdbe7",
+    borderRadius: 6,
     padding: "11px 12px",
-    color: "var(--text, #172033)",
-    background: "var(--panel-bg, #fff)",
+    color: "#15304f",
+    background: "#fff",
     fontSize: 14,
-    outline: "none",
-    transition: "border-color 200ms ease, box-shadow 200ms ease",
   },
   errorBox: {
     marginBottom: 14,
-    border: "1px solid #fecaca",
-    borderRadius: "var(--radius-md, 8px)",
+    border: "1px solid #ffd4da",
+    borderRadius: 6,
     padding: "10px 12px",
     background: "#fff1f2",
-    color: "var(--danger, #d83a4e)",
+    color: "#b42336",
     fontSize: 13,
     fontWeight: 700,
   },
   successBox: {
     marginBottom: 14,
     border: "1px solid #bbf7d0",
-    borderRadius: "var(--radius-md, 8px)",
+    borderRadius: 6,
     padding: "10px 12px",
     background: "#f0fdf4",
-    color: "var(--success, #0b9b6f)",
+    color: "#047857",
     fontSize: 13,
     fontWeight: 700,
   },
   submit: {
     width: "100%",
     border: "none",
-    borderRadius: "var(--radius-md, 8px)",
+    borderRadius: 7,
     padding: "12px 14px",
     color: "#fff",
-    background: "var(--brand-blue, #0077d4)",
+    background: "#0077d4",
     cursor: "pointer",
     fontSize: 15,
     fontWeight: 800,
-    transition: "background-color 150ms ease",
   },
   submitDisabled: {
     width: "100%",
     border: "none",
-    borderRadius: "var(--radius-md, 8px)",
+    borderRadius: 7,
     padding: "12px 14px",
     color: "#fff",
-    background: "var(--line, #d7e1ed)",
+    background: "#a6b4c5",
     cursor: "not-allowed",
     fontSize: 15,
     fontWeight: 800,
@@ -278,7 +275,7 @@ const styles: Record<string, CSSProperties> = {
     marginTop: 10,
     border: "none",
     background: "transparent",
-    color: "var(--brand-blue, #0077d4)",
+    color: "#0077d4",
     cursor: "pointer",
     fontSize: 13,
     fontWeight: 800,
