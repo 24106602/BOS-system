@@ -173,7 +173,15 @@ async function clearLocal() {
 export const getAllEnrolledStudents = async (): Promise<EnrolledStudentRecord[]> => {
   if (isSupabaseConfigured) {
     try {
-      return await fetchEnrolledStudents();
+      const supabaseData = await fetchEnrolledStudents();
+      if (supabaseData.length > 0) return supabaseData;
+      // Supabase 返回空数据（表结构不匹配或未同步），降级到 IndexedDB
+      const localData = await getAllLocal();
+      if (localData.length > 0) {
+        console.warn("Supabase 在校生数据为空，使用本地 IndexedDB 数据");
+        return localData;
+      }
+      return supabaseData;
     } catch (e) {
       console.warn("Supabase 读取在校生失败，降级到本地存储", e);
     }
