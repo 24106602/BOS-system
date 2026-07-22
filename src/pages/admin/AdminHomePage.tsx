@@ -6,185 +6,39 @@ type AdminHomePageProps = {
 
 export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
   return (
-    <section className="bos-admin-home">
-      {/* Welcome Banner */}
-      <div className="bos-admin-home__welcome">
+    <section>
+      <div style={styles.hero}>
         <div>
-          <h1 style={{ margin: 0, color: "var(--text, #172033)", fontSize: 22, fontWeight: 800 }}>
-            欢迎回来，管理员
-          </h1>
-          <p style={{ margin: "6px 0 0", color: "var(--muted, #63738a)", fontSize: 13 }}>
-            2025-2026 学年 · 数据治理平台
-          </p>
+          <div style={styles.eyebrow}>\u5b66\u6821\u7ba1\u7406\u5458\u7aef / \u4e1a\u52a1\u6a21\u5757\u5165\u53e3</div>
+          <h1 style={styles.title}>\u5b66\u751f\u4e8b\u52a1\u6570\u636e\u6cbb\u7406\u5e73\u53f0</h1>
+          <p style={styles.text}>\u6309\u4e1a\u52a1\u6a21\u5757\u8fdb\u5165\u5bf9\u5e94\u5de5\u4f5c\u533a\u3002\u56f0\u96be\u751f\u4e1a\u52a1\u5df2\u542f\u7528\uff0c\u540e\u7eed\u4e1a\u52a1\u4f1a\u6cbf\u7528\u540c\u4e00\u5957\u4e0a\u8f7d\u3001\u6cbb\u7406\u3001\u6c47\u603b\u548c\u603b\u5e93\u6846\u67b6\u3002</p>
         </div>
-        <div style={{
-          padding: "7px 10px",
-          borderRadius: 999,
-          background: "var(--success-bg, #e9f8f2)",
-          color: "var(--success, #0b9b6f)",
-          fontSize: 12,
-          fontWeight: 800,
-          whiteSpace: "nowrap",
-          border: "1px solid var(--success-border, #a7e3ca)",
-        }}>
-          ✓ 平台运行正常
-        </div>
+        <div style={styles.heroBadge}>\u5e73\u53f0\u8fd0\u884c\u6b63\u5e38</div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="bos-admin-home__stats">
-        <QuickStat icon="困" label="困难生总数" value="1,286" tone="blue" />
-        <QuickStat icon="审" label="待审核" value="42" tone="amber" />
-        <QuickStat icon="上" label="已上报" value="1,105" tone="green" />
-        <QuickStat icon="奖" label="三奖总人数" value="856" tone="purple" />
-      </div>
-
-      {/* Business Modules Grid */}
-      <div className="bos-admin-home__grid">
+      <div style={styles.businessGrid}>
         <BusinessCard
-          icon="困"
-          title="困难生业务"
-          description="困难生数据治理、学院上载、全校汇总与家庭成员关联。"
-          status="已启用"
+          icon="\u56f0"
+          title="\u56f0\u96be\u751f\u4e1a\u52a1"
+          description="\u56f0\u96be\u751f\u6570\u636e\u6cbb\u7406\u3001\u5b66\u9662\u4e0a\u8f7d\u3001\u5168\u6821\u6c47\u603b\u4e0e\u5bb6\u5ead\u6210\u5458\u5173\u8054\u3002"
+          status="\u5df2\u542f\u7528"
           statusTone="enabled"
-          metrics={["本专科信息汇总", "家庭成员信息汇总", "困难生数据库"]}
-          actionText="进入业务"
+          metrics={["\u672c\u4e13\u79d1\u4fe1\u606f\u6c47\u603b", "\u5bb6\u5ead\u6210\u5458\u4fe1\u606f\u6c47\u603b", "\u56f0\u96be\u751f\u6570\u636e\u5e93"]}
+          actionText="\u8fdb\u5165\u4e1a\u52a1"
           onClick={() => onNavigate?.("/admin/difficulty")}
         />
         <BusinessCard
-          icon="奖"
-          title="三大奖业务"
-          description="用于三大奖申报数据治理、学院上载审核和学校端汇总。"
-          status="已启用"
+          icon="\u5956"
+          title="\u4e09\u5927\u5956\u4e1a\u52a1"
+          description="\u7528\u4e8e\u4e09\u5927\u5956\u7533\u62a5\u6570\u636e\u6cbb\u7406\u3001\u5b66\u9662\u4e0a\u8f7d\u5ba1\u6838\u548c\u5b66\u6821\u7aef\u6c47\u603b\u3002"
+          status="\u5df2\u542f\u7528"
           statusTone="enabled"
-          metrics={["国家奖学金", "国家励志奖学金", "上海市奖学金"]}
-          actionText="进入业务"
+          metrics={["\u56fd\u5bb6\u5956\u5b66\u91d1", "\u56fd\u5bb6\u52b1\u5fd7\u5956\u5b66\u91d1", "\u4e0a\u6d77\u5e02\u5956\u5b66\u91d1"]}
+          actionText="\u8fdb\u5165\u4e1a\u52a1"
           onClick={() => onNavigate?.("/admin/awards")}
         />
-        <BusinessCard
-          icon="助"
-          title="助学金业务"
-          description="国家助学金数据管理、查询与汇总统计。"
-          status="已启用"
-          statusTone="enabled"
-          metrics={["助学金数据库", "助学金汇总"]}
-          actionText="进入业务"
-          onClick={() => onNavigate?.("/admin/grant")}
-        />
-        <BusinessCard
-          icon="告"
-          title="通知公告"
-          description="发布和管理平台通知公告，支持面向全校或指定学院。"
-          status="已启用"
-          statusTone="enabled"
-          metrics={["公告发布", "公告管理"]}
-          actionText="进入管理"
-          onClick={() => onNavigate?.("/admin/announcement")}
-        />
-        <BusinessCard
-          icon="校"
-          title="学校基础信息"
-          description="维护学校基本信息、院系信息和账号管理。"
-          status="已启用"
-          statusTone="enabled"
-          metrics={["学校信息", "院系管理", "账号维护"]}
-          actionText="进入管理"
-          onClick={() => onNavigate?.("/admin/base-info")}
-        />
-        <BusinessCard
-          icon="在"
-          title="在校生数据库"
-          description="在校生学籍数据库查询与检索。"
-          status="已启用"
-          statusTone="enabled"
-          metrics={["学籍查询", "数据检索"]}
-          actionText="进入查询"
-          onClick={() => onNavigate?.("/admin/enrolled")}
-        />
       </div>
-
-      {/* Inline styles for new classes */}
-      <style>{`
-        .bos-admin-home {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-        .bos-admin-home__welcome {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-          padding: 20px 24px;
-          border: 1px solid var(--line, #d7e1ed);
-          border-radius: var(--radius-lg, 12px);
-          background: var(--panel-bg, #fff);
-          box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.05));
-        }
-        .bos-admin-home__stats {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 14px;
-        }
-        @media (max-width: 1024px) {
-          .bos-admin-home__stats {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-        .bos-admin-home__grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 14px;
-        }
-      `}</style>
     </section>
-  );
-}
-
-function QuickStat({ icon, label, value, tone }: {
-  icon: string;
-  label: string;
-  value: string;
-  tone: "blue" | "amber" | "green" | "purple";
-}) {
-  const toneColors: Record<string, { bg: string; color: string; border: string }> = {
-    blue: { bg: "var(--brand-blue-light, #DBEAFE)", color: "var(--brand-blue, #0077d4)", border: "#BFDBFE" },
-    amber: { bg: "#FEF3C7", color: "#B45309", border: "#FDE68A" },
-    green: { bg: "var(--success-bg, #e9f8f2)", color: "var(--success, #0b9b6f)", border: "var(--success-border, #a7e3ca)" },
-    purple: { bg: "#F3E8FF", color: "#7C3AED", border: "#E9D5FF" },
-  };
-  const colors = toneColors[tone] || toneColors.blue;
-
-  return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: 14,
-      padding: "16px 20px",
-      border: `1px solid ${colors.border}`,
-      borderRadius: "var(--radius-lg, 12px)",
-      background: "var(--panel-bg, #fff)",
-      boxShadow: "var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.05))",
-    }}>
-      <div style={{
-        width: 44,
-        height: 44,
-        display: "grid",
-        placeItems: "center",
-        borderRadius: 10,
-        background: colors.bg,
-        color: colors.color,
-        fontWeight: 900,
-        fontSize: 18,
-        flexShrink: 0,
-      }}>
-        {icon}
-      </div>
-      <div style={{ display: "grid", gap: 2 }}>
-        <span style={{ color: "var(--muted, #63738a)", fontSize: 12, fontWeight: 600 }}>{label}</span>
-        <strong style={{ color: "var(--text, #172033)", fontSize: 24, lineHeight: 1 }}>{value}</strong>
-      </div>
-    </div>
   );
 }
 
@@ -210,76 +64,127 @@ function BusinessCard({
   onClick?: () => void;
 }) {
   return (
-    <section style={{
-      padding: 18,
-      border: "1px solid var(--line, #d7e1ed)",
-      borderRadius: "var(--radius-lg, 12px)",
-      background: "var(--panel-bg, #fff)",
-      boxShadow: "var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.05))",
-      transition: "box-shadow 200ms ease, transform 200ms ease",
-    }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-md, 0 4px 6px rgba(0,0,0,0.07))";
-        (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLElement).style.boxShadow = "var(--shadow-sm, 0 1px 2px rgba(0,0,0,0.05))";
-        (e.currentTarget as HTMLElement).style.transform = "none";
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-        <div style={{
-          width: 44,
-          height: 44,
-          display: "grid",
-          placeItems: "center",
-          borderRadius: 10,
-          background: statusTone === "enabled" ? "var(--brand-blue, #0077d4)" : "var(--line, #d7e1ed)",
-          color: statusTone === "enabled" ? "#fff" : "var(--muted, #63738a)",
-          fontWeight: 900,
-        }}>{icon}</div>
-        <span style={{
-          padding: "4px 8px",
-          borderRadius: 999,
-          background: statusTone === "enabled" ? "var(--success-bg, #e9f8f2)" : "var(--panel-soft, #f7fafd)",
-          color: statusTone === "enabled" ? "var(--success, #0b9b6f)" : "var(--muted, #63738a)",
-          fontSize: 12,
-          fontWeight: 800,
-          border: `1px solid ${statusTone === "enabled" ? "var(--success-border, #a7e3ca)" : "var(--line, #d7e1ed)"}`,
-        }}>{status}</span>
+    <section style={styles.businessCard}>
+      <div style={styles.cardTop}>
+        <div style={statusTone === "enabled" ? styles.cardIcon : styles.cardIconMuted}>{icon}</div>
+        <span style={statusTone === "enabled" ? styles.enabledBadge : styles.pendingBadge}>{status}</span>
       </div>
-      <h2 style={{ margin: "14px 0 8px", color: "var(--text, #172033)", fontSize: 18, fontWeight: 700 }}>{title}</h2>
-      <p style={{ margin: 0, minHeight: 40, color: "var(--muted, #63738a)", fontSize: 13, lineHeight: 1.7 }}>{description}</p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 7, margin: "14px 0" }}>
+      <h2 style={styles.cardTitle}>{title}</h2>
+      <p style={styles.cardText}>{description}</p>
+      <div style={styles.metricList}>
         {metrics.map((item) => (
-          <span key={item} style={{
-            padding: "5px 8px",
-            borderRadius: 999,
-            background: "var(--panel-soft, #f7fafd)",
-            color: "var(--muted, #63738a)",
-            fontSize: 12,
-            border: "1px solid var(--line, #d7e1ed)",
-          }}>{item}</span>
+          <span key={item} style={styles.metricPill}>{item}</span>
         ))}
       </div>
-      <button
-        style={{
-          width: "100%",
-          border: "none",
-          borderRadius: "var(--radius-md, 8px)",
-          padding: "10px 12px",
-          background: disabled ? "var(--line, #d7e1ed)" : "var(--brand-blue, #0077d4)",
-          color: "#fff",
-          fontWeight: 800,
-          cursor: disabled ? "not-allowed" : "pointer",
-          fontSize: 14,
-          transition: "background-color 150ms ease",
-        }}
-        disabled={disabled}
-        onClick={onClick}
-      >
+      <button style={disabled ? styles.disabledButton : styles.primaryButton} disabled={disabled} onClick={onClick}>
         {actionText}
       </button>
     </section>
   );
 }
+
+const styles: Record<string, CSSProperties> = {
+  hero: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    padding: 20,
+    border: "1px solid #d7e1ed",
+    borderRadius: 8,
+    background: "#fff",
+    boxShadow: "0 4px 14px rgba(15, 35, 64, 0.05)",
+  },
+  eyebrow: { color: "#0077d4", fontSize: 13, fontWeight: 800 },
+  title: { margin: "5px 0 7px", color: "#172033", fontSize: 26 },
+  text: { margin: 0, color: "#63738a", fontSize: 14, lineHeight: 1.7 },
+  heroBadge: {
+    padding: "7px 10px",
+    borderRadius: 999,
+    background: "#e9f8f2",
+    color: "#087b5b",
+    fontSize: 12,
+    fontWeight: 800,
+    whiteSpace: "nowrap",
+  },
+  businessGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+    gap: 14,
+    marginTop: 14,
+  },
+  businessCard: {
+    padding: 18,
+    border: "1px solid #d7e1ed",
+    borderRadius: 8,
+    background: "#fff",
+    boxShadow: "0 4px 14px rgba(15, 35, 64, 0.05)",
+  },
+  cardTop: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 },
+  cardIcon: {
+    width: 44,
+    height: 44,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 8,
+    background: "#0077d4",
+    color: "#fff",
+    fontWeight: 900,
+  },
+  cardIconMuted: {
+    width: 44,
+    height: 44,
+    display: "grid",
+    placeItems: "center",
+    borderRadius: 8,
+    background: "#e8eef5",
+    color: "#6b7c92",
+    fontWeight: 900,
+  },
+  enabledBadge: {
+    padding: "4px 8px",
+    borderRadius: 999,
+    background: "#e9f8f2",
+    color: "#087b5b",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  pendingBadge: {
+    padding: "4px 8px",
+    borderRadius: 999,
+    background: "#f2f5f8",
+    color: "#728197",
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  cardTitle: { margin: "14px 0 8px", color: "#172033", fontSize: 20 },
+  cardText: { margin: 0, minHeight: 45, color: "#63738a", fontSize: 13, lineHeight: 1.7 },
+  metricList: { display: "flex", flexWrap: "wrap", gap: 7, margin: "14px 0" },
+  metricPill: {
+    padding: "5px 8px",
+    borderRadius: 999,
+    background: "#f3f8fd",
+    color: "#52647b",
+    fontSize: 12,
+  },
+  primaryButton: {
+    width: "100%",
+    border: "none",
+    borderRadius: 6,
+    padding: "10px 12px",
+    background: "#0077d4",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  disabledButton: {
+    width: "100%",
+    border: "none",
+    borderRadius: 6,
+    padding: "10px 12px",
+    background: "#a7b3c2",
+    color: "#fff",
+    fontWeight: 800,
+    cursor: "not-allowed",
+  },
+};
