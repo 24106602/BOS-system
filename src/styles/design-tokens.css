@@ -1,0 +1,179 @@
+/* ==========================================================================
+   BOS 数据治理平台 — Design Tokens
+   Project path: src/styles/design-tokens.css
+   ========================================================================== */
+
+:root {
+
+  /* --------------------------------------------------------------------------
+     1. Color System — Primary
+     --------------------------------------------------------------------------
+  */
+  --color-primary: #2563EB;
+  --color-primary-light: #DBEAFE;
+  --color-primary-dark: #1D4ED8;
+
+  /* --------------------------------------------------------------------------
+     1. Color System — Semantic
+     --------------------------------------------------------------------------
+  */
+  --color-success: #16A34A;
+  --color-warning: #D97706;
+  --color-danger: #DC2626;
+  --color-info: #0891B2;
+
+  /* --------------------------------------------------------------------------
+     1. Color System — Neutral Grays (10 levels)
+     --------------------------------------------------------------------------
+  */
+  --color-gray-50: #F8FAFC;
+  --color-gray-100: #F1F5F9;
+  --color-gray-200: #E2E8F0;
+  --color-gray-300: #CBD5E1;
+  --color-gray-400: #94A3B8;
+  --color-gray-500: #64748B;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1E293B;
+  --color-gray-900: #0F172A;
+
+  /* --------------------------------------------------------------------------
+     1. Color System — Background
+     --------------------------------------------------------------------------
+  */
+  --bg-page: #F1F5F9;
+  --bg-card: #FFFFFF;
+  --bg-sidebar: #1E293B;
+
+  /* --------------------------------------------------------------------------
+     1. Color System — Text
+     --------------------------------------------------------------------------
+  */
+  --text-primary: #0F172A;
+  --text-secondary: #64748B;
+  --text-disabled: #94A3B8;
+
+  /* --------------------------------------------------------------------------
+     1. Color System — Borders
+     --------------------------------------------------------------------------
+  */
+  --border-default: #E2E8F0;
+  --border-light: #F1F5F9;
+
+  /* --------------------------------------------------------------------------
+     2. Spacing System (4px base)
+     --------------------------------------------------------------------------
+  */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-9: 36px;
+  --space-10: 40px;
+  --space-11: 44px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* --------------------------------------------------------------------------
+     3. Border Radius
+     --------------------------------------------------------------------------
+  */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* --------------------------------------------------------------------------
+     4. Typography — Font Family
+     --------------------------------------------------------------------------
+  */
+  --font-family: "PingFang SC", "Microsoft YaHei", "SF Pro Text", system-ui, sans-serif;
+
+  /* --------------------------------------------------------------------------
+     4. Typography — Font Sizes
+     --------------------------------------------------------------------------
+  */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+
+  /* --------------------------------------------------------------------------
+     4. Typography — Line Heights
+     --------------------------------------------------------------------------
+  */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.75;
+
+  /* --------------------------------------------------------------------------
+     4. Typography — Font Weights
+     --------------------------------------------------------------------------
+  */
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --font-extrabold: 800;
+
+  /* --------------------------------------------------------------------------
+     5. Shadows (4 levels, increasingly dramatic)
+     --------------------------------------------------------------------------
+  */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.06);
+
+  /* --------------------------------------------------------------------------
+     6. Transitions (ease timing function)
+     --------------------------------------------------------------------------
+  */
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* --------------------------------------------------------------------------
+     7. Z-index Scale
+     --------------------------------------------------------------------------
+  */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal-backdrop: 900;
+  --z-modal: 1000;
+  --z-toast: 1100;
+
+  /* --------------------------------------------------------------------------
+     8. Status Colors — Difficulty Student Statuses
+     --------------------------------------------------------------------------
+  */
+  --status-draft-bg: #94A3B8;
+  --status-draft-text: #475569;
+
+  --status-college_confirmed-bg: #DBEAFE;
+  --status-college_confirmed-text: #1D4ED8;
+
+  --status-school_reviewing-bg: #FEF3C7;
+  --status-school_reviewing-text: #B45309;
+
+  --status-school_approved-bg: #CCFBF1;
+  --status-school_approved-text: #0F766E;
+
+  --status-reported-bg: #DCFCE7;
+  --status-reported-text: #15803D;
+
+  --status-rejected_by_school-bg: #FEE2E2;
+  --status-rejected_by_school-text: #B91C1C;
+
+  --status-returned_by_center-bg: #F3E8FF;
+  --status-returned_by_center-text: #7C3AED;
+
+}

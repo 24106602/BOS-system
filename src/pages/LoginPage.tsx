@@ -34,7 +34,7 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
       const profile = await signInWithPassword(account, password);
       onLogin(profile, getProfileLandingPath(profile));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "登录失败，请稍后重试");
+      setMessage(error instanceof Error ? error.message : "\u767b\u5f55\u5931\u8d25\uff0c\u8bf7\u7a0d\u540e\u91cd\u8bd5");
       setMessageType("error");
     } finally {
       setLoading(false);
@@ -55,7 +55,7 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
       setMessage(result);
       setMessageType("success");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "发送密码重置邮件失败");
+      setMessage(error instanceof Error ? error.message : "\u53d1\u9001\u5bc6\u7801\u91cd\u7f6e\u90ae\u4ef6\u5931\u8d25");
       setMessageType("error");
     } finally {
       setResetting(false);
@@ -66,21 +66,21 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
     <main style={styles.page}>
       <section style={styles.shell}>
         <div style={styles.brandPanel}>
-          <div style={styles.logo}>校</div>
+          <div style={styles.logo}>\u6821</div>
           <p style={styles.eyebrow}>BOS DATA GOVERNANCE PLATFORM</p>
-          <h1 style={styles.brandTitle}>BOS 数据治理平台</h1>
-          <p style={styles.brandText}>面向学校管理部门与学院的数据治理平台，支持线上多人登录与权限隔离。</p>
+          <h1 style={styles.brandTitle}>BOS \u6570\u636e\u6cbb\u7406\u5e73\u53f0</h1>
+          <p style={styles.brandText}>\u9762\u5411\u5b66\u6821\u7ba1\u7406\u90e8\u95e8\u4e0e\u5b66\u9662\u7684\u6570\u636e\u6cbb\u7406\u5e73\u53f0\uff0c\u652f\u6301\u7ebf\u4e0a\u591a\u4eba\u767b\u5f55\u4e0e\u6743\u9650\u9694\u79bb\u3002</p>
           <div style={styles.brandLine} />
-          <p style={styles.brandNote}>规范上载、自动治理、集中汇总</p>
+          <p style={styles.brandNote}>\u89c4\u8303\u4e0a\u8f7d\u3001\u81ea\u52a8\u6cbb\u7406\u3001\u96c6\u4e2d\u6c47\u603b</p>
         </div>
 
         <form style={styles.loginPanel} onSubmit={submitLogin}>
-          <p style={styles.loginEyebrow}>账号登录</p>
-          <h2 style={styles.title}>BOS 数据治理平台</h2>
+          <p style={styles.loginEyebrow}>\u8d26\u53f7\u767b\u5f55</p>
+          <h2 style={styles.title}>BOS \u6570\u636e\u6cbb\u7406\u5e73\u53f0</h2>
           <p style={styles.tip}>
             {currentProfile
-              ? `当前已登录：${currentProfile.display_name || currentProfile.college_name || "已登录用户"}`
-              : "请输入 Supabase Auth 账号和密码"}
+              ? `\u5f53\u524d\u5df2\u767b\u5f55\uff1a${currentProfile.display_name || currentProfile.college_name || "\u5df2\u767b\u5f55\u7528\u6237"}`
+              : "\u8bf7\u8f93\u5165 Supabase Auth \u8d26\u53f7\u548c\u5bc6\u7801"}
           </p>
 
           {envMessage && <div style={styles.errorBox}>{envMessage}</div>}
@@ -89,35 +89,35 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
           )}
 
           <label style={styles.fieldLabel}>
-            <span>账号 / 邮箱</span>
+            <span>\u8d26\u53f7 / \u90ae\u7bb1</span>
             <input
               style={styles.input}
               value={account}
               autoComplete="username"
-              placeholder="请输入账号或邮箱"
+              placeholder="\u8bf7\u8f93\u5165\u8d26\u53f7\u6216\u90ae\u7bb1"
               disabled={busy}
               onChange={(event) => setAccount(event.target.value)}
             />
           </label>
 
           <label style={styles.fieldLabel}>
-            <span>密码</span>
+            <span>\u5bc6\u7801</span>
             <input
               style={styles.input}
               value={password}
               type="password"
               autoComplete="current-password"
-              placeholder="请输入密码"
+              placeholder="\u8bf7\u8f93\u5165\u5bc6\u7801"
               disabled={busy}
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
 
           <button type="submit" style={busy || envMessage ? styles.submitDisabled : styles.submit} disabled={busy || Boolean(envMessage)}>
-            {loading ? "登录中..." : "登录"}
+            {loading ? "\u767b\u5f55\u4e2d..." : "\u767b\u5f55"}
           </button>
           <button type="button" style={styles.forgotButton} disabled={busy} onClick={sendResetEmail}>
-            {resetting ? "正在发送..." : "忘记密码"}
+            {resetting ? "\u6b63\u5728\u53d1\u9001..." : "\u5fd8\u8bb0\u5bc6\u7801"}
           </button>
         </form>
       </section>

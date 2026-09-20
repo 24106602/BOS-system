@@ -46,7 +46,7 @@ const awardMenuGroup: ExpandableMenuGroup = {
     { path: "/college/awards", label: "三奖业务首页", mark: "奖" },
     { path: "/college/awards/national", label: "国家奖学金数据处理", mark: "国" },
     { path: "/college/awards/inspirational", label: "国家励志奖学金数据处理", mark: "励" },
-    { path: "/college/awards/shanghai", label: "上海市奖学金数据处理", mark: "沪" },
+    { path: "/college/awards/shanghai", label: "上海市奖学金数据处理", mark: "市" },
   ],
 };
 
@@ -186,9 +186,14 @@ function TabBar({ tabs, activeTabId, onActivateTab, onRemoveTab }: { tabs: TabIt
 }
 
 export default function CollegeLayout({ path, profile, onNavigate, onLogout, children, activeTabId, tabs, onActivateTab, onRemoveTab }: CollegeLayoutProps) {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("college_sidebar_collapsed") === "true";
+    } catch { return false; }
+  });
 
   return (
-    <div className="bos-app-frame">
+    <div className={`bos-app-frame${collapsed ? " is-collapsed" : ""}`}>
       <aside className="bos-sidebar-modern">
         <div className="bos-sidebar-brand">
           <span className="bos-sidebar-logo">BOS</span>
@@ -228,6 +233,18 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
         </nav>
 
         <div className="bos-sidebar-foot">
+          <button
+            onClick={() => {
+              const next = !collapsed;
+              setCollapsed(next);
+              try { localStorage.setItem("college_sidebar_collapsed", String(next)); } catch {}
+            }}
+            className="bos-sidebar-toggle"
+            aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
+            title={collapsed ? "展开侧边栏" : "收起侧边栏"}
+          >
+            {collapsed ? "▶" : "◀"}
+          </button>
           <span className="bos-sidebar-health"><i /> 数据治理服务正常</span>
           <button onClick={onLogout}>退出当前角色</button>
         </div>
@@ -253,6 +270,23 @@ export default function CollegeLayout({ path, profile, onNavigate, onLogout, chi
           <div className="bos-page-content">{children}</div>
         </main>
       </div>
+      <style>{`
+        .bos-sidebar-toggle {
+          width: 100%;
+          padding: 8px;
+          border: 1px solid var(--border-default, #E2E8F0);
+          border-radius: var(--radius-md, 8px);
+          color: var(--text-secondary, #64748B);
+          background: var(--bg-card, #FFFFFF);
+          font-size: 12px;
+          cursor: pointer;
+          transition: all var(--transition-fast, 150ms ease);
+        }
+        .bos-sidebar-toggle:hover {
+          background: var(--color-gray-50, #F8FAFC);
+          color: var(--text-primary, #0F172A);
+        }
+      `}</style>
     </div>
   );
 }

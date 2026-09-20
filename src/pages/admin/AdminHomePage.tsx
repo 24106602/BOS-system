@@ -9,32 +9,32 @@ export default function AdminHomePage({ onNavigate }: AdminHomePageProps) {
     <section>
       <div style={styles.hero}>
         <div>
-          <div style={styles.eyebrow}>学校管理员端 / 业务模块入口</div>
-          <h1 style={styles.title}>学生事务数据治理平台</h1>
-          <p style={styles.text}>按业务模块进入对应工作区。困难生业务已启用，后续业务会沿用同一套上载、治理、汇总和总库框架。</p>
+          <div style={styles.eyebrow}>\u5b66\u6821\u7ba1\u7406\u5458\u7aef / \u4e1a\u52a1\u6a21\u5757\u5165\u53e3</div>
+          <h1 style={styles.title}>\u5b66\u751f\u4e8b\u52a1\u6570\u636e\u6cbb\u7406\u5e73\u53f0</h1>
+          <p style={styles.text}>\u6309\u4e1a\u52a1\u6a21\u5757\u8fdb\u5165\u5bf9\u5e94\u5de5\u4f5c\u533a\u3002\u56f0\u96be\u751f\u4e1a\u52a1\u5df2\u542f\u7528\uff0c\u540e\u7eed\u4e1a\u52a1\u4f1a\u6cbf\u7528\u540c\u4e00\u5957\u4e0a\u8f7d\u3001\u6cbb\u7406\u3001\u6c47\u603b\u548c\u603b\u5e93\u6846\u67b6\u3002</p>
         </div>
-        <div style={styles.heroBadge}>平台运行正常</div>
+        <div style={styles.heroBadge}>\u5e73\u53f0\u8fd0\u884c\u6b63\u5e38</div>
       </div>
 
       <div style={styles.businessGrid}>
         <BusinessCard
-          icon="困"
-          title="困难生业务"
-          description="困难生数据治理、学院上载、全校汇总与家庭成员关联。"
-          status="已启用"
+          icon="\u56f0"
+          title="\u56f0\u96be\u751f\u4e1a\u52a1"
+          description="\u56f0\u96be\u751f\u6570\u636e\u6cbb\u7406\u3001\u5b66\u9662\u4e0a\u8f7d\u3001\u5168\u6821\u6c47\u603b\u4e0e\u5bb6\u5ead\u6210\u5458\u5173\u8054\u3002"
+          status="\u5df2\u542f\u7528"
           statusTone="enabled"
-          metrics={["本专科信息汇总", "家庭成员信息汇总", "困难生数据库"]}
-          actionText="进入业务"
+          metrics={["\u672c\u4e13\u79d1\u4fe1\u606f\u6c47\u603b", "\u5bb6\u5ead\u6210\u5458\u4fe1\u606f\u6c47\u603b", "\u56f0\u96be\u751f\u6570\u636e\u5e93"]}
+          actionText="\u8fdb\u5165\u4e1a\u52a1"
           onClick={() => onNavigate?.("/admin/difficulty")}
         />
         <BusinessCard
-          icon="奖"
-          title="三大奖业务"
-          description="用于三大奖申报数据治理、学院上载审核和学校端汇总。"
-          status="已启用"
+          icon="\u5956"
+          title="\u4e09\u5927\u5956\u4e1a\u52a1"
+          description="\u7528\u4e8e\u4e09\u5927\u5956\u7533\u62a5\u6570\u636e\u6cbb\u7406\u3001\u5b66\u9662\u4e0a\u8f7d\u5ba1\u6838\u548c\u5b66\u6821\u7aef\u6c47\u603b\u3002"
+          status="\u5df2\u542f\u7528"
           statusTone="enabled"
-          metrics={["国家奖学金", "国家励志奖学金", "上海市奖学金"]}
-          actionText="进入业务"
+          metrics={["\u56fd\u5bb6\u5956\u5b66\u91d1", "\u56fd\u5bb6\u52b1\u5fd7\u5956\u5b66\u91d1", "\u4e0a\u6d77\u5e02\u5956\u5b66\u91d1"]}
+          actionText="\u8fdb\u5165\u4e1a\u52a1"
           onClick={() => onNavigate?.("/admin/awards")}
         />
       </div>

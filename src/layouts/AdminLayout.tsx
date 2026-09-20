@@ -54,7 +54,7 @@ const awardMenuGroup: ExpandableMenuGroup = {
     { path: "/admin/awards", label: "三奖提交总览", mark: "览" },
     { path: "/admin/awards/national", label: "国家奖学金汇总", mark: "国" },
     { path: "/admin/awards/inspirational", label: "国家励志奖学金汇总", mark: "励" },
-    { path: "/admin/awards/shanghai", label: "上海市奖学金汇总", mark: "沪" },
+    { path: "/admin/awards/shanghai", label: "上海市奖学金汇总", mark: "市" },
   ],
 };
 
@@ -231,9 +231,14 @@ function TabBar({ tabs, activeTabId, onActivateTab, onRemoveTab }: { tabs: TabIt
 
 export default function AdminLayout({ path, profile, onNavigate, onLogout, children, activeTabId, tabs, onActivateTab, onRemoveTab }: AdminLayoutProps) {
   const account = getAdminAccountLabel(profile);
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("admin_sidebar_collapsed") === "true";
+    } catch { return false; }
+  });
 
   return (
-    <div className="bos-app-frame">
+    <div className={`bos-app-frame${collapsed ? " is-collapsed" : ""}`}>
       <aside className="bos-sidebar-modern">
         <div className="bos-sidebar-brand">
           <span className="bos-sidebar-logo">BOS</span>
@@ -255,6 +260,12 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
             <MenuButton item={{ path: "/admin", label: "管理员首页", mark: "首" }} active={path === "/admin"} onClick={() => onNavigate("/admin")} />
             <MenuButton item={{ path: "/admin/enrolled", label: "在校生数据库", mark: "在" }} active={path === "/admin/enrolled"} onClick={() => onNavigate("/admin/enrolled")} />
           </div>
+
+          <ExpandableMenu
+            group={announcementMenuGroup}
+            currentPath={path}
+            onNavigate={onNavigate}
+          />
 
           <ExpandableMenu
             group={baseInfoMenuGroup}
@@ -285,15 +296,21 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
             currentPath={path}
             onNavigate={onNavigate}
           />
-
-          <ExpandableMenu
-            group={announcementMenuGroup}
-            currentPath={path}
-            onNavigate={onNavigate}
-          />
         </nav>
 
         <div className="bos-sidebar-foot">
+          <button
+            onClick={() => {
+              const next = !collapsed;
+              setCollapsed(next);
+              try { localStorage.setItem("admin_sidebar_collapsed", String(next)); } catch {}
+            }}
+            className="bos-sidebar-toggle"
+            aria-label={collapsed ? "展开侧边栏" : "收起侧边栏"}
+            title={collapsed ? "展开侧边栏" : "收起侧边栏"}
+          >
+            {collapsed ? "▶" : "◀"}
+          </button>
           <span className="bos-sidebar-health"><i /> 数据治理服务正常</span>
           <button onClick={onLogout}>退出当前角色</button>
         </div>
@@ -319,6 +336,23 @@ export default function AdminLayout({ path, profile, onNavigate, onLogout, child
           <div className="bos-page-content">{children}</div>
         </main>
       </div>
+      <style>{`
+        .bos-sidebar-toggle {
+          width: 100%;
+          padding: 8px;
+          border: 1px solid var(--border-default, #E2E8F0);
+          border-radius: var(--radius-md, 8px);
+          color: var(--text-secondary, #64748B);
+          background: var(--bg-card, #FFFFFF);
+          font-size: 12px;
+          cursor: pointer;
+          transition: all var(--transition-fast, 150ms ease);
+        }
+        .bos-sidebar-toggle:hover {
+          background: var(--color-gray-50, #F8FAFC);
+          color: var(--text-primary, #0F172A);
+        }
+      `}</style>
     </div>
   );
 }
