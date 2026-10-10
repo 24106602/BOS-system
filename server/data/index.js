@@ -9,6 +9,8 @@ import { enrolledStudentRepository } from "./sqlserver/enrolledStudentRepository
 import { hardshipStudentRepository } from "./sqlserver/hardshipStudentRepository.js";
 import { collegeBatchRepository } from "./sqlserver/collegeBatchRepository.js";
 import { awardBatchRepository } from "./sqlserver/awardBatchRepository.js";
+import { difficultyStudentDetailRepository } from "./sqlserver/difficultyStudentDetailRepository.js";
+import { difficultyFamilyMemberRepository } from "./sqlserver/difficultyFamilyMemberRepository.js";
 
 const dataSourceType = process.env.DATA_SOURCE || "supabase";
 
@@ -19,6 +21,8 @@ const sqlServerRepos = {
   hardshipStudent: hardshipStudentRepository,
   collegeBatch: collegeBatchRepository,
   awardBatch: awardBatchRepository,
+  difficultyStudentDetail: difficultyStudentDetailRepository,
+  difficultyFamilyMember: difficultyFamilyMemberRepository,
 };
 
 // Supabase Repository 占位（实际项目中接入现有 supabaseDataService）

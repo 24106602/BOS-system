@@ -6,6 +6,8 @@ import { registerBaseInfoRoutes } from "./server/baseInfoRoutes.js";
 import { registerDifficultyStudentRoutes } from "./server/difficultyStudentRoutes.js";
 import { registerAuthRoutes } from "./server/routes/authRoutes.js";
 import { registerEnrolledStudentRoutes } from "./server/routes/enrolledStudentRoutes.js";
+import { registerDifficultyStudentDetailRoutes } from "./server/routes/difficultyStudentRoutes.js";
+import { registerDifficultyFamilyRoutes } from "./server/routes/difficultyFamilyRoutes.js";
 
 const app = express();
 
@@ -52,13 +54,18 @@ app.use(express.json({
 }));
 
 registerBaseInfoRoutes(app);
-registerDifficultyStudentRoutes(app);
+
+const dataSource = process.env.DATA_SOURCE || "supabase";
+if (dataSource !== "sqlserver") {
+  registerDifficultyStudentRoutes(app);
+}
 
 // SQL Server 模式路由
-const dataSource = process.env.DATA_SOURCE || "supabase";
 if (dataSource === "sqlserver") {
   registerAuthRoutes(app);
   registerEnrolledStudentRoutes(app);
+  registerDifficultyStudentDetailRoutes(app);
+  registerDifficultyFamilyRoutes(app);
   console.log(`[Server] SQL Server 模式已启用`);
 }
 
