@@ -1,8 +1,8 @@
 /**
- * 在校生数据库 - Supabase 优先 + 本地降级
- * 当 Supabase 已配置时，数据存储到云端；否则降级到 IndexedDB
+ * 在校生数据库 - API 优先 + 本地降级
+ * 当 API 已配置时，数据存储到云端；否则降级到 IndexedDB
  */
-import { isSupabaseConfigured } from "../lib/supabaseClient";
+import { isApiDataSource } from "../services/apiDataService";
 import type { EnrolledStudentRecord } from "../types/enrolledStudent";
 import {
   fetchEnrolledStudents,
@@ -10,7 +10,7 @@ import {
   addEnrolledStudentsToCloud,
   clearEnrolledStudentsFromCloud,
   verifyEnrolledStudentFromCloud,
-} from "../services/supabaseDataService";
+} from "../services/apiDataService";
 
 const DB_NAME = "bos_enrolled_student_db";
 const STORE_NAME = "enrolled_students";
@@ -171,19 +171,19 @@ async function clearLocal() {
 // ---- 对外接口（与原 localEnrolledStudentDb 兼容）----
 
 export const getAllEnrolledStudents = async (): Promise<EnrolledStudentRecord[]> => {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
-      const supabaseData = await fetchEnrolledStudents();
-      if (supabaseData.length > 0) return supabaseData;
-      // Supabase 返回空数据（表结构不匹配或未同步），降级到 IndexedDB
+      const cloudData = await fetchEnrolledStudents();
+      if (cloudData.length > 0) return cloudData;
+      // API 返回空数据（表结构不匹配或未同步），降级到 IndexedDB
       const localData = await getAllLocal();
       if (localData.length > 0) {
-        console.warn("Supabase 在校生数据为空，使用本地 IndexedDB 数据");
+        console.warn("API 在校生数据为空，使用本地 IndexedDB 数据");
         return localData;
       }
-      return supabaseData;
+      return cloudData;
     } catch (e) {
-      console.warn("Supabase 读取在校生失败，降级到本地存储", e);
+      console.warn("API 读取在校生失败，降级到本地存储", e);
     }
   }
   return getAllLocal();
@@ -195,23 +195,23 @@ export const getEnrolledStudentCount = async (): Promise<number> => {
 };
 
 export const saveEnrolledStudents = async (students: EnrolledStudentRecord[]): Promise<void> => {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       await saveEnrolledStudentsToCloud(students);
       return;
     } catch (e) {
-      console.warn("Supabase 保存在校生失败，降级到本地存储", e);
+      console.warn("API 保存在校生失败，降级到本地存储", e);
     }
   }
   await saveAllLocal(students);
 };
 
 export const clearEnrolledStudents = async (): Promise<void> => {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       await clearEnrolledStudentsFromCloud();
     } catch (e) {
-      console.warn("Supabase 清空在校生失败", e);
+      console.warn("API 清空在校生失败", e);
     }
   }
   await clearLocal();
@@ -245,11 +245,11 @@ export const verifyEnrolledStudent = async (
   idCard: string,
   name: string
 ): Promise<{ verified: boolean; reason?: string }> => {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       return await verifyEnrolledStudentFromCloud(studentId, idCard, name);
     } catch (e) {
-      console.warn("Supabase 校验在校生失败，降级到本地存储", e);
+      console.warn("API 校验在校生失败，降级到本地存储", e);
     }
   }
 
@@ -275,11 +275,11 @@ export const verifyEnrolledStudent = async (
 };
 
 export const addEnrolledStudents = async (newStudents: EnrolledStudentRecord[]): Promise<number> => {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       return await addEnrolledStudentsToCloud(newStudents);
     } catch (e) {
-      console.warn("Supabase 增量保存在校生失败，降级到本地存储", e);
+      console.warn("API 增量保存在校生失败，降级到本地存储", e);
     }
   }
 

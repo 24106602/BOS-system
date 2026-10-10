@@ -1,12 +1,12 @@
 /**
  * 认证服务接口定义
- * 不同认证提供者（Supabase Auth / JWT）实现此接口
+ * JWT 认证提供者实现此接口
  */
 import type { UserProfile } from "../types/auth";
 
 export interface AuthProvider {
   /** 认证方式名称 */
-  readonly type: "supabase" | "jwt";
+  readonly type: "jwt";
 
   /** 是否已配置 */
   readonly isConfigured: boolean;

@@ -1,7 +1,7 @@
 /**
  * API 客户端
  * 统一封装后端 API 请求，支持 JWT 认证
- * 替代直接使用 supabase client 进行认证和数据操作
+ * SQL Server 后端 API 请求
  */
 import type { UserProfile } from "../types/auth";
 

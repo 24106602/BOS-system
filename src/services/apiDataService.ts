@@ -4,7 +4,7 @@
  * 当 VITE_DATA_SOURCE=api 时，前端不直接连数据库，
  * 而是通过 Express 后端 API 进行所有数据操作。
  *
- * 接口与 supabaseDataService.ts 保持一致，便于切换
+ * 接口与原 supabaseDataService.ts 保持一致，便于切换
  */
 import { api } from "../lib/apiClient";
 import type { EnrolledStudentRecord } from "../types/enrolledStudent";

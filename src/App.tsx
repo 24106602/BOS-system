@@ -31,6 +31,7 @@ import {
   DIFFICULTY_FAMILY_TEMPLATE_FIELDS,
   getDifficultyTemplateValue,
   getFamilyTemplateValue,
+  resolveDifficultyFieldBinding,
 } from "./constants/difficultyStudentTemplate";
 import { isSameSubmissionCollege, normalizeSubmissionCollegeName, resolveCollegeUpload } from "./utils/collegeDetector";
 import type {

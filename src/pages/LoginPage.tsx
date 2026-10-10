@@ -1,5 +1,4 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
-import { isSupabaseConfigured, SUPABASE_ENV_ERROR } from "../lib/supabaseClient";
 import { getProfileLandingPath, sendPasswordResetEmail, signInWithPassword } from "../services/authService";
 import type { UserProfile } from "../types/auth";
 
@@ -16,16 +15,10 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
   const [messageType, setMessageType] = useState<"error" | "success">("error");
   const [loading, setLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const envMessage = isSupabaseConfigured ? "" : SUPABASE_ENV_ERROR;
   const busy = loading || resetting;
 
   const submitLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (envMessage) {
-      setMessage(envMessage);
-      setMessageType("error");
-      return;
-    }
 
     try {
       setLoading(true);
@@ -42,12 +35,6 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
   };
 
   const sendResetEmail = async () => {
-    if (envMessage) {
-      setMessage(envMessage);
-      setMessageType("error");
-      return;
-    }
-
     try {
       setResetting(true);
       setMessage("");
@@ -80,11 +67,10 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
           <p style={styles.tip}>
             {currentProfile
               ? `当前已登录：${currentProfile.display_name || currentProfile.college_name || "已登录用户"}`
-              : "请输入 Supabase Auth 账号和密码"}
+              : "请输入账号和密码"}
           </p>
 
-          {envMessage && <div style={styles.errorBox}>{envMessage}</div>}
-          {message && !envMessage && (
+          {message && (
             <div style={messageType === "success" ? styles.successBox : styles.errorBox}>{message}</div>
           )}
 
@@ -113,7 +99,7 @@ export default function LoginPage({ currentProfile, initialError = "", onLogin }
             />
           </label>
 
-          <button type="submit" style={busy || envMessage ? styles.submitDisabled : styles.submit} disabled={busy || Boolean(envMessage)}>
+          <button type="submit" style={busy ? styles.submitDisabled : styles.submit} disabled={busy}>
             {loading ? "登录中..." : "登录"}
           </button>
           <button type="button" style={styles.forgotButton} disabled={busy} onClick={sendResetEmail}>

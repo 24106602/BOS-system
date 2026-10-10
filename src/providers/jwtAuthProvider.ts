@@ -55,8 +55,8 @@ export class JwtAuthProvider implements AuthProvider {
   readonly type = "jwt" as const;
 
   get isConfigured(): boolean {
-    // JWT 模式始终可用（只要有后端 API）
-    return Boolean(import.meta.env.VITE_AUTH_MODE === "jwt");
+    // JWT 模式始终可用
+    return true;
   }
 
   async signInWithPassword(account: string, password: string): Promise<UserProfile> {

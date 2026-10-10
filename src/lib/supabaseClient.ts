@@ -1,29 +1,23 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const SUPABASE_ENV_ERROR = "请先配置 Supabase 环境变量";
+/**
+ * Supabase 已弃用，系统已切换到 SQL Server 模式。
+ * 本文件保留为空壳，仅用于兼容残留的导入引用。
+ * 任何对 `supabase` 对象的属性访问都会抛出错误。
+ */
 
-const viteEnv = import.meta.env || {};
-const supabaseUrl = viteEnv.VITE_SUPABASE_URL?.trim() || "";
-const supabaseAnonKey = viteEnv.VITE_SUPABASE_ANON_KEY?.trim() || "";
+export const SUPABASE_ENV_ERROR = "Supabase 已弃用，系统已切换到 SQL Server 模式";
 
-export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+export const isSupabaseConfigured = false as const;
 
-const createMissingClient = () =>
+const createDeprecatedClient = (): SupabaseClient =>
   new Proxy(
     {},
     {
       get() {
-        throw new Error(SUPABASE_ENV_ERROR);
+        throw new Error("Supabase 已弃用，请使用 SQL Server 模式");
       },
     }
   ) as SupabaseClient;
 
-export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
-      },
-    })
-  : createMissingClient();
+export const supabase = createDeprecatedClient();

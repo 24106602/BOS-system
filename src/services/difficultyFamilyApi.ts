@@ -1,10 +1,8 @@
 /**
  * 家庭成员信息 API
- * 支持 JWT 和 Supabase 双模式
+ * JWT 模式，通过 SQL Server 后端 API 请求
  */
 import { getAccessToken } from "../lib/apiClient";
-
-const AUTH_MODE = (import.meta.env.VITE_AUTH_MODE || "supabase") as "supabase" | "jwt";
 
 const FAMILY_API_URL = (
   import.meta.env.VITE_DIFFICULTY_FAMILY_API_URL || "/api/difficulty-family-members"
@@ -43,27 +41,15 @@ export type FamilyImportConfirmResult = {
 };
 
 function getBaseUrl() {
-  if (AUTH_MODE === "jwt") {
-    return (import.meta.env.VITE_API_BASE_URL || "") + FAMILY_API_URL;
-  }
-  return FAMILY_API_URL;
+  return (import.meta.env.VITE_API_BASE_URL || "") + FAMILY_API_URL;
 }
 
 async function getToken() {
-  if (AUTH_MODE === "jwt") {
-    const token = getAccessToken();
-    if (!token) {
-      throw new DifficultyFamilyApiError("登录状态已失效，请重新登录", 401, "UNAUTHENTICATED");
-    }
-    return token;
-  }
-  const { supabase } = await import("../lib/supabaseClient");
-  const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
-  if (!accessToken) {
+  const token = getAccessToken();
+  if (!token) {
     throw new DifficultyFamilyApiError("登录状态已失效，请重新登录", 401, "UNAUTHENTICATED");
   }
-  return accessToken;
+  return token;
 }
 
 async function requestApi<T>(

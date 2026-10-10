@@ -1,8 +1,9 @@
 /**
- * Supabase 三大奖数据服务层
+ * 三大奖数据服务层 - 通过后端 API
  * 统一封装三大奖数据的后端操作，替代 localStorage 存储
  */
-import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import { api } from "../lib/apiClient";
+import { isApiDataSource } from "./apiDataService";
 import type { AwardSubmission, AwardType } from "../types/award";
 
 // ============================================================
@@ -12,21 +13,12 @@ import type { AwardSubmission, AwardType } from "../types/award";
 export async function fetchAwardSubmissions(
   awardType?: AwardType
 ): Promise<AwardSubmission[]> {
-  if (!isSupabaseConfigured) return [];
+  if (!isApiDataSource) return [];
 
-  let query = supabase
-    .from("award_batches")
-    .select("*, award_batch_rows(*)")
-    .eq("is_deleted", false)
-    .order("created_at", { ascending: true });
-
-  if (awardType) {
-    query = query.eq("award_type", awardType);
-  }
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-
+  const query = awardType
+    ? `/award-submissions?awardType=${encodeURIComponent(awardType)}`
+    : "/award-submissions";
+  const data = await api.get<unknown[]>(query);
   return (data || []).map(mapBatchWithRows);
 }
 
@@ -42,53 +34,8 @@ export async function saveAwardSubmissionToCloud(
   awardType: AwardType,
   submission: AwardSubmission
 ): Promise<void> {
-  if (!isSupabaseConfigured) return;
-
-  // upsert 批次
-  const { data: batchData, error: batchError } = await supabase
-    .from("award_batches")
-    .upsert(
-      {
-        college_name: submission.collegeName,
-        award_type: awardType,
-        academic_year: submission.academicYear,
-        row_count: submission.rowCount,
-        review_status: submission.reviewStatus,
-        submit_status: submission.submitStatus,
-        is_deleted: false,
-        deleted_at: null,
-        deleted_by: null,
-      },
-      { onConflict: "college_name,award_type,academic_year" }
-    )
-    .select("id")
-    .single();
-
-  if (batchError) throw new Error(batchError.message);
-  const batchId = batchData.id;
-
-  // 禁用旧明细后写入新明细，保留每次上载的历史行。
-  const { error: disableRowsError } = await supabase
-    .from("award_batch_rows")
-    .update({ is_deleted: true, deleted_at: new Date().toISOString() })
-    .eq("batch_id", batchId)
-    .eq("is_deleted", false);
-  if (disableRowsError) throw new Error(disableRowsError.message);
-
-  // 插入新的明细行
-  const rows = (submission.rows || []).map((row, index) => ({
-    batch_id: batchId,
-    row_data: row,
-    row_index: index,
-    is_deleted: false,
-  }));
-
-  if (rows.length > 0) {
-    const { error: rowsError } = await supabase
-      .from("award_batch_rows")
-      .insert(rows);
-    if (rowsError) throw new Error(rowsError.message);
-  }
+  if (!isApiDataSource) return;
+  await api.post("/award-submissions", { awardType, submission });
 }
 
 // ============================================================
@@ -98,24 +45,13 @@ export async function saveAwardSubmissionToCloud(
 export async function deleteAwardSubmissionFromCloud(
   id: string
 ): Promise<void> {
-  if (!isSupabaseConfigured) return;
-  const deletedAt = new Date().toISOString();
-  const { error } = await supabase
-    .from("award_batches")
-    .update({ is_deleted: true, deleted_at: deletedAt })
-    .eq("id", id)
-    .eq("is_deleted", false);
-  if (error) throw new Error(error.message);
+  if (!isApiDataSource) return;
+  await api.delete(`/award-submissions/${encodeURIComponent(id)}`);
 }
 
 export async function clearAwardSubmissionsFromCloud(): Promise<void> {
-  if (!isSupabaseConfigured) return;
-  const deletedAt = new Date().toISOString();
-  const { error: batchError } = await supabase
-    .from("award_batches")
-    .update({ is_deleted: true, deleted_at: deletedAt })
-    .eq("is_deleted", false);
-  if (batchError) throw new Error(batchError.message);
+  if (!isApiDataSource) return;
+  await api.delete("/award-submissions");
 }
 
 // ============================================================
@@ -123,22 +59,22 @@ export async function clearAwardSubmissionsFromCloud(): Promise<void> {
 // ============================================================
 
 function mapBatchWithRows(batch: Record<string, unknown>): AwardSubmission {
-  const batchRows = (batch.award_batch_rows || []) as Record<string, unknown>[];
+  const batchRows = (batch.award_batch_rows || batch.rows || []) as Record<string, unknown>[];
   const rows = batchRows
     .filter((row) => row.is_deleted !== true)
     .sort((a, b) => Number(a.row_index) - Number(b.row_index))
-    .map((r) => (r.row_data || {}) as Record<string, unknown>);
+    .map((r) => (r.row_data || r) as Record<string, unknown>);
 
   return {
-    id: String(batch.id),
-    awardType: String(batch.award_type) as AwardType,
-    academicYear: String(batch.academic_year || ""),
-    collegeName: String(batch.college_name || ""),
-    createdAt: String(batch.created_at || ""),
-    confirmedAt: String(batch.confirmed_at || batch.created_at || ""),
-    reviewStatus: String(batch.review_status || "draft") as "draft" | "confirmed",
-    submitStatus: String(batch.submit_status || "pending") as "pending" | "submitted",
-    rowCount: Number(batch.row_count || 0),
+    id: String(batch.id ?? ""),
+    awardType: String(batch.award_type ?? batch.awardType ?? "") as AwardType,
+    academicYear: String(batch.academic_year ?? batch.academicYear ?? ""),
+    collegeName: String(batch.college_name ?? batch.collegeName ?? ""),
+    createdAt: String(batch.created_at ?? batch.createdAt ?? ""),
+    confirmedAt: String(batch.confirmed_at ?? batch.confirmedAt ?? batch.created_at ?? batch.createdAt ?? ""),
+    reviewStatus: String(batch.review_status ?? batch.reviewStatus ?? "draft") as "draft" | "confirmed",
+    submitStatus: String(batch.submit_status ?? batch.submitStatus ?? "pending") as "pending" | "submitted",
+    rowCount: Number(batch.row_count ?? batch.rowCount ?? 0),
     awardTypeCounts: {},
     fields: Object.keys(rows[0] || {}),
     rows,

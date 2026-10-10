@@ -1,8 +1,8 @@
 /**
- * 学院提交批次 - Supabase 优先 + 本地降级
- * 当 Supabase 已配置时，数据存储到云端；否则降级到 IndexedDB/localStorage
+ * 学院提交批次 - API 优先 + 本地降级
+ * 当 API 已配置时，数据存储到云端；否则降级到 IndexedDB/localStorage
  */
-import { isSupabaseConfigured } from "../lib/supabaseClient";
+import { isApiDataSource } from "../services/apiDataService";
 import type { CollegeProcessedBatch } from "../types/merge";
 import { getBatchAcademicYear, withAcademicYear } from "../utils/academicYear";
 import { normalizeSubmissionCollegeName } from "../utils/collegeDetector";
@@ -12,7 +12,7 @@ import {
   deleteCollegeBatchFromCloud,
   clearCollegeBatchesFromCloud,
   restoreCollegeBatchFromCloud,
-} from "../services/supabaseDataService";
+} from "../services/apiDataService";
 
 // ---- 本地存储降级 ----
 
@@ -197,72 +197,72 @@ async function clearMergeBatchesLocal() {
   }
 }
 
-// ---- 对外接口（Supabase 优先 + 本地降级）----
+// ---- 对外接口（API 优先 + 本地降级）----
 
 export async function saveMergeBatch(batch: CollegeProcessedBatch) {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       await saveCollegeBatchToCloud(batch);
       return;
     } catch (e) {
-      console.warn("Supabase 保存批次失败，降级到本地存储", e);
+      console.warn("API 保存批次失败，降级到本地存储", e);
     }
   }
   await saveMergeBatchLocal(batch);
 }
 
 export async function getMergeBatches(): Promise<CollegeProcessedBatch[]> {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       return await fetchCollegeBatches();
     } catch (e) {
-      console.warn("Supabase 读取批次失败，降级到本地存储", e);
+      console.warn("API 读取批次失败，降级到本地存储", e);
     }
   }
   return getMergeBatchesLocal();
 }
 
 export async function getDisabledMergeBatches(): Promise<CollegeProcessedBatch[]> {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       return (await fetchCollegeBatches(true)).filter((batch) => batch.isDeleted);
     } catch (e) {
-      console.warn("Supabase 读取已禁用批次失败，降级到本地存储", e);
+      console.warn("API 读取已禁用批次失败，降级到本地存储", e);
     }
   }
   return (await getMergeBatchesLocal(true)).filter((batch) => batch.isDeleted);
 }
 
 export async function deleteMergeBatch(id: string) {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       await deleteCollegeBatchFromCloud(id);
       return;
     } catch (e) {
-      console.warn("Supabase 删除批次失败，降级到本地存储", e);
+      console.warn("API 删除批次失败，降级到本地存储", e);
     }
   }
   await deleteMergeBatchLocal(id);
 }
 
 export async function clearMergeBatches() {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       await clearCollegeBatchesFromCloud();
     } catch (e) {
-      console.warn("Supabase 清空批次失败", e);
+      console.warn("API 清空批次失败", e);
     }
   }
   await clearMergeBatchesLocal();
 }
 
 export async function restoreMergeBatch(id: string) {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       await restoreCollegeBatchFromCloud(id);
       return;
     } catch (e) {
-      console.warn("Supabase 恢复批次失败，降级到本地存储", e);
+      console.warn("API 恢复批次失败，降级到本地存储", e);
     }
   }
   await restoreMergeBatchLocal(id);

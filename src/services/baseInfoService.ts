@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx-js-style";
-import { supabase } from "../lib/supabaseClient";
+import { getAccessToken } from "../lib/apiClient";
 
 const BASE_INFO_API_URL = (import.meta.env.VITE_BASE_INFO_API_URL || "/api/base-info").replace(/\/$/, "");
 
@@ -59,8 +59,7 @@ const requestBaseInfoApi = async <T>(
   method: "GET" | "POST" | "PATCH" | "DELETE",
   body?: unknown
 ): Promise<T> => {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const accessToken = sessionData.session?.access_token;
+  const accessToken = getAccessToken();
   if (!accessToken) throw new BaseInfoApiError("登录状态已失效，请重新登录", 401, "UNAUTHENTICATED");
 
   const response = await fetch(`${BASE_INFO_API_URL}${path}`, {

@@ -1,8 +1,8 @@
 /**
- * 困难生数据库 - Supabase 优先 + 本地降级
- * 当 Supabase 已配置时，数据存储到云端；否则降级到 IndexedDB/localStorage
+ * 困难生数据库 - API 优先 + 本地降级
+ * 当 API 已配置时，数据存储到云端；否则降级到 IndexedDB/localStorage
  */
-import { isSupabaseConfigured } from "../lib/supabaseClient";
+import { isApiDataSource } from "../services/apiDataService";
 import type { StudentRecord } from "../types/student";
 import {
   fetchHardshipStudents,
@@ -10,7 +10,7 @@ import {
   mergeHardshipStudentsToCloud,
   clearHardshipStudentsFromCloud,
   findHardshipStudentFromCloud,
-} from "../services/supabaseDataService";
+} from "../services/apiDataService";
 
 const DB_NAME = "bos_student_db";
 const STORE_NAME = "students";
@@ -165,59 +165,59 @@ async function findLocal(keyword: string): Promise<StudentRecord | null> {
   );
 }
 
-// ---- 对外接口（Supabase 优先 + 本地降级）----
+// ---- 对外接口（API 优先 + 本地降级）----
 
 export async function getAllStudents(): Promise<StudentRecord[]> {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       return await fetchHardshipStudents();
     } catch (e) {
-      console.warn("Supabase 读取困难生失败，降级到本地存储", e);
+      console.warn("API 读取困难生失败，降级到本地存储", e);
     }
   }
   return getAllLocal();
 }
 
 export async function saveAllStudents(records: StudentRecord[]): Promise<void> {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       await saveHardshipStudentsToCloud(records);
       return;
     } catch (e) {
-      console.warn("Supabase 保存困难生失败，降级到本地存储", e);
+      console.warn("API 保存困难生失败，降级到本地存储", e);
     }
   }
   await saveAllLocal(records);
 }
 
 export async function mergeStudents(newRecords: StudentRecord[]): Promise<number> {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       return await mergeHardshipStudentsToCloud(newRecords);
     } catch (e) {
-      console.warn("Supabase 合并困难生失败，降级到本地存储", e);
+      console.warn("API 合并困难生失败，降级到本地存储", e);
     }
   }
   return mergeLocal(newRecords);
 }
 
 export async function clearStudents(): Promise<void> {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       await clearHardshipStudentsFromCloud();
     } catch (e) {
-      console.warn("Supabase 清空困难生失败", e);
+      console.warn("API 清空困难生失败", e);
     }
   }
   await clearLocal();
 }
 
 export async function findStudent(keyword: string): Promise<StudentRecord | null> {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       return await findHardshipStudentFromCloud(keyword);
     } catch (e) {
-      console.warn("Supabase 查找困难生失败，降级到本地存储", e);
+      console.warn("API 查找困难生失败，降级到本地存储", e);
     }
   }
   return findLocal(keyword);

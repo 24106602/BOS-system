@@ -1,4 +1,4 @@
-import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import { api } from "../lib/apiClient";
 import {
   makeFallbackUserProfiles,
   resolveLoginEmail,
@@ -17,9 +17,6 @@ type UserProfileRow = {
   enabled: boolean | null;
   created_at: string | null;
 };
-
-const profileSelect = "id,auth_user_id,role,college_name,display_name,login_email,enabled,created_at";
-const profileSelectWithoutLoginEmail = "id,auth_user_id,role,college_name,display_name,enabled,created_at";
 
 const isUserRole = (role: string): role is UserRole => role === "admin" || role === "college";
 
@@ -41,56 +38,19 @@ const normalizeProfile = (row: UserProfileRow): UserProfile => {
   };
 };
 
-const shouldRetryWithoutLoginEmail = (errorMessage: string) =>
-  /login_email|column/i.test(errorMessage);
-
-export const fetchUserProfile = async (authUserId: string): Promise<UserProfile> => {
-  const initial = await supabase
-    .from("user_profiles")
-    .select(profileSelect)
-    .eq("auth_user_id", authUserId)
-    .maybeSingle<UserProfileRow>();
-  let data = initial.data as UserProfileRow | null;
-  let error = initial.error;
-
-  if (error && shouldRetryWithoutLoginEmail(error.message)) {
-    const fallback = await supabase
-      .from("user_profiles")
-      .select(profileSelectWithoutLoginEmail)
-      .eq("auth_user_id", authUserId)
-      .maybeSingle<UserProfileRow>();
-    data = fallback.data;
-    error = fallback.error;
-  }
-
-  if (error) throw new Error(error.message || "读取用户权限失败");
-  if (!data) throw new Error("未找到用户权限配置，请联系管理员");
-  return normalizeProfile(data);
+export const fetchUserProfile = async (_authUserId: string): Promise<UserProfile> => {
+  const data = await api.get<{ profile: UserProfileRow }>("/auth/me");
+  if (!data.profile) throw new Error("未找到用户权限配置，请联系管理员");
+  return normalizeProfile(data.profile);
 };
 
 export const listUserProfiles = async (): Promise<UserProfile[]> => {
-  if (!isSupabaseConfigured) return makeFallbackUserProfiles();
-
-  const initial = await supabase
-    .from("user_profiles")
-    .select(profileSelect)
-    .order("role", { ascending: true })
-    .order("college_name", { ascending: true });
-  let data = initial.data as UserProfileRow[] | null;
-  let error = initial.error;
-
-  if (error && shouldRetryWithoutLoginEmail(error.message)) {
-    const fallback = await supabase
-      .from("user_profiles")
-      .select(profileSelectWithoutLoginEmail)
-      .order("role", { ascending: true })
-      .order("college_name", { ascending: true });
-    data = fallback.data;
-    error = fallback.error;
+  try {
+    const data = await api.get<{ data: UserProfileRow[] }>("/admin/users");
+    return (data.data || []).map((row) => normalizeProfile(row));
+  } catch {
+    return makeFallbackUserProfiles();
   }
-
-  if (error) throw new Error(error.message || "读取用户列表失败");
-  return (data || []).map((row) => normalizeProfile(row as UserProfileRow));
 };
 
 export const getFallbackProfiles = () => makeFallbackUserProfiles();

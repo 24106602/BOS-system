@@ -3,7 +3,8 @@ import {
   normalizeDifficultyStudentStatus,
   type DifficultyStudentStatus,
 } from "../constants/statusTransitions";
-import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
+import { api } from "../lib/apiClient";
+import { isApiDataSource } from "./apiDataService";
 import {
   resubmitDifficultyStudent,
   submitDifficultyStudentBatch,
@@ -87,14 +88,15 @@ const getText = (row: Record<string, unknown>, aliases: string[]) => {
   return matchedKey ? String(row[matchedKey] ?? "").trim() : "";
 };
 
-const formatSupabaseError = (error: unknown) => {
+const formatApiError = (error: unknown) => {
+  if (error instanceof Error) return error.message;
   const detail = error as { message?: string; details?: string; hint?: string; code?: string };
   return [
     detail?.message,
     detail?.details ? `details: ${detail.details}` : "",
     detail?.hint ? `hint: ${detail.hint}` : "",
     detail?.code ? `code: ${detail.code}` : "",
-  ].filter(Boolean).join("；") || "未知 Supabase 错误";
+  ].filter(Boolean).join("；") || "未知 API 错误";
 };
 
 export const buildStudentPayloads = (
@@ -125,14 +127,14 @@ export const syncCollegeStudentsToSupabase = async (
   academicYear: string,
   collegeName: string
 ): Promise<StudentSyncResult> => {
-  if (!isSupabaseConfigured) {
+  if (!isApiDataSource) {
     return {
       configured: false,
       inserted: 0,
       updated: 0,
       skipped: rows.length,
       failed: 0,
-      message: "Supabase 未配置，已保留本地上载记录。",
+      message: "API 未配置，已保留本地上载记录。",
     };
   }
 
@@ -203,32 +205,17 @@ export const fetchCollegeDifficultyStudents = async (
   let cloudRows: DifficultyStudentRow[] = [];
   let errorMessage = "";
 
-  if (isSupabaseConfigured) {
-    const fullSelect = "id,academic_year,college_name,student_id,name,id_card,grade,gender,difficulty_level,status,rejected_reason,resubmission_remark,raw_data";
-    const { data, error } = await supabase
-      .from("students")
-      .select(fullSelect)
-      .eq("is_deleted", false)
-      .eq("academic_year", academicYear)
-      .eq("college_name", normalizedCollege);
-
-    if (!error) {
-      cloudRows = ((data || []) as CloudStudentRow[]).map(toDifficultyStudent);
-    } else {
-      const fallback = await supabase
-        .from("students")
-        .select("id,academic_year,college_name,student_id,name,id_card,difficulty_level,status")
-        .eq("is_deleted", false)
-        .eq("academic_year", academicYear)
-        .eq("college_name", normalizedCollege);
-      if (fallback.error) errorMessage = `读取 students 表失败：${formatSupabaseError(fallback.error)}`;
-      else {
-        cloudRows = ((fallback.data || []) as CloudStudentRow[]).map(toDifficultyStudent);
-        errorMessage = `students 表部分字段读取失败，已使用兼容字段显示：${formatSupabaseError(error)}`;
-      }
+  if (isApiDataSource) {
+    try {
+      const data = await api.get<CloudStudentRow[]>(
+        `/difficulty-students?academicYear=${encodeURIComponent(academicYear)}&collegeName=${encodeURIComponent(normalizedCollege)}`
+      );
+      cloudRows = (data || []).map(toDifficultyStudent);
+    } catch (error) {
+      errorMessage = `读取困难生数据失败：${formatApiError(error)}`;
     }
   } else {
-    errorMessage = "Supabase 未配置，当前显示本地上载记录。";
+    errorMessage = "API 未配置，当前显示本地上载记录。";
   }
 
   if (cloudRows.length > 0) return { rows: cloudRows, source: "supabase", error: errorMessage };
@@ -241,8 +228,8 @@ export const rejectStudentRecords = async (
   ids: (number | string)[],
   reason: string
 ): Promise<{ success: boolean; message: string }> => {
-  if (!isSupabaseConfigured) {
-    return { success: false, message: "Supabase 未配置，无法执行退回操作。" };
+  if (!isApiDataSource) {
+    return { success: false, message: "API 未配置，无法执行退回操作。" };
   }
 
   try {
@@ -260,8 +247,8 @@ export const resubmitStudentRecords = async (
   ids: (number | string)[],
   remark: string
 ): Promise<{ success: boolean; message: string }> => {
-  if (!isSupabaseConfigured) {
-    return { success: false, message: "Supabase 未配置，无法执行重新提交操作。" };
+  if (!isApiDataSource) {
+    return { success: false, message: "API 未配置，无法执行重新提交操作。" };
   }
 
   try {

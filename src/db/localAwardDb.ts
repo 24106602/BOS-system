@@ -1,8 +1,8 @@
 /**
- * 三大奖数据库 - Supabase 优先 + 本地降级
- * 当 Supabase 已配置时，数据存储到云端；否则降级到 localStorage
+ * 三大奖数据库 - API 优先 + 本地降级
+ * 当 API 已配置时，数据存储到云端；否则降级到 localStorage
  */
-import { isSupabaseConfigured } from "../lib/supabaseClient";
+import { isApiDataSource } from "../services/apiDataService";
 import { awardStorageKeys } from "../services/awardConfig";
 import { normalizeSubmissionCollegeName } from "../utils/collegeDetector";
 import type { AwardSubmission, AwardType } from "../types/award";
@@ -62,22 +62,22 @@ const normalizeSubmission = (
 // ---- 对外接口（与原有 awardProcessor 兼容）----
 
 export async function getAwardSubmissions(awardType: AwardType): Promise<AwardSubmission[]> {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       return await fetchAwardSubmissions(awardType);
     } catch (e) {
-      console.warn("Supabase 读取三大奖数据失败，降级到本地存储", e);
+      console.warn("API 读取三大奖数据失败，降级到本地存储", e);
     }
   }
   return getLocalSubmissions(awardType);
 }
 
 export async function getAllAwardSubmissions(): Promise<AwardSubmission[]> {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       return await fetchAllAwardSubmissions();
     } catch (e) {
-      console.warn("Supabase 读取三大奖数据失败，降级到本地存储", e);
+      console.warn("API 读取三大奖数据失败，降级到本地存储", e);
     }
   }
   return (["national", "inspirational", "shanghai"] as AwardType[]).flatMap((awardType) =>
@@ -89,12 +89,12 @@ export async function saveAwardSubmission(
   awardType: AwardType,
   submission: AwardSubmission
 ): Promise<void> {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       await saveAwardSubmissionToCloud(awardType, submission);
       return;
     } catch (e) {
-      console.warn("Supabase 保存三大奖数据失败，降级到本地存储", e);
+      console.warn("API 保存三大奖数据失败，降级到本地存储", e);
     }
   }
 
@@ -122,12 +122,12 @@ export async function saveAwardSubmission(
 }
 
 export async function deleteAwardSubmission(id: string): Promise<void> {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       await deleteAwardSubmissionFromCloud(id);
       return;
     } catch (e) {
-      console.warn("Supabase 删除三大奖数据失败，降级到本地存储", e);
+      console.warn("API 删除三大奖数据失败，降级到本地存储", e);
     }
   }
 
@@ -144,11 +144,11 @@ export async function deleteAwardSubmission(id: string): Promise<void> {
 }
 
 export async function clearAwardSubmissions(): Promise<void> {
-  if (isSupabaseConfigured) {
+  if (isApiDataSource) {
     try {
       await clearAwardSubmissionsFromCloud();
     } catch (e) {
-      console.warn("Supabase 清空三大奖数据失败", e);
+      console.warn("API 清空三大奖数据失败", e);
     }
   }
 

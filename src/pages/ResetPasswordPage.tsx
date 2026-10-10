@@ -1,5 +1,4 @@
 import { useState, type CSSProperties, type FormEvent } from "react";
-import { isSupabaseConfigured, SUPABASE_ENV_ERROR } from "../lib/supabaseClient";
 import { updateRecoveryPassword } from "../services/authService";
 
 type ResetPasswordPageProps = {
@@ -12,16 +11,11 @@ export default function ResetPasswordPage({ onComplete }: ResetPasswordPageProps
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  const envMessage = isSupabaseConfigured ? "" : SUPABASE_ENV_ERROR;
   const passwordsMismatch = confirmPassword.length > 0 && newPassword !== confirmPassword;
   const submitDisabled = loading || Boolean(success) || !newPassword || !confirmPassword || passwordsMismatch;
 
   const submitPassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (envMessage) {
-      setError(envMessage);
-      return;
-    }
     if (newPassword !== confirmPassword) {
       setError("两次输入的新密码不一致");
       return;
@@ -48,8 +42,7 @@ export default function ResetPasswordPage({ onComplete }: ResetPasswordPageProps
         <h1 style={styles.title}>修改密码</h1>
         <p style={styles.tip}>请设置新的登录密码，修改成功后系统会返回登录页。</p>
 
-        {envMessage && <div style={styles.errorBox}>{envMessage}</div>}
-        {error && !envMessage && <div style={styles.errorBox}>{error}</div>}
+        {error && <div style={styles.errorBox}>{error}</div>}
         {passwordsMismatch && !error && <div style={styles.errorBox}>两次输入的新密码不一致</div>}
         {success && <div style={styles.successBox}>{success}</div>}
 
