@@ -19,6 +19,8 @@ import { checkHealth } from "./server/data/sqlserver/connection.js";
 const app = express();
 
 const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:3001",
+  "http://127.0.0.1:3001",
   "http://localhost:5173",
   "http://127.0.0.1:5173",
   "http://localhost:4173",
@@ -31,8 +33,17 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || DEFAULT_ALLOWED_ORIGINS.j
   .map((origin) => origin.trim())
   .filter(Boolean);
 
-const isOriginAllowed = (origin) =>
-  !origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin);
+// CORS 放行规则：
+// 1. 无 Origin 头（非浏览器请求）→ 放行
+// 2. 白名单包含 "*" → 全部放行
+// 3. Origin 在白名单中 → 放行
+// 4. ALLOWED_ORIGINS 为空（生产同源部署）→ 全部放行
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+  if (allowedOrigins.length === 0) return true;
+  if (allowedOrigins.includes("*")) return true;
+  return allowedOrigins.includes(origin);
+};
 
 app.use(
   cors({
