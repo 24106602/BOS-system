@@ -1,4 +1,7 @@
 import { supabase } from "../lib/supabaseClient";
+import { getAccessToken } from "../lib/apiClient";
+
+const AUTH_MODE = (import.meta.env.VITE_AUTH_MODE || "supabase") as "supabase" | "jwt";
 
 const DIFFICULTY_API_URL = (
   import.meta.env.VITE_DIFFICULTY_API_URL || "/api/difficulty-students"
@@ -115,6 +118,18 @@ export type DifficultyExportResult = {
 };
 
 const getDifficultyAccessToken = async () => {
+  if (AUTH_MODE === "jwt") {
+    const token = getAccessToken();
+    if (!token) {
+      throw new DifficultyStudentApiError(
+        "登录状态已失效，请重新登录",
+        401,
+        "UNAUTHENTICATED"
+      );
+    }
+    return token;
+  }
+
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData.session?.access_token;
   if (!accessToken) {
@@ -134,7 +149,11 @@ const requestDifficultyApi = async <T>(
 ): Promise<T> => {
   const accessToken = await getDifficultyAccessToken();
 
-  const response = await fetch(`${DIFFICULTY_API_URL}${path}`, {
+  const baseUrl = AUTH_MODE === "jwt"
+    ? (import.meta.env.VITE_API_BASE_URL || "") + DIFFICULTY_API_URL
+    : DIFFICULTY_API_URL;
+
+  const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -177,7 +196,10 @@ export const exportDifficultyStudents = async (
   input: DifficultyExportRequest
 ): Promise<DifficultyExportResult> => {
   const accessToken = await getDifficultyAccessToken();
-  const response = await fetch(`${DIFFICULTY_API_URL}/export`, {
+  const baseUrl = AUTH_MODE === "jwt"
+    ? (import.meta.env.VITE_API_BASE_URL || "") + DIFFICULTY_API_URL
+    : DIFFICULTY_API_URL;
+  const response = await fetch(`${baseUrl}/export`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,

@@ -8,6 +8,7 @@ import { registerAuthRoutes } from "./server/routes/authRoutes.js";
 import { registerEnrolledStudentRoutes } from "./server/routes/enrolledStudentRoutes.js";
 import { registerDifficultyStudentDetailRoutes } from "./server/routes/difficultyStudentRoutes.js";
 import { registerDifficultyFamilyRoutes } from "./server/routes/difficultyFamilyRoutes.js";
+import { registerDifficultyImportRoutes } from "./server/routes/difficultyImportRoutes.js";
 
 const app = express();
 
@@ -66,6 +67,7 @@ if (dataSource === "sqlserver") {
   registerEnrolledStudentRoutes(app);
   registerDifficultyStudentDetailRoutes(app);
   registerDifficultyFamilyRoutes(app);
+  registerDifficultyImportRoutes(app);
   console.log(`[Server] SQL Server 模式已启用`);
 }
 
