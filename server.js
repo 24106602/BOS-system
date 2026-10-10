@@ -2,6 +2,9 @@ import "dotenv/config";
 import express from "express";
 import OpenAI from "openai";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
+import fs from "fs";
 import { registerBaseInfoRoutes } from "./server/baseInfoRoutes.js";
 import { registerDifficultyStudentRoutes } from "./server/difficultyStudentRoutes.js";
 import { registerAuthRoutes } from "./server/routes/authRoutes.js";
@@ -10,6 +13,8 @@ import { registerDifficultyStudentDetailRoutes } from "./server/routes/difficult
 import { registerDifficultyFamilyRoutes } from "./server/routes/difficultyFamilyRoutes.js";
 import { registerDifficultyImportRoutes } from "./server/routes/difficultyImportRoutes.js";
 import { registerDifficultyFamilyImportRoutes } from "./server/routes/difficultyFamilyImportRoutes.js";
+import { registerUserRoutes } from "./server/routes/userRoutes.js";
+import { checkHealth } from "./server/data/sqlserver/connection.js";
 
 const app = express();
 
@@ -70,6 +75,7 @@ if (dataSource === "sqlserver") {
   registerDifficultyFamilyRoutes(app);
   registerDifficultyImportRoutes(app);
   registerDifficultyFamilyImportRoutes(app);
+  registerUserRoutes(app);
   console.log(`[Server] SQL Server 模式已启用`);
 }
 
@@ -138,6 +144,59 @@ app.post("/api/deepseek", async (req, res) => {
 });
 
 const port = Number.parseInt(process.env.PORT || "3001", 10);
+
+// ---------------------------------------------------------
+// 健康检查端点
+// ---------------------------------------------------------
+app.get("/api/health", async (req, res) => {
+  const start = Date.now();
+  const dbHealth = await checkHealth();
+  const latency = Date.now() - start;
+
+  const health = {
+    status: dbHealth.status === "healthy" ? "ok" : "error",
+    timestamp: new Date().toISOString(),
+    latencyMs: latency,
+    database: dbHealth,
+    dataSource: process.env.DATA_SOURCE || "sqlserver",
+    uptime: process.uptime(),
+    memory: {
+      rss: Math.round(process.memoryUsage().rss / 1024 / 1024) + "MB",
+      heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + "MB",
+    },
+  };
+
+  res.status(dbHealth.status === "healthy" ? 200 : 503).json(health);
+});
+
+// ---------------------------------------------------------
+// 生产环境：提供前端静态文件
+// ---------------------------------------------------------
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const distDir = path.join(__dirname, "dist");
+
+if (fs.existsSync(distDir)) {
+  console.log(`[Server] 生产模式：提供前端静态文件 (${distDir})`);
+  app.use(
+    express.static(distDir, {
+      maxAge: "1h",
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-cache");
+        }
+      },
+    })
+  );
+
+  // SPA 路由回退：所有非 API 请求返回 index.html
+  app.get(/^\/(?!api\/|assets\/|favicon\.ico|logo\.png).*/, (req, res) => {
+    res.sendFile(path.join(distDir, "index.html"));
+  });
+} else {
+  console.log(`[Server] 开发模式：未找到前端 dist 目录，仅提供 API 服务`);
+}
+
 app.listen(port, () => {
   console.log(`BOS API Server running on http://localhost:${port} (数据源: ${dataSource})`);
 });
