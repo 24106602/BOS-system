@@ -4,6 +4,8 @@ import OpenAI from "openai";
 import cors from "cors";
 import { registerBaseInfoRoutes } from "./server/baseInfoRoutes.js";
 import { registerDifficultyStudentRoutes } from "./server/difficultyStudentRoutes.js";
+import { registerAuthRoutes } from "./server/routes/authRoutes.js";
+import { registerEnrolledStudentRoutes } from "./server/routes/enrolledStudentRoutes.js";
 
 const app = express();
 
@@ -52,10 +54,20 @@ app.use(express.json({
 registerBaseInfoRoutes(app);
 registerDifficultyStudentRoutes(app);
 
-const client = new OpenAI({
-  apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: "https://api.deepseek.com",
-});
+// SQL Server 模式路由
+const dataSource = process.env.DATA_SOURCE || "supabase";
+if (dataSource === "sqlserver") {
+  registerAuthRoutes(app);
+  registerEnrolledStudentRoutes(app);
+  console.log(`[Server] SQL Server 模式已启用`);
+}
+
+const client = process.env.DEEPSEEK_API_KEY
+  ? new OpenAI({
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      baseURL: "https://api.deepseek.com",
+    })
+  : null;
 
 const DEEPSEEK_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 const MAX_PROMPT_LENGTH = Number.parseInt(process.env.DEEPSEEK_MAX_PROMPT_LENGTH || "20000", 10);
@@ -116,5 +128,5 @@ app.post("/api/deepseek", async (req, res) => {
 
 const port = Number.parseInt(process.env.PORT || "3001", 10);
 app.listen(port, () => {
-  console.log(`DeepSeek server running on http://localhost:${port}`);
+  console.log(`BOS API Server running on http://localhost:${port} (数据源: ${dataSource})`);
 });
