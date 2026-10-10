@@ -9,6 +9,7 @@ import { registerEnrolledStudentRoutes } from "./server/routes/enrolledStudentRo
 import { registerDifficultyStudentDetailRoutes } from "./server/routes/difficultyStudentRoutes.js";
 import { registerDifficultyFamilyRoutes } from "./server/routes/difficultyFamilyRoutes.js";
 import { registerDifficultyImportRoutes } from "./server/routes/difficultyImportRoutes.js";
+import { registerDifficultyFamilyImportRoutes } from "./server/routes/difficultyFamilyImportRoutes.js";
 
 const app = express();
 
@@ -68,6 +69,7 @@ if (dataSource === "sqlserver") {
   registerDifficultyStudentDetailRoutes(app);
   registerDifficultyFamilyRoutes(app);
   registerDifficultyImportRoutes(app);
+  registerDifficultyFamilyImportRoutes(app);
   console.log(`[Server] SQL Server 模式已启用`);
 }
 

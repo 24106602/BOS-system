@@ -29,6 +29,7 @@ type FamilyProcessPageProps = {
   familyLogs: LogItem[];
   familyLogEndRef: RefObject<HTMLDivElement | null>;
   onBackToDifficulty?: () => void;
+  onFormalImportConfirmed?: (result: { inserted: number }) => void | Promise<void>;
 };
 
 type ModalType = "import" | "passed" | "failed" | null;
@@ -56,9 +57,12 @@ export default function FamilyProcessPage({
   familyLogs,
   familyLogEndRef,
   onBackToDifficulty,
+  onFormalImportConfirmed,
 }: FamilyProcessPageProps) {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [importFileName, setImportFileName] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ inserted: number } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 30;
   const totalPages = Math.max(1, Math.ceil(familyProcessedData.length / pageSize));
@@ -108,6 +112,48 @@ export default function FamilyProcessPage({
     if (!file) return;
     setImportFileName(file.name);
     await uploadFamilyDataFile(file);
+  };
+
+  const handleFormalImport = async () => {
+    if (!hasProcessedRows) {
+      alert("请先上传并处理家庭成员数据");
+      return;
+    }
+    if (hasBlockingRows) {
+      alert("存在不通过数据，无法正式导入");
+      return;
+    }
+    if (!confirm(`确认将 ${passedRows.length} 条家庭成员信息正式导入数据库？`)) return;
+
+    setIsImporting(true);
+    try {
+      const { confirmFamilyMemberImport } = await import("../services/difficultyFamilyApi");
+      const rows = passedRows.map((row, index) => ({
+        key: `${academicYear}::1::${String(row["学生身份证号"] || row["身份证号"] || "")}::${String(row["家庭成员姓名"] || row["姓名"] || "")}::${index}`,
+        academicYear,
+        semester: String(row["学期"] || row["学期*"] || "1"),
+        studentIdCard: String(row["学生身份证号"] || row["身份证号"] || ""),
+        memberName: String(row["家庭成员姓名"] || row["姓名"] || ""),
+        memberAge: Number.parseInt(String(row["家庭成员年龄"] || row["年龄"] || "0"), 10) || null,
+        relation: String(row["与学生关系"] || row["关系"] || ""),
+        workUnit: String(row["工作或学习单位"] || row["工作单位"] || ""),
+        annualIncome: String(row["年收入（元）"] || row["年收入"] || ""),
+        occupation: String(row["职业"] || ""),
+        healthStatus: String(row["健康状况"] || ""),
+        sourceFile: importFileName || "manual_import",
+        importedAt: new Date().toISOString().replace("T", " ").substring(0, 19),
+      }));
+
+      const result = await confirmFamilyMemberImport("", rows, academicYear);
+      setImportResult(result);
+      await onFormalImportConfirmed?.(result);
+      alert(`家庭成员信息导入完成：${result.inserted} 条`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "正式导入失败";
+      alert(message);
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   return (
@@ -160,6 +206,13 @@ export default function FamilyProcessPage({
         </button>
         <button className="is-purple" disabled={!hasProcessedRows} onClick={exportFamilyResult}>导出通过名单</button>
         <button className="is-purple" disabled={!hasProcessedRows} onClick={exportFamilyErrorReport}>导出不通过名单</button>
+        <button
+          className={importResult ? "is-success" : "is-info"}
+          disabled={!hasProcessedRows || hasBlockingRows || isImporting}
+          onClick={handleFormalImport}
+        >
+          {isImporting ? "导入中..." : importResult ? `已导入${importResult.inserted}条` : "正式导入数据库"}
+        </button>
         <button
           className={reviewConfirmed ? "is-success" : "is-warning"}
           disabled={!canConfirm || recognitionWindowBlocked}

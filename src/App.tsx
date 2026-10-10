@@ -482,6 +482,16 @@ export default function App({ collegeMode = false, fixedProcessingPanel, onBackT
     );
   };
 
+  const handleFamilyFormalImportConfirmed = (result: { inserted: number }) => {
+    setFamilyReviewConfirmed(false);
+    setFamilyUploadedToSchool(false);
+    setFamilyStatus("正式导入完成，待学院确认审核");
+    pushFamilyLog(
+      "success",
+      `家庭成员信息正式导入完成：新增 ${result.inserted} 条，当前为草稿态，请继续完成学院确认审核。`
+    );
+  };
+
   const confirmFamilyCollegeReview = () => {
     if (!ensureRecognitionWindowOpen()) return;
     if (familyProcessedData.length === 0) {
@@ -1693,6 +1703,7 @@ ${JSON.stringify(finalFailRows.slice(0, 20), null, 2)}
               familyLogs={familyLogs}
               familyLogEndRef={familyLogEndRef}
               onBackToDifficulty={onBackToDifficulty}
+              onFormalImportConfirmed={handleFamilyFormalImportConfirmed}
             />
           )}
         </div>
